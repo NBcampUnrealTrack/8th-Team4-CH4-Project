@@ -8,7 +8,28 @@ public class Team4Project : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput" });
+		PublicDependencyModuleNames.AddRange(new string[]
+		{
+			"Core", 
+			"CoreUObject",
+			"Engine",
+			"InputCore",
+			"EnhancedInput", 
+			"AIModule", 
+			"NavigationSystem", 
+			"GameplayAbilities", 
+			"GameplayTasks", 
+			"GameplayTags", 
+			"NetCore", 
+			"Niagara", 
+			"Slate", 
+			"SlateCore", 
+			"UMG",
+			"AdvancedSessions",
+			"OnlineSubsystem", 
+			"OnlineSubsystemSteam", 
+			"OnlineSubsystemUtils" 
+		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 
