@@ -4,9 +4,10 @@
 AGODGameState::AGODGameState()
 {
 	CurrentPhase = EGamePhase::WaitingForPlayers;
-	RemainingTime = 600; // 10분
+	RemainingTime = 600;
 	DistanceToDestination = 10000.0f;
-	bGunsUnlocked = false; // 처음에는 발포 불가
+	bGunsUnlocked = false;
+	LobbyCountdown = 0;
 }
 
 void AGODGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -17,9 +18,10 @@ void AGODGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AGODGameState, RemainingTime);
 	DOREPLIFETIME(AGODGameState, DistanceToDestination);
 	DOREPLIFETIME(AGODGameState, bGunsUnlocked);
+	DOREPLIFETIME(AGODGameState, LobbyCountdown);
 }
 
 void AGODGameState::OnRep_GamePhase()
 {
-	// TODO: Phase 변경에 따른 승리/패배 UI 연출 로직 연결
+	OnGamePhaseChanged.Broadcast(CurrentPhase);
 }
