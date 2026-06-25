@@ -201,6 +201,8 @@ void ABasePlayerController::SetupInputComponent()
 	Super::SetupInputComponent();
 
 	InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ABasePlayerController::OnSpectateNextClicked);
+	InputComponent->BindKey(EKeys::T, IE_Pressed, this, &ABasePlayerController::OpenChat);
+	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ABasePlayerController::CloseChat);
 	
 }
 
@@ -271,4 +273,33 @@ void ABasePlayerController::OnSpectateNextClicked()
 	if (!bIsSpectating) return;
 
 	Server_SpectateNext();
+}
+
+
+//채팅 관련
+void ABasePlayerController::OpenChat()
+{
+	if (bIsSpectating || bChatOpen) return;
+	bChatOpen = true;
+	
+	// UI 없이 테스트용 — T 누르면 고정 메시지 바로 전송
+	SubmitChat(TEXT("안녕하세요 테스트 메시지입니다"));
+}
+
+void ABasePlayerController::CloseChat()
+{
+	if (!bChatOpen) return;
+	bChatOpen = false;
+	OnChatClosed();
+}
+
+void ABasePlayerController::SubmitChat(const FString& Message)
+{
+	if (Message.IsEmpty()) return;
+
+	if (AGODPlayerState* PS = GetPlayerState<AGODPlayerState>())
+	{
+		PS->Server_SendChat(Message);
+	}
+	CloseChat();
 }

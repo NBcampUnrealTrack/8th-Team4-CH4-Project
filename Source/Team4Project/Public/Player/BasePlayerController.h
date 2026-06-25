@@ -73,6 +73,18 @@ public:
 	/** 다음 플레이어 시점으로 전환 */
 	UFUNCTION(Server, Reliable)
 	void Server_SpectateNext();
+	
+	void OpenChat();
+	void CloseChat();
+	void SubmitChat(const FString& Message);
+	
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnChatOpened();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnChatClosed();
+
+	bool bChatOpen = false;
 
 protected:
 	bool bIsSpectating = false;
