@@ -2,13 +2,14 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Interface/Interactable.h"
 #include "DoorBase.generated.h"
 
 class UStaticMeshComponent;
 class UBoxComponent;
 
 UCLASS()
-class TEAM4PROJECT_API ADoorBase : public AActor
+class TEAM4PROJECT_API ADoorBase : public AActor, public IInteractable
 {
 	GENERATED_BODY()
 
@@ -58,6 +59,10 @@ public:
 	/** 마피아 전용 잠금/해제. */
 	UFUNCTION(BlueprintCallable, Category = "Door")
 	void SetLocked(bool bLock);
+
+	// IInteractable
+	virtual void Interact_Implementation(ACharacter* Interactor) override;
+	virtual FText GetInteractPrompt_Implementation() const override;
 
 	// ============================================================
 	// 에디터 설정

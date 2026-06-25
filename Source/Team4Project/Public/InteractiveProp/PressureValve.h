@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Interface/Interactable.h"
 #include "PressureValve.generated.h"
 
 class UStaticMeshComponent;
@@ -9,7 +10,7 @@ class UBoxComponent;
 class UPressureComponent;
 
 UCLASS()
-class TEAM4PROJECT_API APressureValve : public AActor
+class TEAM4PROJECT_API APressureValve : public AActor, public IInteractable
 {
 	GENERATED_BODY()
 
@@ -53,6 +54,10 @@ public:
 	// 밸브 조작 중지
 	UFUNCTION(BlueprintCallable, Server, Reliable, Category = "Valve")
 	void Server_StopTurning();
+
+	// IInteractable
+	virtual void Interact_Implementation(ACharacter* Interactor) override;
+	virtual FText GetInteractPrompt_Implementation() const override;
 
 private:
 	UFUNCTION() void OnRep_ValveRotation();

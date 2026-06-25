@@ -1,4 +1,4 @@
-#include "InteractiveProp/ItemBase.h"
+﻿#include "InteractiveProp/ItemBase.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "Net/UnrealNetwork.h"
@@ -11,9 +11,8 @@ AItemBase::AItemBase()
 
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	RootComponent = Mesh;
-	Mesh->SetSimulatePhysics(true);
-	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	Mesh->SetCollisionProfileName(TEXT("PhysicsActor"));
+	Mesh->SetSimulatePhysics(true);
 }
 
 void AItemBase::BeginPlay()
@@ -72,4 +71,14 @@ void AItemBase::SetPhysicsForHeld(bool bHeld)
 		Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 		Mesh->SetSimulatePhysics(true);
 	}
+}
+
+void AItemBase::Interact_Implementation(ACharacter* Interactor)
+{
+	Server_PickUp(Interactor);
+}
+
+FText AItemBase::GetInteractPrompt_Implementation() const
+{
+	return FText::FromString(TEXT("집기"));
 }

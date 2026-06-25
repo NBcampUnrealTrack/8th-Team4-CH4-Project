@@ -3,6 +3,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "GameFramework/Character.h"
 
 APressureValve::APressureValve()
 {
@@ -73,4 +74,17 @@ UPressureComponent* APressureValve::GetPressureComponent() const
 {
 	if (!TrainActor) return nullptr;
 	return TrainActor->FindComponentByClass<UPressureComponent>();
+}
+
+void APressureValve::Interact_Implementation(ACharacter* Interactor)
+{
+	if (bIsTurning)
+		Server_StopTurning();
+	else
+		Server_StartTurning(Interactor ? Interactor->GetController() : nullptr);
+}
+
+FText APressureValve::GetInteractPrompt_Implementation() const
+{
+	return bIsTurning ? FText::FromString(TEXT("밸브 정지")) : FText::FromString(TEXT("밸브 조작"));
 }
