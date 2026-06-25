@@ -18,11 +18,7 @@ class TEAM4PROJECT_API UVoipTalkerComponent : public UVOIPTalker
 public:
 	virtual void OnTalkingBegin(UAudioComponent* AudioComponent) override;
 	virtual void OnTalkingEnd() override;
-
-	/**
-	 * 재생 컴포넌트를 죽는 월드에서 완전히 떼어낸다(Stop + Detach + Unregister) + Settings/구독 정리.
-	 * travel 직전(ABasePlayerState::StopVoicePlayback) 및 Pawn 파괴 시 호출. 언제 불러도 안전.
-	 */
+	
 	void TeardownVoiceAudio();
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Voice")

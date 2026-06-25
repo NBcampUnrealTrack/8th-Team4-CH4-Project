@@ -3,9 +3,15 @@
 #include "NativeGameplayTags.h"
 //#include "Runtime/GameplayTags/Public/NativeGameplayTags.h"
 
-namespace EventTags
+namespace Character
 {
-    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interact)
+    namespace Crew
+    {
+        UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mechanic)
+        UE_DECLARE_GAMEPLAY_TAG_EXTERN(Sheriff)
+        UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mafia)
+        UE_DECLARE_GAMEPLAY_TAG_EXTERN(Outlaw)
+    }
 }
 
 namespace SetByCaller
@@ -15,7 +21,18 @@ namespace SetByCaller
 namespace Abilities
 {
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Attack)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interact)
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Use)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Equip)
+}
+
+namespace State
+{
+    namespace Weapon
+    {
+        // 총기 장착 상태 (Fire 어빌리티 발동 조건)
+        UE_DECLARE_GAMEPLAY_TAG_EXTERN(GunEquipped)
+    }
 }
 
 namespace Cooldown
@@ -24,37 +41,15 @@ namespace Cooldown
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Use)
 }
 
-namespace GameItems
+namespace Items
 {
     namespace Equipment
     {
         namespace Weapons
         {
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(Axe)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(Sword)
+            UE_DECLARE_GAMEPLAY_TAG_EXTERN(Gun)
             UE_DECLARE_GAMEPLAY_TAG_EXTERN(Knife)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(Bloodthorn)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(NightsEdge)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shadowbane)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(Staff)
-        }
-
-        namespace Cloaks
-        {
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(RedCloak)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(BlueCloak)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(GreenCloak)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(YellowCloak)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(DarkGrayCloak)
-        }
-
-        namespace Masks
-        {
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(SteelMask)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(GreenMask)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(BlueMask)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(YellowMask)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(GrayMask)
+ 
         }
     }
 
@@ -62,24 +57,12 @@ namespace GameItems
     {
         namespace Potions
         {
-            namespace Red
-            {
-                UE_DECLARE_GAMEPLAY_TAG_EXTERN(Small)
-                UE_DECLARE_GAMEPLAY_TAG_EXTERN(Large)
-            }
-
-            namespace Blue
-            {
-                UE_DECLARE_GAMEPLAY_TAG_EXTERN(Small)
-                UE_DECLARE_GAMEPLAY_TAG_EXTERN(Large)
-            }
+            
         }
     }
 
     namespace Craftables
     {
-        UE_DECLARE_GAMEPLAY_TAG_EXTERN(FireFernFruit)
-        UE_DECLARE_GAMEPLAY_TAG_EXTERN(LuminDaisy)
-        UE_DECLARE_GAMEPLAY_TAG_EXTERN(ScorchPetalBlossom)
+
     }
 }

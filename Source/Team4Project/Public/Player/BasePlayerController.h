@@ -21,15 +21,9 @@ public:
 	virtual void SetupInputComponent() override;
 
 	virtual void PreClientTravel(const FString& PendingURL, ETravelType TravelType, bool bIsSeamlessTravel) override;
-
-	// ============================================================
-	// 보이스(VOIP)
-	// ============================================================
-	// 리스너를 Pawn 에 고정 + 오픈 마이크 시작. 로컬 컨트롤러 1회만. 호스트/클라 양쪽 진입점에서 호출.
+	
 	void StartLocalVoice(APawn* P);
-
-	// seamless travel 직전 호출: 발화를 멈춰 오디오 스레드의 active VOIP sound 를 비운다.
-	// 이게 없으면 월드가 파괴돼도 오디오 렌더 스레드가 죽은 synth 를 계속 처리하다 크래시한다.
+	
 	void StopLocalVoice();
 
 	bool bVoiceStarted = false;
@@ -48,9 +42,6 @@ protected:
 	FDelegateHandle PostLoadMapHandle;
 	
 public:
-	// ============================================================
-	// 온라인 닉네임(스팀 계정) — 소유 클라가 로컬 OnlineSubsystem 닉네임을 서버로 올려 PlayerState 에 복제.
-	// ============================================================
 	void TrySendNickname();
 
 	UFUNCTION(Server, Reliable)
@@ -60,17 +51,12 @@ protected:
 	bool bNicknameSent = false;
 	
 public:
-	// ============================================================
-	// 관전 시스템
-	// ============================================================
-	/** 서버에서 호출 — 관전 모드 시작 */
 	UFUNCTION(Client, Reliable)
 	void Client_StartSpectating();
 
 	UFUNCTION(Server, Reliable)
 	void Server_StartSpectating();
-
-	/** 다음 플레이어 시점으로 전환 */
+	
 	UFUNCTION(Server, Reliable)
 	void Server_SpectateNext();
 
