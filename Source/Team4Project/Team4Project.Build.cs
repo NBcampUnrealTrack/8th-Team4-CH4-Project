@@ -25,6 +25,7 @@ public class Team4Project : ModuleRules
 			"Slate", 
 			"SlateCore", 
 			"UMG",
+			"StructUtils",
 			"AdvancedSessions",
 			"OnlineSubsystem", 
 			"OnlineSubsystemSteam", 
@@ -32,7 +33,13 @@ public class Team4Project : ModuleRules
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
-
+		
+		PublicIncludePaths.AddRange(new string[]
+			{
+				"Team4Project",
+			}
+		);
+		
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
 		
