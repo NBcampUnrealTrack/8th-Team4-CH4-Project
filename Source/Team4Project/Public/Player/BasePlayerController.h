@@ -6,9 +6,9 @@
 #include "GameFramework/PlayerController.h"
 #include "BasePlayerController.generated.h"
 
-/**
- * 
- */
+class UScrollBox;      
+class UEditableText;
+
 UCLASS()
 class TEAM4PROJECT_API ABasePlayerController : public APlayerController
 {
@@ -60,20 +60,34 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_SpectateNext();
 	
+	// BasePlayerController.h
+	UPROPERTY()
+	TObjectPtr<UUserWidget> ChatBoxWidget;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Chat")
+	TSubclassOf<UUserWidget> ChatBoxWidgetClass;   // BP에서 WBP_ChatBox 할당
+
+	UPROPERTY(EditDefaultsOnly, Category = "Chat")
+	TSubclassOf<UUserWidget> ChatEntryWidgetClass; // BP에서 WBP_ChatEntry 할당
+
+	UFUNCTION()
+	void HandleChatMessage(const FChatMessage& Msg);
+	
+	// 위젯에서 named slot/named widget 접근용
+	UScrollBox*     GetChatScrollBox()  const;
+	UEditableText*  GetChatInputWidget() const;
+	void OnChatToggle();
+
 	void OpenChat();
+	
+	UFUNCTION()
+	void OnChatTextCommitted(const FText& Text, ETextCommit::Type CommitMethod);
 	void CloseChat();
 	void SubmitChat(const FString& Message);
-	
-	UFUNCTION(BlueprintImplementableEvent)
-	void OnChatOpened();
-
-	UFUNCTION(BlueprintImplementableEvent)
-	void OnChatClosed();
-
-	bool bChatOpen = false;
 
 protected:
 	bool bIsSpectating = false;
+	bool bChatOpen = false; 
 
 	// 살아있는 플레이어 목록에서 다음 대상 찾기
 	APawn* FindNextSpectateTarget() const;
