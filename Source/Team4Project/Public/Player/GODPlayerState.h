@@ -4,6 +4,9 @@
 #include "GameFramework/PlayerState.h"
 #include "GODPlayerState.generated.h"
 
+// 최대 글자수
+static constexpr int32 MaxChatLength = 100;
+
 // 메인 역할군 (3파전)
 UENUM(BlueprintType)
 enum class EMainRole : uint8
@@ -56,4 +59,8 @@ public:
 	// 오염도 (0.0 ~ 1.0)
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "State")
 	float SootLevel;
+	
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_SendChat(const FString& Message);
+	
 };
