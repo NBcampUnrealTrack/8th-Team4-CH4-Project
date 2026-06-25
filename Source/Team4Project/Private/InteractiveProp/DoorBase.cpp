@@ -101,3 +101,14 @@ void ADoorBase::OnRep_IsLocked()
 		OnRep_IsOpen();
 	}
 }
+
+void ADoorBase::Interact_Implementation(ACharacter* Interactor)
+{
+	ToggleDoor();
+}
+
+FText ADoorBase::GetInteractPrompt_Implementation() const
+{
+	if (bIsLocked) return FText::FromString(TEXT("잠김"));
+	return bIsOpen ? FText::FromString(TEXT("닫기")) : FText::FromString(TEXT("열기"));
+}

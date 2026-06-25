@@ -2,12 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Interface/Interactable.h"
 #include "ItemBase.generated.h"
 
 class UStaticMeshComponent;
 
 UCLASS()
-class TEAM4PROJECT_API AItemBase : public AActor
+class TEAM4PROJECT_API AItemBase : public AActor, public IInteractable
 {
 	GENERATED_BODY()
 
@@ -42,6 +43,10 @@ public:
 	// 놓기
 	UFUNCTION(BlueprintCallable, Server, Reliable, Category = "Item")
 	void Server_Drop();
+
+	// IInteractable
+	virtual void Interact_Implementation(ACharacter* Interactor) override;
+	virtual FText GetInteractPrompt_Implementation() const override;
 
 protected:
 	virtual void Server_PickUp_Implementation(ACharacter* Holder);

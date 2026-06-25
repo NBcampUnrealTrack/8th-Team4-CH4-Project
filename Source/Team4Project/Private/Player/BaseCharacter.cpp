@@ -4,6 +4,7 @@
 #include "Player/BaseCharacter.h"
 #include "Player/Component/BaseAbilitySystemComponent.h"
 #include "Player/Component/BaseAttributeSet.h"
+#include "Component/InteractComponent.h"
 #include "GameplayEffect.h"
 #include "Components/CapsuleComponent.h"
 #include "Game/BaseDataSubsystem.h"
@@ -20,6 +21,8 @@ ABaseCharacter::ABaseCharacter()
 	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
 
 	AttributeSet = CreateDefaultSubobject<UBaseAttributeSet>(TEXT("AttributeSet"));
+
+	InteractComponent = CreateDefaultSubobject<UInteractComponent>(TEXT("InteractComponent"));
 }
 
 void ABaseCharacter::BeginPlay()

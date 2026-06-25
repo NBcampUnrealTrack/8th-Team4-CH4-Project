@@ -13,6 +13,7 @@ class UBaseAttributeSet;
 class UGameplayAbility;
 class UGameplayEffect;
 class ABaseWeapon;
+class UInteractComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterDied,
 	ABaseCharacter*, DeadCharacter,
@@ -56,6 +57,9 @@ public:
 
 	// 장착한 무기 설정 (서버에서 EquipGun 어빌리티가 호출)
 	void SetCurrentWeapon(ABaseWeapon* InWeapon) { CurrentWeapon = InWeapon; }
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction")
+	TObjectPtr<UInteractComponent> InteractComponent;
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

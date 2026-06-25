@@ -4,14 +4,20 @@
 #include "Player/BasePlayerController.h"
 
 #include "OnlineSubsystem.h"
+#include "Blueprint/UserWidget.h"
+#include "Components/EditableText.h"
+#include "Components/ScrollBox.h"
+#include "Components/TextBlock.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/GameStateBase.h"
 #include "Interfaces/OnlineIdentityInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "Player/VoicePlayerState.h"
 #include "Engine/Engine.h"
+#include "Game/GODGameState.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Game/ChatTypes.h"  
 #include "HAL/FileManager.h"
 
 // [임시 디버그] Shipping 에서도 보이는 유일한 채널 = 파일. Saved/NameDebug.log 에 누적. 확인 후 제거.
@@ -37,6 +43,16 @@ namespace
 ABasePlayerController::ABasePlayerController()
 {
 	bReplicates = true;
+	
+	static ConstructorHelpers::FClassFinder<UUserWidget> ChatBoxFinder(
+	  TEXT("/Game/ChatUI/WBP_ChatBox"));
+	if (ChatBoxFinder.Succeeded())
+		ChatBoxWidgetClass = ChatBoxFinder.Class;
+
+	static ConstructorHelpers::FClassFinder<UUserWidget> ChatEntryFinder(
+		TEXT("/Game/ChatUI/WBP_ChatEntry"));
+	if (ChatEntryFinder.Succeeded())
+		ChatEntryWidgetClass = ChatEntryFinder.Class;
 }
 
 void ABasePlayerController::OnRep_PlayerState()
@@ -167,6 +183,26 @@ void ABasePlayerController::BeginPlay()
 	}
 	
 	TrySendNickname();
+	
+	// 채팅 위젯 미리 생성
+	if (IsLocalController() && ChatBoxWidgetClass)
+	{
+		ChatBoxWidget = CreateWidget(this, ChatBoxWidgetClass);
+		ChatBoxWidget->AddToViewport();
+		ChatBoxWidget->SetVisibility(ESlateVisibility::Collapsed);
+
+		if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+		{
+			GS->OnChatMessageReceived.AddDynamic(
+				this, &ABasePlayerController::HandleChatMessage);
+		}
+
+		if (UEditableText* Input = GetChatInputWidget())
+		{
+			Input->OnTextCommitted.AddDynamic(
+				this, &ABasePlayerController::OnChatTextCommitted);
+		}
+	}
 }
 
 void ABasePlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -199,8 +235,7 @@ void ABasePlayerController::SetupInputComponent()
 	Super::SetupInputComponent();
 
 	InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ABasePlayerController::OnSpectateNextClicked);
-	InputComponent->BindKey(EKeys::T, IE_Pressed, this, &ABasePlayerController::OpenChat);
-	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ABasePlayerController::CloseChat);
+	InputComponent->BindKey(EKeys::T, IE_Pressed, this, &ABasePlayerController::OnChatToggle);
 	
 }
 
@@ -274,21 +309,57 @@ void ABasePlayerController::OnSpectateNextClicked()
 }
 
 
-//채팅 관련
+// ============================================================
+// 채팅 시스템
+// ============================================================
+
 void ABasePlayerController::OpenChat()
 {
-	if (bIsSpectating || bChatOpen) return;
+	if (bIsSpectating || bChatOpen || !ChatBoxWidget) return;
 	bChatOpen = true;
-	
-	// UI 없이 테스트용 — T 누르면 고정 메시지 바로 전송
-	SubmitChat(TEXT("안녕하세요 테스트 메시지입니다"));
+
+	ChatBoxWidget->SetVisibility(ESlateVisibility::Visible);
+
+	// 히스토리는 한 프레임 뒤
+	GetWorldTimerManager().SetTimerForNextTick([this]()
+	{
+		if (UScrollBox* ScrollBox = GetChatScrollBox())
+		{
+			if (ScrollBox->GetChildrenCount() == 0)
+			{
+				if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+				{
+					for (const FChatMessage& Msg : GS->ChatHistory)
+						HandleChatMessage(Msg);
+				}
+			}
+		}
+		
+		if (UEditableText* Input = GetChatInputWidget())
+	{
+		TSharedPtr<SWidget> SlateWidget = Input->GetCachedWidget();
+		if (SlateWidget.IsValid())
+		{
+			FSlateApplication::Get().SetKeyboardFocus(SlateWidget, EFocusCause::SetDirectly);
+		}
+	}
+	});
+
+	FInputModeGameAndUI InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
+	SetInputMode(InputMode);
+	bShowMouseCursor = false;
 }
 
-void ABasePlayerController::CloseChat()
+void ABasePlayerController::OnChatTextCommitted(const FText& Text, ETextCommit::Type CommitMethod)
 {
-	if (!bChatOpen) return;
-	bChatOpen = false;
-	OnChatClosed();
+	if (CommitMethod != ETextCommit::OnEnter) return;
+
+	const FString Message = Text.ToString();
+	if (!Message.IsEmpty())
+		SubmitChat(Message);
+	else
+		CloseChat();
 }
 
 void ABasePlayerController::SubmitChat(const FString& Message)
@@ -300,4 +371,68 @@ void ABasePlayerController::SubmitChat(const FString& Message)
 		PS->Server_SendChat(Message);
 	}
 	CloseChat();
+}
+
+void ABasePlayerController::HandleChatMessage(const FChatMessage& Msg)
+{
+	UScrollBox* ScrollBox = GetChatScrollBox();
+	if (!ScrollBox || !ChatEntryWidgetClass) return;
+
+	UUserWidget* Entry = CreateWidget(this, ChatEntryWidgetClass);
+	if (!Entry) return;
+
+	
+	if (UTextBlock* Text = Cast<UTextBlock>(
+			Entry->GetWidgetFromName(TEXT("Text_Line"))))
+	{
+		Text->SetText(FText::FromString(
+			FString::Printf(TEXT("[%s]: %s"), *Msg.SenderName, *Msg.Message)));
+	}
+
+	ScrollBox->AddChild(Entry);
+	ScrollBox->ScrollToEnd();
+	
+}
+
+void ABasePlayerController::CloseChat()
+{
+	if (!bChatOpen) return;
+	bChatOpen = false;
+
+	// 입력창 비우기
+	if (UEditableText* Input = GetChatInputWidget())
+		Input->SetText(FText::GetEmpty());
+
+	if (ChatBoxWidget)
+		ChatBoxWidget->SetVisibility(ESlateVisibility::Collapsed);
+
+	GetWorldTimerManager().SetTimerForNextTick([this]()
+	{
+		FInputModeGameOnly InputMode;
+		InputMode.SetConsumeCaptureMouseDown(false);
+		SetInputMode(InputMode);
+	});
+}
+
+
+UScrollBox* ABasePlayerController::GetChatScrollBox() const
+{
+	if (!ChatBoxWidget) return nullptr;
+	return Cast<UScrollBox>(
+		ChatBoxWidget->GetWidgetFromName(TEXT("ScrollBox_ChatLog")));
+}
+
+UEditableText* ABasePlayerController::GetChatInputWidget() const
+{
+	if (!ChatBoxWidget) return nullptr;
+	return Cast<UEditableText>(
+		ChatBoxWidget->GetWidgetFromName(TEXT("EditableText_Input")));
+}
+void ABasePlayerController::OnChatToggle()
+{
+	UE_LOG(LogTemp, Warning, TEXT("OnChatToggle called, bChatOpen=%d"), bChatOpen);
+	if (bChatOpen)
+		CloseChat();
+	else
+		OpenChat();
 }
