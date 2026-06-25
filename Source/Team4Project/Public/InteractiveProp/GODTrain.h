@@ -1,10 +1,12 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GODTrain.generated.h"
 
 class UStaticMeshComponent;
+class UFurnanceComponent;
+class UPressureComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTrainArrived);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTrainDerailed);
@@ -30,22 +32,26 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UStaticMeshComponent* TrainMesh;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UFurnanceComponent* Furnace;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UPressureComponent* Pressure;
+
 	// ============================================================
 	// 복제 상태
 	// ============================================================
-	/** 현재 운행 속도 (cm/s). */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Train")
 	float TrainSpeed;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Train")
 	float DistanceToDestination;
 
-	/** 탈선 여부 */
 	UPROPERTY(ReplicatedUsing = OnRep_bIsDerailed, BlueprintReadOnly, Category = "Train")
 	bool bIsDerailed;
 
 	// ============================================================
-	// 블루프린트 이벤트 (UI/이펙트 연결용)
+	// 블루프린트 이벤트
 	// ============================================================
 	UPROPERTY(BlueprintAssignable, Category = "Train|Events")
 	FOnTrainArrived OnTrainArrived;
@@ -56,18 +62,12 @@ public:
 	// ============================================================
 	// 서버 API
 	// ============================================================
-	/** 열차 속도 변경  */
 	UFUNCTION(BlueprintCallable, Category = "Train")
 	void SetTrainSpeed(float NewSpeed);
 
-	/**
-	 * 선로 전환 시 호출. 반경 내 물리 오브젝트에만 측면 충격을 가해
-	 * 관성 쏠림(화물/플레이어 넉백) 연출. SphereOverlap 사용으로 경량화.
-	 */
 	UFUNCTION(BlueprintCallable, Category = "Train")
 	void ApplyTrackSwitchImpulse(float ImpulseStrength = 800.f, float ImpulseRadius = 2000.f);
 
-	/** 탈선 처리 — GameMode::TriggerDerailment 가 호출 */
 	UFUNCTION(BlueprintCallable, Category = "Train")
 	void TriggerDerailment();
 
@@ -80,10 +80,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
 	float TotalDistance = 10000.f;
 
-private:
-	UFUNCTION()
-	void OnRep_bIsDerailed();
+	// 연료 소진 시 초당 감속량
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
+	float Deceleration = 100.f;
 
-	/** 서버 Tick 마다 GameState.DistanceToDestination 에 값을 밀어 넣음 */
+	// 압력 폭발 시 속도 페널티
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
+	float ExplosionSpeedPenalty = 200.f;
+
+private:
+	UFUNCTION() void OnRep_bIsDerailed();
+
+	// 화로 이벤트 핸들러
+	UFUNCTION() void OnFurnaceActivated();
+	UFUNCTION() void OnFurnaceDeactivated();
+	UFUNCTION() void OnPressureExploded();
+
 	void SyncDistanceToGameState();
 };

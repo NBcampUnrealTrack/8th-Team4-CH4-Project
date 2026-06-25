@@ -1,4 +1,6 @@
-﻿#include "InteractiveProp/GODTrain.h"
+#include "InteractiveProp/GODTrain.h"
+#include "Component/FurnanceComponent.h"
+#include "Component/PressureComponent.h"
 #include "Game/GODGameState.h"
 #include "Net/UnrealNetwork.h"
 #include "Components/StaticMeshComponent.h"
@@ -11,6 +13,9 @@ AGODTrain::AGODTrain()
 
 	TrainMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TrainMesh"));
 	RootComponent = TrainMesh;
+
+	Furnace = CreateDefaultSubobject<UFurnanceComponent>(TEXT("Furnace"));
+	Pressure = CreateDefaultSubobject<UPressureComponent>(TEXT("Pressure"));
 }
 
 void AGODTrain::BeginPlay()
@@ -23,6 +28,17 @@ void AGODTrain::BeginPlay()
 		DistanceToDestination = TotalDistance;
 		bIsDerailed = false;
 		SyncDistanceToGameState();
+
+		if (Furnace)
+		{
+			Furnace->OnFurnaceActivated.AddDynamic(this, &AGODTrain::OnFurnaceActivated);
+			Furnace->OnFurnaceDeactivated.AddDynamic(this, &AGODTrain::OnFurnaceDeactivated);
+		}
+
+		if (Pressure)
+		{
+			Pressure->OnPressureExplode.AddDynamic(this, &AGODTrain::OnPressureExploded);
+		}
 	}
 }
 
@@ -32,6 +48,18 @@ void AGODTrain::Tick(float DeltaTime)
 
 	if (!HasAuthority() || bIsDerailed) return;
 
+	// 연료 없으면 점진적 감속
+	if (Furnace && !Furnace->bIsBurning && TrainSpeed > 0.f)
+	{
+		TrainSpeed = FMath::Max(0.f, TrainSpeed - Deceleration * DeltaTime);
+	}
+
+	// 압력 컴포넌트에 연료 상태 전달
+	if (Pressure && Furnace)
+	{
+		Pressure->bFurnaceActive = Furnace->bIsBurning;
+	}
+
 	DistanceToDestination = FMath::Max(0.f, DistanceToDestination - TrainSpeed * DeltaTime);
 	SyncDistanceToGameState();
 }
@@ -39,7 +67,6 @@ void AGODTrain::Tick(float DeltaTime)
 void AGODTrain::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-
 	DOREPLIFETIME(AGODTrain, TrainSpeed);
 	DOREPLIFETIME(AGODTrain, bIsDerailed);
 }
@@ -82,7 +109,25 @@ void AGODTrain::TriggerDerailment()
 
 	bIsDerailed = true;
 	TrainSpeed = 0.f;
-	OnRep_bIsDerailed(); // 서버 측 즉시 통지
+	OnRep_bIsDerailed();
+}
+
+void AGODTrain::OnFurnaceActivated()
+{
+	// 연료 공급 재개 시 기본 속도로 복귀
+	TrainSpeed = DefaultSpeed;
+}
+
+void AGODTrain::OnFurnaceDeactivated()
+{
+	// 감속은 Tick에서 점진적으로 처리
+}
+
+void AGODTrain::OnPressureExploded()
+{
+	// 폭발 시 즉시 속도 패널티
+	TrainSpeed = FMath::Max(0.f, TrainSpeed - ExplosionSpeedPenalty);
+	// 이펙트/데미지는 BP에서 OnPressureExplode 델리게이트에 바인딩
 }
 
 void AGODTrain::SyncDistanceToGameState()
