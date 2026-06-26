@@ -33,8 +33,9 @@ namespace Abilities
 {
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Attack)
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interact)
-    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Use)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Invisible)
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Equip)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Detect)
 }
 
 namespace State
@@ -50,7 +51,14 @@ namespace State
 namespace Cooldown
 {
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Attack)
-    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Use)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Invisible)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Detect)
+}
+
+namespace Event
+{
+    // 처치 이벤트. 사망 시 킬러 ASC 로 전송 → 마피아 시체 은폐 등 패시브 어빌리티 트리거.
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Kill)
 }
 
 namespace Items

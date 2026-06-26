@@ -16,6 +16,9 @@ UGA_EquipGun::UGA_EquipGun()
 	FGameplayTagContainer Tags;
 	Tags.AddTag(Abilities::Equip.GetTag());
 	SetAssetTags(Tags);
+
+	// 투명화(Ability.Invisible) 중에는 장착 불가. 투명화가 풀리면 다시 장착 가능.
+	ActivationBlockedTags.AddTag(Abilities::Invisible.GetTag());
 }
 
 void UGA_EquipGun::ActivateAbility(

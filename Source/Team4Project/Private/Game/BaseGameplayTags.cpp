@@ -31,8 +31,9 @@ namespace Abilities
 {
 	UE_DEFINE_GAMEPLAY_TAG(Attack,   "Ability.Attack")
 	UE_DEFINE_GAMEPLAY_TAG(Interact, "Ability.Interact")
-	UE_DEFINE_GAMEPLAY_TAG(Use,      "Ability.Use")
-	UE_DEFINE_GAMEPLAY_TAG(Equip,    "Ability.Equip")
+	UE_DEFINE_GAMEPLAY_TAG(Invisible, "Ability.Invisible")
+	UE_DEFINE_GAMEPLAY_TAG(Equip, "Ability.Equip")
+	UE_DEFINE_GAMEPLAY_TAG(Detect, "Ability.Detect")
 }
 
 namespace State
@@ -48,7 +49,13 @@ namespace State
 namespace Cooldown
 {
 	UE_DEFINE_GAMEPLAY_TAG(Attack, "Cooldown.Attack")
-	UE_DEFINE_GAMEPLAY_TAG(Use,    "Cooldown.Use")
+	UE_DEFINE_GAMEPLAY_TAG(Use, "Cooldown.Invisible")
+	UE_DEFINE_GAMEPLAY_TAG(Detect, "Cooldown.Detect")
+}
+
+namespace Event
+{
+	UE_DEFINE_GAMEPLAY_TAG(Kill, "Event.Kill")
 }
 
 namespace Items
