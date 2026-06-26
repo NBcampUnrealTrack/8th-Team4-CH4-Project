@@ -25,7 +25,9 @@ namespace State
 {
 	namespace Weapon
 	{
-		UE_DEFINE_GAMEPLAY_TAG(GunEquipped, "State.Weapon.GunEquipped")
+		UE_DEFINE_GAMEPLAY_TAG(EquipGun, "State.Equip.Gun")
+		UE_DEFINE_GAMEPLAY_TAG(EquipCoal, "State.Equip.Coal")
+		UE_DEFINE_GAMEPLAY_TAG(EquipGear, "State.Equip.Gear")
 	}
 }
 

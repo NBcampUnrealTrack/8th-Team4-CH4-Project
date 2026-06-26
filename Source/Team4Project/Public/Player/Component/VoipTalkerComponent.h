@@ -54,4 +54,17 @@ private:
 	void UnbindOwnerPawnEndPlay();
 
 	USoundAttenuation* ResolveAttenuation();
+
+	/**
+	 * 발화자(이 Talker 의 오너 PlayerState)가 사망 상태인지.
+	 * PlayerState->bIsAlive 와 빙의 중인 캐릭터의 IsDead() 둘 다 확인한다
+	 * (현재 사망 경로가 둘 중 한쪽만 갱신할 수 있어 OR 로 판정).
+	 */
+	bool IsSpeakerDead() const;
+
+	/**
+	 * 이 머신의 로컬 청자(내 플레이어)가 사망 상태인지.
+	 * 죽은 사람 목소리를 들을 자격이 있는지 판단하는 데 쓴다(죽은 사람만 들림).
+	 */
+	bool IsLocalListenerDead() const;
 };

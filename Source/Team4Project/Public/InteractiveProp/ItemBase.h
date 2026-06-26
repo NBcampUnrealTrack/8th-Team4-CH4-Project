@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "GameplayTagContainer.h"
 #include "Interface/Interactable.h"
 #include "ItemBase.generated.h"
 
@@ -35,6 +36,11 @@ public:
 	// 부착 소켓 이름 (스켈레톤에 소켓 추가 후 BP에서 재지정 가능)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item")
 	FName AttachSocketName = TEXT("RightHand");
+
+	// 이 아이템을 들었을 때 캐릭터 ASC 에 부여할 장착 상태 태그
+	// (예: 석탄=State.Equip.Coal, 기어=State.Equip.Gear). 서브클래스/BP 에서 지정.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item")
+	FGameplayTag EquipStateTag;
 
 	// 집기 - 클라이언트가 호출 → 서버에서 실행
 	UFUNCTION(BlueprintCallable, Server, Reliable, Category = "Item")

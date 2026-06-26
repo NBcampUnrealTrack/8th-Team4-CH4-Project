@@ -4,7 +4,10 @@
 #include "Player/BaseCharacter.h"
 #include "Player/Component/BaseAbilitySystemComponent.h"
 #include "Player/Component/BaseAttributeSet.h"
+#include "Player/Weapon/BaseWeapon.h"
 #include "Component/InteractComponent.h"
+#include "InteractiveProp/ItemBase.h"
+#include "Game/BaseGameplayTags.h"
 #include "GameplayEffect.h"
 #include "Components/CapsuleComponent.h"
 #include "Game/BaseDataSubsystem.h"
@@ -129,6 +132,38 @@ void ABaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ABaseCharacter, bIsDead);
 	DOREPLIFETIME(ABaseCharacter, CurrentWeapon);
+	DOREPLIFETIME(ABaseCharacter, CurrentHeldItem);
+}
+
+// ============================================================
+// 장착 슬롯 (총/물리 아이템 공용, 한 번에 하나만)
+// ============================================================
+
+void ABaseCharacter::ClearEquipSlot()
+{
+	if (!HasAuthority()) return;
+
+	// 1) 총이 장착돼 있으면 해제 (무기 파괴 + 태그 제거)
+	const FGameplayTag GunTag = State::Weapon::EquipGun.GetTag();
+	if (AbilitySystemComponent && AbilitySystemComponent->HasMatchingGameplayTag(GunTag))
+	{
+		if (CurrentWeapon)
+		{
+			CurrentWeapon->Destroy();
+		}
+		CurrentWeapon = nullptr;
+
+		AbilitySystemComponent->RemoveLooseGameplayTag(GunTag);
+		AbilitySystemComponent->RemoveReplicatedLooseGameplayTag(GunTag);
+	}
+
+	// 2) 물리 아이템을 들고 있으면 떨군다.
+	//    Server_Drop 이 자체적으로 장착 태그/CurrentHeldItem 까지 정리한다.
+	if (IsValid(CurrentHeldItem))
+	{
+		CurrentHeldItem->Server_Drop();
+	}
+	CurrentHeldItem = nullptr;
 }
 
 // ============================================================

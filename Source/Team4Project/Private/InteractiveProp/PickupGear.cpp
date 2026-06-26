@@ -1,9 +1,11 @@
 #include "InteractiveProp/PickupGear.h"
 #include "Player/GODPlayerState.h"
+#include "Game/BaseGameplayTags.h"
 #include "GameFramework/Character.h"
 
 APickupGear::APickupGear()
 {
+	EquipStateTag = State::Weapon::EquipGear.GetTag();
 }
 
 void APickupGear::Server_PickUp_Implementation(ACharacter* Holder)
