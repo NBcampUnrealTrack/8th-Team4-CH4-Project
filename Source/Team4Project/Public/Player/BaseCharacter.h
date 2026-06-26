@@ -171,7 +171,8 @@ protected:
 	void OnRep_MeshHidden();
 
 	// bMeshHidden 값을 실제 메시/무기/아이템 가시성에 반영.
-	void ApplyMeshVisibility();
+	// 서브클래스(마피아)가 bIsInvisible 등 추가 조건을 합성할 수 있도록 virtual.
+	virtual void ApplyMeshVisibility();
 
 	// 타이머 콜백: 숨김 해제.
 	void RevealMesh();

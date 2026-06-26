@@ -77,4 +77,7 @@ private:
 	void OnRep_IsInvisible();
 
 	void UpdateMeshVisibilityForInvisibility();
+
+	// bIsInvisible 과 bMeshHidden 두 상태를 합성해 가시성 결정.
+	virtual void ApplyMeshVisibility() override;
 };
