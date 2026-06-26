@@ -18,7 +18,7 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Interaction")
 	void Interact(ACharacter* Interactor);
 
-	// HUD에 표시할 상호작용 힌트 텍스트
+	// HUD에 표시할 상호작용 힌트 텍스트.
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Interaction")
 	FText GetInteractPrompt() const;
 };
