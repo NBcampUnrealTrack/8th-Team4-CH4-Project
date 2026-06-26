@@ -33,11 +33,15 @@ void AGODCharacterSheriff::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void AGODCharacterSheriff::CheckForHiddenBodies()
 {
 	TArray<AActor*> Overlapping;
+	// 사망한 캐릭터는 Ragdoll 콜리전 프로파일(ECC_PhysicsBody)로 전환되므로 두 채널 모두 탐색
 	UKismetSystemLibrary::SphereOverlapActors(
 		GetWorld(),
 		GetActorLocation(),
 		BodyDetectionRadius,
-		TArray<TEnumAsByte<EObjectTypeQuery>>{ UEngineTypes::ConvertToObjectType(ECC_Pawn) },
+		TArray<TEnumAsByte<EObjectTypeQuery>>{
+			UEngineTypes::ConvertToObjectType(ECC_Pawn),
+			UEngineTypes::ConvertToObjectType(ECC_PhysicsBody)
+		},
 		ABaseCharacter::StaticClass(),
 		TArray<AActor*>{ this },
 		Overlapping

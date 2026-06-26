@@ -5,6 +5,8 @@
 #include "Player/Role/GODCharacterWatchman.h"
 #include "Player/BasePlayerController.h"
 #include "InteractiveProp/GODTrain.h"
+#include "InteractiveProp/PressureValve.h"
+#include "InteractiveProp/PickupGear.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
 #include "TimerManager.h"
@@ -109,6 +111,17 @@ void AGODGameMode::StartGame()
 	GODGS->LobbyCountdown = 0;
 	TimeElapsed = 0;
 
+	// 재시작 대비: 이전 라운드 상태 초기화
+	for (TActorIterator<APressureValve> It(GetWorld()); It; ++It)
+	{
+		(*It)->Tags.Remove(FName(TEXT("Stoker.ForceClose")));
+	}
+	for (TActorIterator<APickupGear> It(GetWorld()); It; ++It)
+	{
+		if ((*It)->ActorHasTag(TEXT("Gear.Destroyed")))
+			(*It)->Destroy();
+	}
+
 	AssignRoles();
 
 	GetWorld()->GetTimerManager().SetTimer(
@@ -134,15 +147,27 @@ void AGODGameMode::AssignRoles()
 		RolePool.Swap(i, j);
 	}
 
+	// 시민 직업 풀: 셔플 후 순서대로 배정해 중복 방지
+	TArray<ECitizenClass> CitizenPool = {
+		ECitizenClass::Mechanic, ECitizenClass::Watchman,
+		ECitizenClass::Stoker,   ECitizenClass::Porter
+	};
+	for (int32 i = CitizenPool.Num() - 1; i > 0; i--)
+	{
+		int32 j = FMath::RandRange(0, i);
+		CitizenPool.Swap(i, j);
+	}
+	int32 CitizenIndex = 0;
+
 	for (int32 i = 0; i < PlayerArray.Num(); ++i)
 	{
 		APlayerController* PC = PlayerArray[i];
 		AGODPlayerState* PS = PC ? PC->GetPlayerState<AGODPlayerState>() : nullptr;
 		if (!PS || i >= RolePool.Num()) continue;
 
-		PS->MainRole    = RolePool[i];
+		PS->MainRole     = RolePool[i];
 		PS->CitizenClass = (PS->MainRole == EMainRole::Citizen)
-			? static_cast<ECitizenClass>(FMath::RandRange(1, 4))
+			? CitizenPool[CitizenIndex++]
 			: ECitizenClass::None;
 		PS->AmmoCount = 1;
 		PS->bIsAlive  = true;
@@ -179,24 +204,25 @@ void AGODGameMode::RespawnPlayerAsRole(APlayerController* PC, TSubclassOf<ABaseC
 {
 	if (!PC || !CharClass) return;
 
+	// PlayerStart 먼저 탐색: 없으면 기존 폰을 유지하고 중단(원점 스폰 방지)
+	AActor* StartSpot = FindPlayerStart(PC);
+	if (!StartSpot)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("RespawnPlayerAsRole: PlayerStart 없음 (%s)"), *PC->GetName());
+		return;
+	}
+
 	if (APawn* OldPawn = PC->GetPawn())
 	{
 		PC->UnPossess();
 		OldPawn->Destroy();
 	}
 
-	FVector SpawnLoc = FVector::ZeroVector;
-	FRotator SpawnRot = FRotator::ZeroRotator;
-	if (AActor* StartSpot = FindPlayerStart(PC))
-	{
-		SpawnLoc = StartSpot->GetActorLocation();
-		SpawnRot = StartSpot->GetActorRotation();
-	}
-
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-	if (ABaseCharacter* NewPawn = GetWorld()->SpawnActor<ABaseCharacter>(CharClass, SpawnLoc, SpawnRot, Params))
+	if (ABaseCharacter* NewPawn = GetWorld()->SpawnActor<ABaseCharacter>(
+			CharClass, StartSpot->GetActorLocation(), StartSpot->GetActorRotation(), Params))
 	{
 		PC->Possess(NewPawn);
 	}
@@ -311,7 +337,12 @@ void AGODGameMode::CheckWinConditions()
 		}
 	}
 
-	if (AliveSheriffs == 0 && AliveMafias == 0 && AliveOutlaws > 0)
+	// 모든 특수직 전멸(동시 사망 포함) → 시민 승리를 가장 먼저 처리
+	if (AliveSheriffs == 0 && AliveMafias == 0 && AliveOutlaws == 0)
+	{
+		EndGame(EGamePhase::CitizensWon);
+	}
+	else if (AliveSheriffs == 0 && AliveMafias == 0 && AliveOutlaws > 0)
 	{
 		EndGame(EGamePhase::OutlawWon);
 	}

@@ -2,6 +2,10 @@
 
 #include "Player/Role/GODCharacterMafia.h"
 #include "InteractiveProp/DoorBase.h"
+#include "InteractiveProp/ItemBase.h"
+#include "Player/Weapon/BaseWeapon.h"
+#include "Components/PrimitiveComponent.h"
+#include "Components/WidgetComponent.h"
 #include "Game/BaseGameplayTags.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -66,8 +70,23 @@ void AGODCharacterMafia::UseMasterKey(AActor* DoorActor)
 void AGODCharacterMafia::UseWireCutter(AActor* GearActor)
 {
 	if (!HasAuthority() || !IsValid(GearActor)) return;
-	// 기어 액터 구현 후 IGearInterface::DestroyGear() 호출로 교체
-	GearActor->Destroy();
+
+	// 들고 있던 캐릭터의 CurrentHeldItem을 먼저 정리
+	if (AItemBase* Item = Cast<AItemBase>(GearActor))
+	{
+		if (Item->bIsHeld)
+			Item->Server_Drop();
+	}
+
+	// Destroy() 대신 태그+숨김으로 처리:
+
+	GearActor->Tags.AddUnique(FName(TEXT("Gear.Destroyed")));
+	GearActor->SetActorHiddenInGame(true);
+
+	if (UPrimitiveComponent* Root = Cast<UPrimitiveComponent>(GearActor->GetRootComponent()))
+	{
+		Root->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
 }
 
 // ── 시체 은폐 (팀원 GA 호출용) ──
@@ -107,15 +126,21 @@ void AGODCharacterMafia::OnRep_IsInvisible()
 
 void AGODCharacterMafia::UpdateMeshVisibilityForInvisibility()
 {
-	if (!GetMesh()) return;
+	ApplyMeshVisibility();
+}
 
-	if (bIsInvisible)
+void AGODCharacterMafia::ApplyMeshVisibility()
+{
+	// 투명화 중이고 자신의 화면이 아닌 경우: 메시/무기/아이템/위젯 모두 강제 숨김.
+	// bMeshHidden 상태는 투명화 해제 후 RevealMesh()가 처리.
+	if (bIsInvisible && !IsLocallyControlled())
 	{
-		if (!IsLocallyControlled())
-			GetMesh()->SetVisibility(false);
+		if (GetMesh()) GetMesh()->SetVisibility(false);
+		if (CurrentWeapon) CurrentWeapon->SetActorHiddenInGame(true);
+		if (CurrentHeldItem) CurrentHeldItem->SetActorHiddenInGame(true);
+		if (WidgetComponent) WidgetComponent->SetVisibility(false, true);
+		return;
 	}
-	else
-	{
-		GetMesh()->SetVisibility(true);
-	}
+	// 투명화가 아닐 때는 bMeshHidden 기반 베이스 로직을 그대로 사용
+	Super::ApplyMeshVisibility();
 }

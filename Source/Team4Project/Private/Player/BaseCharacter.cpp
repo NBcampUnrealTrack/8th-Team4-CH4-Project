@@ -2,6 +2,7 @@
 
 
 #include "Player/BaseCharacter.h"
+#include "Player/GODPlayerState.h"
 #include "Player/Component/BaseAbilitySystemComponent.h"
 #include "Player/Component/BaseAttributeSet.h"
 #include "Player/Weapon/BaseWeapon.h"
@@ -316,6 +317,12 @@ void ABaseCharacter::Die(AActor* Killer)
 	if (!HasAuthority() || bIsDead) return;
 
 	bIsDead = true;
+
+	// HandlePlayerDeath를 거치지 않는 직접 호출에서도 두 사망 상태가 일치하도록 동기화.
+	if (AGODPlayerState* PS = GetPlayerState<AGODPlayerState>())
+	{
+		PS->bIsAlive = false;
+	}
 
 	OnCharacterDied.Broadcast(this, Killer);
 
