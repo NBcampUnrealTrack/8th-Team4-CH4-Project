@@ -2,7 +2,7 @@
 
 
 #include "Player/Weapon/BaseWeapon.h"
-#include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "NiagaraFunctionLibrary.h"
 
 ABaseWeapon::ABaseWeapon()
@@ -10,7 +10,7 @@ ABaseWeapon::ABaseWeapon()
 	PrimaryActorTick.bCanEverTick = false;
 	bReplicates = true;
 
-	WeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponMesh"));
+	WeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WeaponMesh"));
 	SetRootComponent(WeaponMesh);
 	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
