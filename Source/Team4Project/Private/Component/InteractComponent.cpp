@@ -23,7 +23,8 @@ void UInteractComponent::BeginPlay()
 	InteractSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
 	InteractSphere->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap); // 문, 밸브 등
 	InteractSphere->SetCollisionResponseToChannel(ECC_WorldStatic,  ECR_Overlap); // 고정 오브젝트
-	InteractSphere->SetCollisionResponseToChannel(ECC_PhysicsBody,  ECR_Overlap); // 물리 아이템
+	InteractSphere->SetCollisionResponseToChannel(ECC_PhysicsBody,  ECR_Overlap); // 물리 아이템 + 래그돌 시체
+	InteractSphere->SetCollisionResponseToChannel(ECC_Pawn,         ECR_Overlap); // 생존 캐릭터 (수색/탄약빼앗기)
 	InteractSphere->SetGenerateOverlapEvents(true);
 	InteractSphere->RegisterComponent();
 	InteractSphere->AttachToComponent(
@@ -83,6 +84,27 @@ AActor* UInteractComponent::GetClosestInteractable() const
 	for (AActor* Actor : NearbyInteractables)
 	{
 		if (!IsValid(Actor)) continue;
+		const float DistSq = FVector::DistSquared(OwnerLoc, Actor->GetActorLocation());
+		if (DistSq < BestDistSq)
+		{
+			BestDistSq = DistSq;
+			Closest = Actor;
+		}
+	}
+	return Closest;
+}
+
+AActor* UInteractComponent::GetClosestInteractableOfClass(TSubclassOf<AActor> ActorClass) const
+{
+	if (!ActorClass) return nullptr;
+
+	AActor* Closest = nullptr;
+	float BestDistSq = FLT_MAX;
+	const FVector OwnerLoc = GetOwner()->GetActorLocation();
+
+	for (AActor* Actor : NearbyInteractables)
+	{
+		if (!IsValid(Actor) || !Actor->IsA(ActorClass)) continue;
 		const float DistSq = FVector::DistSquared(OwnerLoc, Actor->GetActorLocation());
 		if (DistSq < BestDistSq)
 		{

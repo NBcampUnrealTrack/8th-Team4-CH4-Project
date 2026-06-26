@@ -18,6 +18,7 @@
 #include "GameFramework/PlayerController.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Net/UnrealNetwork.h"
+#include "AbilitySystemBlueprintLibrary.h"
 
 ABaseCharacter::ABaseCharacter()
 {
@@ -365,5 +366,30 @@ void ABaseCharacter::OnRep_IsDead()
 	{
 		Multicast_HandleDeath_Implementation();
 	}
+}
+
+// ============================================================
+// IInteractable
+// ============================================================
+
+void ABaseCharacter::Interact_Implementation(ACharacter* Interactor)
+{
+	if (!HasAuthority() || !Interactor) return;
+
+	FGameplayEventData EventData;
+	EventData.OptionalObject = this;
+
+	const FGameplayTag TriggerTag = bIsDead
+		? FGameplayTag::RequestGameplayTag(TEXT("Ability.Trigger.StealAmmo"))
+		: FGameplayTag::RequestGameplayTag(TEXT("Ability.Trigger.SearchTarget"));
+
+	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(Interactor, TriggerTag, EventData);
+}
+
+FText ABaseCharacter::GetInteractPrompt_Implementation() const
+{
+	return bIsDead
+		? FText::FromString(TEXT("탄약 빼앗기"))
+		: FText::FromString(TEXT("수색"));
 }
 

@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "GameplayTagContainer.h"
 #include "AbilitySystemInterface.h"
+#include "Interface/Interactable.h"
 #include "ActiveGameplayEffectHandle.h"
 #include "GameplayAbilitySpecHandle.h"
 #include "BaseCharacter.generated.h"
@@ -25,7 +26,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterDied,
 	AActor*, Killer);
 
 UCLASS()
-class TEAM4PROJECT_API ABaseCharacter : public ACharacter, public IAbilitySystemInterface
+class TEAM4PROJECT_API ABaseCharacter : public ACharacter, public IAbilitySystemInterface, public IInteractable
 {
 	GENERATED_BODY()
 
@@ -104,6 +105,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction")
 	TObjectPtr<UInteractComponent> InteractComponent;
 
+	// IInteractable — 죽은 캐릭터: 탄약 빼앗기 / 살아있는 캐릭터: 수색
+	virtual void Interact_Implementation(ACharacter* Interactor) override;
+	virtual FText GetInteractPrompt_Implementation() const override;
 	// 캐릭터에 붙는 위젯(이름표/표식 등). BP 에서 위젯 클래스·위치 지정.
 	// 투명화/시체 은폐로 메시가 숨겨질 때 이 위젯도 함께 숨겨진다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "UI")
