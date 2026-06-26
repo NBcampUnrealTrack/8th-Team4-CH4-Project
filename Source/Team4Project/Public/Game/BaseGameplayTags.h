@@ -30,8 +30,9 @@ namespace State
 {
     namespace Weapon
     {
-        // 총기 장착 상태 (Fire 어빌리티 발동 조건)
-        UE_DECLARE_GAMEPLAY_TAG_EXTERN(GunEquipped)
+        UE_DECLARE_GAMEPLAY_TAG_EXTERN(EquipGun)
+        UE_DECLARE_GAMEPLAY_TAG_EXTERN(EquipCoal)
+        UE_DECLARE_GAMEPLAY_TAG_EXTERN(EquipGear)
     }
 }
 

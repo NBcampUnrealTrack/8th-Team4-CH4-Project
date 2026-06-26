@@ -1,9 +1,11 @@
 #include "InteractiveProp/CoalItem.h"
 #include "Player/GODPlayerState.h"
+#include "Game/BaseGameplayTags.h"
 #include "GameFramework/Character.h"
 
 ACoalItem::ACoalItem()
 {
+	EquipStateTag = State::Weapon::EquipCoal.GetTag();
 }
 
 void ACoalItem::Server_PickUp_Implementation(ACharacter* Holder)

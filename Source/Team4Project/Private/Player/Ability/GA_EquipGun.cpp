@@ -33,7 +33,7 @@ void UGA_EquipGun::ActivateAbility(
 		return;
 	}
 
-	const FGameplayTag EquippedTag = State::Weapon::GunEquipped.GetTag();
+	const FGameplayTag EquippedTag = State::Weapon::EquipGun.GetTag();
 
 	// 토글: 이미 장착돼 있으면 -> 장착 해제 (무기 제거 + 태그 제거)
 	if (ASC->HasMatchingGameplayTag(EquippedTag))
@@ -57,6 +57,10 @@ void UGA_EquipGun::ActivateAbility(
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
+
+	// 단일 슬롯: 총을 들기 전에 들고 있던 물리 아이템(석탄/기어)을 떨군다.
+	// (이 분기는 총이 아직 미장착 상태이므로 ClearEquipSlot 의 총 해제 경로는 동작하지 않음.)
+	Character->ClearEquipSlot();
 
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.Owner = Character;
