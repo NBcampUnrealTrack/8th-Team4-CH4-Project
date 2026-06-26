@@ -13,6 +13,7 @@ class UBaseAttributeSet;
 class UGameplayAbility;
 class UGameplayEffect;
 class ABaseWeapon;
+class AItemBase;
 class UInteractComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterDied,
@@ -58,6 +59,17 @@ public:
 	// 장착한 무기 설정 (서버에서 EquipGun 어빌리티가 호출)
 	void SetCurrentWeapon(ABaseWeapon* InWeapon) { CurrentWeapon = InWeapon; }
 
+	// 현재 손에 든 물리 아이템(석탄/기어 등). 무기는 CurrentWeapon 으로 별도 관리.
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Item")
+	AItemBase* GetCurrentHeldItem() const { return CurrentHeldItem; }
+
+	// 보유 아이템 설정 (서버에서 ItemBase 픽업/드롭이 호출)
+	void SetCurrentHeldItem(AItemBase* InItem) { CurrentHeldItem = InItem; }
+
+	// 장착 슬롯을 비운다(서버 전용): 총이면 해제(파괴+태그 제거), 물리 아이템이면 떨군다.
+	// 새 아이템/무기를 장착하기 직전에 호출해 "한 번에 하나만" 들도록 강제한다.
+	void ClearEquipSlot();
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction")
 	TObjectPtr<UInteractComponent> InteractComponent;
 
@@ -88,6 +100,10 @@ protected:
 	// 현재 장착 무기 (서버에서 스폰 후 설정, 클라에 복제)
 	UPROPERTY(Replicated)
 	TObjectPtr<ABaseWeapon> CurrentWeapon;
+
+	// 현재 손에 든 물리 아이템 (서버에서 픽업 시 설정, 클라에 복제)
+	UPROPERTY(Replicated)
+	TObjectPtr<AItemBase> CurrentHeldItem;
 
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_HandleDeath();

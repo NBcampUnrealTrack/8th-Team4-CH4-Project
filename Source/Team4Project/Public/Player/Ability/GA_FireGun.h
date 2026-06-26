@@ -9,7 +9,12 @@
 /**
  * 총기 발사 어빌리티 (공통). State.Weapon.GunEquipped 상태에서만 발동.
  * 라인트레이스로 명중 판정 후, 맞은 캐릭터를 즉시 사망 처리(마피아 게임 룰).
- * 연사 방지는 Cooldown GE(긴 지속시간) / 탄약 소모는 Cost GE 로 BP 에서 설정.
+ *
+ * 쿨다운/비용은 BP 에서 GE 를 만들어 어빌리티 디폴트에 지정한다(값도 GE 안에 직접):
+ *   - Cooldown Gameplay Effect Class : Has Duration(예: 2초) + 쿨다운 태그 1개 부여 → 재발동 차단
+ *   - Cost Gameplay Effect Class     : Instant + CurrentAmmo 에 Add -1 → 발사 시 탄약 차감,
+ *                                      0발이면 기본 비용검사가 발동을 자동 차단
+ * 별도 C++ 변수/오버라이드 없이 GAS 기본 CommitAbility 흐름으로 처리된다.
  */
 UCLASS()
 class TEAM4PROJECT_API UGA_FireGun : public UGameplayAbility

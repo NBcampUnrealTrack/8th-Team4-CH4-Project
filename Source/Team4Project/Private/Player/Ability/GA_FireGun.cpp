@@ -18,7 +18,9 @@ UGA_FireGun::UGA_FireGun()
 	SetAssetTags(Tags);
 
 	// 총기 장착 상태에서만 발동
-	ActivationRequiredTags.AddTag(State::Weapon::GunEquipped.GetTag());
+	ActivationRequiredTags.AddTag(State::Weapon::EquipGun.GetTag());
+
+	// 쿨다운/비용 GE 는 BP 에서 CooldownGameplayEffectClass / CostGameplayEffectClass 에 지정한다.
 }
 
 void UGA_FireGun::ActivateAbility(
@@ -41,21 +43,17 @@ void UGA_FireGun::ActivateAbility(
 		return;
 	}
 
-	// 명중 판정/사망 처리는 서버에서만
 	if (Character->HasAuthority())
 	{
-		const FRotator AimRot = Character->GetBaseAimRotation();
+		ABaseWeapon* Weapon = Character->GetCurrentWeapon();
 
-		FVector Start = Character->GetActorLocation();
-		if (ABaseWeapon* Weapon = Character->GetCurrentWeapon())
-		{
-			Start = Weapon->GetMuzzleLocation();
-		}
+		const FRotator AimRot = Character->GetBaseAimRotation();
+		const FVector Start = Weapon ? Weapon->GetMuzzleLocation() : Character->GetActorLocation();
 		const FVector End = Start + AimRot.Vector() * Range;
 
 		FCollisionQueryParams Params;
 		Params.AddIgnoredActor(Character);
-		if (ABaseWeapon* Weapon = Character->GetCurrentWeapon())
+		if (Weapon)
 		{
 			Params.AddIgnoredActor(Weapon);
 		}
@@ -69,10 +67,18 @@ void UGA_FireGun::ActivateAbility(
 			{
 				if (!Target->IsDead())
 				{
-					// 맞으면 즉시 사망 (데미지 없음 - 마피아 룰)
 					Target->Die(Character);
 				}
 			}
+		}
+
+		// 머즐 + 명중 임팩트 이펙트 (서버 → 전 클라 재생). 발사가 성사된 경우에만 도달.
+		if (Weapon)
+		{
+			Weapon->Multicast_PlayFireFX(
+				bHit,
+				bHit ? Hit.ImpactPoint : FVector::ZeroVector,
+				bHit ? Hit.ImpactNormal : FVector::UpVector);
 		}
 
 		if (bDrawDebug)
