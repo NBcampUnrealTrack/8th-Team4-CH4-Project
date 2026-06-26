@@ -31,7 +31,7 @@ void AItemBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 
 void AItemBase::Server_PickUp_Implementation(ACharacter* Holder)
 {
-	if (!Holder || bIsHeld) return;
+	if (!Holder || bIsHeld || ActorHasTag(TEXT("Gear.Destroyed"))) return;
 
 	// 단일 슬롯: 새 아이템을 들기 전에 기존 장착(총/다른 아이템)을 먼저 비운다.
 	ABaseCharacter* BaseChar = Cast<ABaseCharacter>(Holder);
@@ -122,5 +122,7 @@ void AItemBase::Interact_Implementation(ACharacter* Interactor)
 
 FText AItemBase::GetInteractPrompt_Implementation() const
 {
+	if (ActorHasTag(TEXT("Gear.Destroyed")))
+		return FText::GetEmpty();
 	return FText::FromString(TEXT("집기"));
 }

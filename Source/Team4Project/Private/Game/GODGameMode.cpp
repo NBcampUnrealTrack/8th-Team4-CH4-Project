@@ -6,6 +6,7 @@
 #include "Player/BasePlayerController.h"
 #include "InteractiveProp/GODTrain.h"
 #include "InteractiveProp/PressureValve.h"
+#include "InteractiveProp/PickupGear.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
 #include "TimerManager.h"
@@ -110,10 +111,15 @@ void AGODGameMode::StartGame()
 	GODGS->LobbyCountdown = 0;
 	TimeElapsed = 0;
 
-	// 재시작 대비: 이전 라운드에서 화부가 잠근 밸브 태그 초기화
+	// 재시작 대비: 이전 라운드 상태 초기화
 	for (TActorIterator<APressureValve> It(GetWorld()); It; ++It)
 	{
 		(*It)->Tags.Remove(FName(TEXT("Stoker.ForceClose")));
+	}
+	for (TActorIterator<APickupGear> It(GetWorld()); It; ++It)
+	{
+		if ((*It)->ActorHasTag(TEXT("Gear.Destroyed")))
+			(*It)->Destroy();
 	}
 
 	AssignRoles();

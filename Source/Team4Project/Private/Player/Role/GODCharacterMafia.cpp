@@ -4,6 +4,7 @@
 #include "InteractiveProp/DoorBase.h"
 #include "InteractiveProp/ItemBase.h"
 #include "Player/Weapon/BaseWeapon.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Game/BaseGameplayTags.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -70,16 +71,22 @@ void AGODCharacterMafia::UseWireCutter(AActor* GearActor)
 {
 	if (!HasAuthority() || !IsValid(GearActor)) return;
 
-	// 다른 플레이어가 들고 있는 경우 먼저 놓게 해서 CurrentHeldItem dangling 방지
+	// 들고 있던 캐릭터의 CurrentHeldItem을 먼저 정리
 	if (AItemBase* Item = Cast<AItemBase>(GearActor))
 	{
 		if (Item->bIsHeld)
-		{
 			Item->Server_Drop();
-		}
 	}
 
-	GearActor->Destroy();
+	// Destroy() 대신 태그+숨김으로 처리:
+
+	GearActor->Tags.AddUnique(FName(TEXT("Gear.Destroyed")));
+	GearActor->SetActorHiddenInGame(true);
+
+	if (UPrimitiveComponent* Root = Cast<UPrimitiveComponent>(GearActor->GetRootComponent()))
+	{
+		Root->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
 }
 
 // ── 시체 은폐 (팀원 GA 호출용) ──
