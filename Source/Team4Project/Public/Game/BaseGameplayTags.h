@@ -5,13 +5,24 @@
 
 namespace Character
 {
-    namespace Crew
-    {
-        UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mechanic)
-        UE_DECLARE_GAMEPLAY_TAG_EXTERN(Sheriff)
-        UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mafia)
-        UE_DECLARE_GAMEPLAY_TAG_EXTERN(Outlaw)
-    }
+	namespace Crew
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mechanic)
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Watchman)
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Stoker)
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Porter)
+	}
+	namespace Special
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Sheriff)
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mafia)
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Outlaw)
+	}
+}
+
+namespace Role
+{
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(HasWireCutter)
 }
 
 namespace SetByCaller

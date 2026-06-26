@@ -2,6 +2,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "GameFramework/Character.h"
+#include "AbilitySystemBlueprintLibrary.h"
 
 ADoorBase::ADoorBase()
 {
@@ -81,6 +83,13 @@ void ADoorBase::SetLocked(bool bLock)
 	if (!HasAuthority()) return;
 
 	bIsLocked = bLock;
+
+	// Actor Tag 동기화 (GA_UnlockDoor의 ActorHasTag 체크와 일치시키기 위해)
+	if (bLock)
+		Tags.AddUnique(TEXT("Door.Locked"));
+	else
+		Tags.Remove(TEXT("Door.Locked"));
+
 	OnRep_IsLocked();
 }
 
@@ -104,6 +113,18 @@ void ADoorBase::OnRep_IsLocked()
 
 void ADoorBase::Interact_Implementation(ACharacter* Interactor)
 {
+	if (!HasAuthority() || !Interactor) return;
+
+	// 역할별 GA 이벤트 전송 (ActivationRequiredTags가 역할 판정)
+	// MasterKey(마피아): 잠금 / UnlockDoor(보안관): 잠금 해제
+	FGameplayEventData EventData;
+	EventData.OptionalObject = this;
+	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
+		Interactor, FGameplayTag::RequestGameplayTag(TEXT("Ability.Trigger.MasterKey")), EventData);
+	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
+		Interactor, FGameplayTag::RequestGameplayTag(TEXT("Ability.Trigger.UnlockDoor")), EventData);
+
+	// 일반 개폐 (잠긴 상태면 ToggleDoor 내부에서 무시됨)
 	ToggleDoor();
 }
 

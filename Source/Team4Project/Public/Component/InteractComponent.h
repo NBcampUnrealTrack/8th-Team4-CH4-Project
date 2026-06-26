@@ -27,6 +27,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Interaction")
 	bool HasInteractable() const { return GetClosestInteractable() != nullptr; }
 
+	// 범위 안의 IInteractable 중 가장 가까운 것 반환
+	AActor* GetClosestInteractable() const;
+
+	// 범위 안의 IInteractable 중 특정 클래스에 해당하는 가장 가까운 것 반환 (GA 직접 타겟팅용)
+	AActor* GetClosestInteractableOfClass(TSubclassOf<AActor> ActorClass) const;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
 	float InteractRadius = 200.f;
 
@@ -54,6 +60,4 @@ private:
 	UFUNCTION()
 	void OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
-
-	AActor* GetClosestInteractable() const;
 };

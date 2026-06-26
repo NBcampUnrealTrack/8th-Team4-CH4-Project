@@ -5,6 +5,9 @@
 #include "GODGameState.h"
 #include "GODGameMode.generated.h"
 
+class ABaseCharacter;
+class AGODPlayerState;
+
 UCLASS()
 class TEAM4PROJECT_API AGODGameMode : public AGameModeBase
 {
@@ -51,6 +54,30 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic|Maps")
 	FString MainMenuMapPath = TEXT("/Game/Level/TitleMap");
 
+	// ============================================================
+	// 역할별 캐릭터 BP 클래스 — BP_GODGameMode 에서 지정
+	// ============================================================
+	UPROPERTY(EditDefaultsOnly, Category = "Spawning")
+	TSubclassOf<ABaseCharacter> MafiaClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Spawning")
+	TSubclassOf<ABaseCharacter> SheriffClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Spawning")
+	TSubclassOf<ABaseCharacter> OutlawClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Spawning")
+	TSubclassOf<ABaseCharacter> MechanicClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Spawning")
+	TSubclassOf<ABaseCharacter> WatchmanClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Spawning")
+	TSubclassOf<ABaseCharacter> StokerClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Spawning")
+	TSubclassOf<ABaseCharacter> PorterClass;
+
 private:
 	FTimerHandle GameTimerHandle;
 	FTimerHandle CountdownTimerHandle;
@@ -62,6 +89,10 @@ private:
 	void AssignRoles();
 	void CheckWinConditions();
 	void EndGame(EGamePhase WinningPhase);
+
+	TSubclassOf<ABaseCharacter> GetClassForRole(AGODPlayerState* PS) const;
+	void RespawnPlayerAsRole(APlayerController* PC, TSubclassOf<ABaseCharacter> CharClass);
+	void SetupWatchmanTracking();
 
 	/** 타이머 만료 시 메인 메뉴로 복귀. */
 	UFUNCTION()

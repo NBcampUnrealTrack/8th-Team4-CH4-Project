@@ -1,9 +1,12 @@
 ﻿#include "Game/GODGameMode.h"
 #include "Game/GODGameState.h"
 #include "Player/GODPlayerState.h"
+#include "Player/BaseCharacter.h"
+#include "Player/Role/GODCharacterWatchman.h"
 #include "Player/BasePlayerController.h"
 #include "InteractiveProp/GODTrain.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerStart.h"
 #include "TimerManager.h"
 #include "EngineUtils.h"
 
@@ -133,19 +136,100 @@ void AGODGameMode::AssignRoles()
 
 	for (int32 i = 0; i < PlayerArray.Num(); ++i)
 	{
-		if (AGODPlayerState* PS = PlayerArray[i]->GetPlayerState<AGODPlayerState>())
-		{
-			if (i < RolePool.Num())
+		APlayerController* PC = PlayerArray[i];
+		AGODPlayerState* PS = PC ? PC->GetPlayerState<AGODPlayerState>() : nullptr;
+		if (!PS || i >= RolePool.Num()) continue;
+
+		PS->MainRole    = RolePool[i];
+		PS->CitizenClass = (PS->MainRole == EMainRole::Citizen)
+			? static_cast<ECitizenClass>(FMath::RandRange(1, 4))
+			: ECitizenClass::None;
+		PS->AmmoCount = 1;
+		PS->bIsAlive  = true;
+
+		RespawnPlayerAsRole(PC, GetClassForRole(PS));
+	}
+
+	SetupWatchmanTracking();
+}
+
+TSubclassOf<ABaseCharacter> AGODGameMode::GetClassForRole(AGODPlayerState* PS) const
+{
+	if (!PS) return nullptr;
+
+	switch (PS->MainRole)
+	{
+		case EMainRole::Mafia:   return MafiaClass;
+		case EMainRole::Sheriff: return SheriffClass;
+		case EMainRole::Outlaw:  return OutlawClass;
+		case EMainRole::Citizen:
+			switch (PS->CitizenClass)
 			{
-				PS->MainRole = RolePool[i];
-				PS->CitizenClass = (PS->MainRole == EMainRole::Citizen)
-					? static_cast<ECitizenClass>(FMath::RandRange(1, 4))
-					: ECitizenClass::None;
-				PS->AmmoCount = 1;
-				PS->bIsAlive = true;
+				case ECitizenClass::Mechanic: return MechanicClass;
+				case ECitizenClass::Watchman: return WatchmanClass;
+				case ECitizenClass::Stoker:   return StokerClass;
+				case ECitizenClass::Porter:   return PorterClass;
+				default: return nullptr;
 			}
+		default: return nullptr;
+	}
+}
+
+void AGODGameMode::RespawnPlayerAsRole(APlayerController* PC, TSubclassOf<ABaseCharacter> CharClass)
+{
+	if (!PC || !CharClass) return;
+
+	if (APawn* OldPawn = PC->GetPawn())
+	{
+		PC->UnPossess();
+		OldPawn->Destroy();
+	}
+
+	FVector SpawnLoc = FVector::ZeroVector;
+	FRotator SpawnRot = FRotator::ZeroRotator;
+	if (AActor* StartSpot = FindPlayerStart(PC))
+	{
+		SpawnLoc = StartSpot->GetActorLocation();
+		SpawnRot = StartSpot->GetActorRotation();
+	}
+
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	if (ABaseCharacter* NewPawn = GetWorld()->SpawnActor<ABaseCharacter>(CharClass, SpawnLoc, SpawnRot, Params))
+	{
+		PC->Possess(NewPawn);
+	}
+}
+
+void AGODGameMode::SetupWatchmanTracking()
+{
+	AGODCharacterWatchman* Watchman = nullptr;
+	TArray<ABaseCharacter*> SpecialChars;
+
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* PC = It->Get();
+		if (!PC) continue;
+
+		AGODPlayerState* PS = PC->GetPlayerState<AGODPlayerState>();
+		if (!PS) continue;
+
+		if (PS->MainRole == EMainRole::Citizen && PS->CitizenClass == ECitizenClass::Watchman)
+		{
+			Watchman = Cast<AGODCharacterWatchman>(PC->GetPawn());
+		}
+		else if (PS->MainRole == EMainRole::Mafia || PS->MainRole == EMainRole::Outlaw)
+		{
+			if (ABaseCharacter* Char = Cast<ABaseCharacter>(PC->GetPawn()))
+				SpecialChars.Add(Char);
 		}
 	}
+
+	if (!Watchman || SpecialChars.Num() == 0) return;
+
+	ABaseCharacter* P2 = SpecialChars.Num() >= 2 ? SpecialChars[1] : nullptr;
+	Watchman->SetTrackedPlayers(SpecialChars[0], P2, FLinearColor::Red, FLinearColor::Blue);
 }
 
 void AGODGameMode::UpdateGameTimer()
