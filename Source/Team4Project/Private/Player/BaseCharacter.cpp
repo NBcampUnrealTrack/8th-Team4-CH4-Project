@@ -199,7 +199,7 @@ void ABaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 
 bool ABaseCharacter::IsMafia() const
 {
-	return CharacterTag == Character::Crew::Mafia.GetTag();
+	return CharacterTag == Character::Special::Mafia.GetTag();
 }
 
 void ABaseCharacter::SetInvisibleForDuration(float Duration)
