@@ -74,14 +74,21 @@ void AGODCharacterMafia::UseWireCutter(AActor* GearActor)
 
 void AGODCharacterMafia::Multicast_HideBody_Implementation(ABaseCharacter* DeadCharacter)
 {
-	if (IsValid(DeadCharacter) && DeadCharacter->GetMesh())
+	if (!IsValid(DeadCharacter)) return;
+	if (DeadCharacter->GetMesh())
 		DeadCharacter->GetMesh()->SetVisibility(false);
+	// 보안관 패시브 감지용 태그 (서버에서만 의미 있음)
+	if (HasAuthority())
+		DeadCharacter->Tags.AddUnique(TEXT("Body.Hidden"));
 }
 
 void AGODCharacterMafia::Multicast_ShowBody_Implementation(ABaseCharacter* DeadCharacter)
 {
-	if (IsValid(DeadCharacter) && DeadCharacter->GetMesh())
+	if (!IsValid(DeadCharacter)) return;
+	if (DeadCharacter->GetMesh())
 		DeadCharacter->GetMesh()->SetVisibility(true);
+	if (HasAuthority())
+		DeadCharacter->Tags.Remove(TEXT("Body.Hidden"));
 }
 
 // ── 투명화 ──

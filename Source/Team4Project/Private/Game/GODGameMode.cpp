@@ -261,15 +261,21 @@ void AGODGameMode::HandlePlayerDeath(AGODPlayerState* KillerPS, AGODPlayerState*
 
 	VictimPS->bIsAlive = false;
 
+	// 캐릭터 사망 처리 (래그돌 + bIsDead 설정)
+	if (AController* VictimPC = Cast<AController>(VictimPS->GetOwner()))
+	{
+		if (ABaseCharacter* VictimChar = Cast<ABaseCharacter>(VictimPC->GetPawn()))
+		{
+			AController* KillerPC = KillerPS ? Cast<AController>(KillerPS->GetOwner()) : nullptr;
+			VictimChar->Die(KillerPC ? KillerPC->GetPawn() : nullptr);
+		}
+	}
+
 	// 피해자 관전 모드 전환
 	if (ABasePlayerController* VictimPC = Cast<ABasePlayerController>(VictimPS->GetOwner()))
 	{
 		VictimPC->Client_StartSpectating();
 	}
-
-	// TODO: 피해자 캐릭터 래그돌 활성화 — 캐릭터 클래스 구현 후 연결
-	// ACharacter* VictimChar = Cast<ACharacter>(VictimPS->GetPawn());
-	// if (VictimChar) { VictimChar->EnableRagdoll(); }
 
 	if (KillerPS)
 	{

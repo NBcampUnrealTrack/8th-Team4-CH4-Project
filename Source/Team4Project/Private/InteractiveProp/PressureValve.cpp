@@ -50,7 +50,8 @@ void APressureValve::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 
 void APressureValve::Server_StartTurning_Implementation(AController* Operator)
 {
-	if (bIsTurning) return;
+	// 화부가 강제 차단한 밸브는 재조작 불가
+	if (bIsTurning || ActorHasTag(TEXT("Stoker.ForceClose"))) return;
 	bIsTurning = true;
 }
 

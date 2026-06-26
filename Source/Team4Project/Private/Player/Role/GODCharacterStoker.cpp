@@ -1,6 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Player/Role/GODCharacterStoker.h"
+#include "InteractiveProp/PressureValve.h"
 #include "Game/BaseGameplayTags.h"
 
 AGODCharacterStoker::AGODCharacterStoker()
@@ -24,7 +25,9 @@ void AGODCharacterStoker::ForceClosePressureValve(AActor* PressureValveActor)
 {
 	if (!HasAuthority() || !PressureValveActor) return;
 
-	// 압력 밸브 액터의 강제 차단 인터페이스 호출.
-	// 밸브 액터 구현 시 Execute_ForceClose 또는 컴포넌트 함수로 교체할 것.
-	PressureValveActor->Tags.AddUnique(TEXT("Stoker.ForceClose"));
+	if (APressureValve* Valve = Cast<APressureValve>(PressureValveActor))
+	{
+		Valve->Server_StopTurning();
+		Valve->Tags.AddUnique(TEXT("Stoker.ForceClose")); // 이후 일반 조작 차단용
+	}
 }
