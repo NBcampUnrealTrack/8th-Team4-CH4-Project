@@ -71,6 +71,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Role")
 	void SetCharacterTag(const FGameplayTag& NewTag);
 
+	// Speed 속성(디버프/날씨/버프 GE 반영분) × 무게배수(짐꾼 면제)로 MaxWalkSpeed 재계산.
+	// Speed/Weight 속성 변경 시 자동 호출된다.
+	UFUNCTION(BlueprintCallable, Category = "Stats|Speed")
+	void RecalculateMoveSpeed();
+
+	// Weight 속성을 Delta 만큼 증감 (음수 방지). 서버 전용 — 아이템 줍기/떨구기에서 호출.
+	// Weight 가 바뀌면 RecalculateMoveSpeed 가 자동 호출되어 속도에 반영된다.
+	UFUNCTION(BlueprintCallable, Category = "Stats|Speed")
+	void AddWeight(float Delta);
+
 	// 일정 시간 동안 메시(+무기/아이템)를 숨겼다가 복구 (투명화). 서버에서 호출.
 	void SetInvisibleForDuration(float Duration);
 
@@ -94,12 +104,9 @@ public:
 	// 현재 손에 든 물리 아이템(석탄/기어 등). 무기는 CurrentWeapon 으로 별도 관리.
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Item")
 	AItemBase* GetCurrentHeldItem() const { return CurrentHeldItem; }
-
-	// 보유 아이템 설정 (서버에서 ItemBase 픽업/드롭이 호출)
+	
 	void SetCurrentHeldItem(AItemBase* InItem) { CurrentHeldItem = InItem; }
-
-	// 장착 슬롯을 비운다(서버 전용): 총이면 해제(파괴+태그 제거), 물리 아이템이면 떨군다.
-	// 새 아이템/무기를 장착하기 직전에 호출해 "한 번에 하나만" 들도록 강제한다.
+	
 	void ClearEquipSlot();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction")
@@ -121,20 +128,35 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UBaseAttributeSet> AttributeSet;
-
-	// 이 캐릭터의 직업 태그 (예: Character.Crew.Mafia). DT_CharacterRow 조회 키.
-	// 소유 클라에만 복제(역할 노출 방지). 서버 어빌리티는 서버 값을 그대로 사용.
+	
 	UPROPERTY(EditDefaultsOnly, Replicated, Category = "Stats")
 	FGameplayTag CharacterTag;
-
-	//UPROPERTY(EditDefaultsOnly, Category = "Stats")
-	//TObjectPtr<UCharacterStatsConfig> StatsConfig;
 
 	void InitializeAbilityActorInfo();
 	void ServerInitGAS();
 
-	// DT_CharacterRow 의 한 Row(태그)에 담긴 속성 GE/이펙트/어빌리티를 모두 부여 (서버 전용).
-	// 재호출 시 직전 부여분을 먼저 정리하고 새로 적용한다(역할 변경 지원).
+	// ============================================================
+	// 이동 속도 (무게 / 직업)
+	// ============================================================
+	// 디버프/날씨/버프 등 "속도 배수"는 전부 Speed 속성을 곱하는 GameplayEffect 로 표현한다.
+	// (GE 가 Speed CurrentValue 를 깎고/올리면 아래 다리가 MaxWalkSpeed 에 반영)
+	// 무게만 연속값 + 짐꾼 면제 조건이라 C++ 에서 마지막에 곱한다.
+
+	// 무게 1당 이동 속도 감소 비율(짐꾼 제외). 0.01 이면 무게 10에 10% 감소.
+	UPROPERTY(EditDefaultsOnly, Category = "Stats|Speed")
+	float WeightSpeedPenaltyPerUnit = 0.01f;
+
+	// 무게로 인한 최저 속도 배수(이 밑으로는 더 느려지지 않음).
+	UPROPERTY(EditDefaultsOnly, Category = "Stats|Speed")
+	float MinWeightSpeedMultiplier = 0.3f;
+
+	// 속성 변경 콜백 중복 바인딩 방지 플래그.
+	bool bSpeedBindingsInitialized = false;
+
+	// Speed/Weight 속성 변경에 RecalculateMoveSpeed 를 바인딩.
+	void InitSpeedBindings();
+	void HandleSpeedAttributeChanged(const struct FOnAttributeChangeData& Data);
+	
 	void ApplyCharacterDataRow(const FGameplayTag& RowTag);
 
 	// ApplyCharacterDataRow 가 부여한 어빌리티/이펙트를 모두 제거 (서버 전용).

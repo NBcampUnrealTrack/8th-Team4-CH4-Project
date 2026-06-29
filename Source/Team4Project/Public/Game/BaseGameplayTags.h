@@ -46,6 +46,10 @@ namespace State
         UE_DECLARE_GAMEPLAY_TAG_EXTERN(EquipCoal)
         UE_DECLARE_GAMEPLAY_TAG_EXTERN(EquipGear)
     }
+	namespace Debuff
+    {
+    	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Snow)
+    }
 }
 
 namespace Cooldown

@@ -6,6 +6,7 @@
 ACoalItem::ACoalItem()
 {
 	EquipStateTag = State::Weapon::EquipCoal.GetTag();
+	WeightAmount = 30.f; 
 }
 
 void ACoalItem::Server_PickUp_Implementation(ACharacter* Holder)

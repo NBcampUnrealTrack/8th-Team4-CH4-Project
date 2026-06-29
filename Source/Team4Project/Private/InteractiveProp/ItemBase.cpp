@@ -32,8 +32,7 @@ void AItemBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 void AItemBase::Server_PickUp_Implementation(ACharacter* Holder)
 {
 	if (!Holder || bIsHeld || ActorHasTag(TEXT("Gear.Destroyed"))) return;
-
-	// 단일 슬롯: 새 아이템을 들기 전에 기존 장착(총/다른 아이템)을 먼저 비운다.
+	
 	ABaseCharacter* BaseChar = Cast<ABaseCharacter>(Holder);
 	if (BaseChar)
 	{
@@ -42,19 +41,18 @@ void AItemBase::Server_PickUp_Implementation(ACharacter* Holder)
 
 	bIsHeld = true;
 	HolderCharacter = Holder;
-	SetPhysicsForHeld(true);
-
-	if (USkeletalMeshComponent* SkelMesh = Holder->GetMesh())
-	{
-		AttachToComponent(SkelMesh,
-			FAttachmentTransformRules::SnapToTargetNotIncludingScale,
-			AttachSocketName);
-	}
-
-	// 장착 슬롯 등록 + 상태 태그 부여.
+	
+	RefreshHeldAttachment();
+	
 	if (BaseChar)
 	{
 		BaseChar->SetCurrentHeldItem(this);
+
+		// 무게 부여 → 속도 감소(짐꾼 면제). 떨굴 때 동일량 차감.
+		if (WeightAmount != 0.f)
+		{
+			BaseChar->AddWeight(WeightAmount);
+		}
 
 		if (EquipStateTag.IsValid())
 		{
@@ -87,18 +85,51 @@ void AItemBase::Server_Drop_Implementation()
 		{
 			BaseChar->SetCurrentHeldItem(nullptr);
 		}
+
+		// 줍기 때 더한 무게를 되돌린다.
+		if (WeightAmount != 0.f)
+		{
+			BaseChar->AddWeight(-WeightAmount);
+		}
 	}
 
 	bIsHeld = false;
 	HolderCharacter = nullptr;
 
-	DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
-	SetPhysicsForHeld(false);
+	// 서버에서 즉시 분리(클라는 OnRep 에서 동일하게 분리).
+	RefreshHeldAttachment();
 }
 
 void AItemBase::OnRep_bIsHeld()
 {
-	SetPhysicsForHeld(bIsHeld);
+	RefreshHeldAttachment();
+}
+
+void AItemBase::OnRep_HolderCharacter()
+{
+	RefreshHeldAttachment();
+}
+
+void AItemBase::RefreshHeldAttachment()
+{
+	// bIsHeld 와 HolderCharacter 는 따로 복제되어 도착 순서가 보장되지 않는다.
+	// 둘 다 유효할 때만 부착하고, 그 외에는 분리한다. (서버/클라 공통)
+	if (bIsHeld && HolderCharacter)
+	{
+		SetPhysicsForHeld(true);
+
+		if (USkeletalMeshComponent* SkelMesh = HolderCharacter->GetMesh())
+		{
+			AttachToComponent(SkelMesh,
+				FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+				AttachSocketName);
+		}
+	}
+	else
+	{
+		DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+		SetPhysicsForHeld(false);
+	}
 }
 
 void AItemBase::SetPhysicsForHeld(bool bHeld)

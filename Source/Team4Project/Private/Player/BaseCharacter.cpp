@@ -20,6 +20,7 @@
 #include "NiagaraFunctionLibrary.h"
 #include "Net/UnrealNetwork.h"
 #include "AbilitySystemBlueprintLibrary.h"
+#include "Engine/Engine.h" // [임시] 디버그 화면 출력용
 
 ABaseCharacter::ABaseCharacter()
 {
@@ -66,6 +67,9 @@ void ABaseCharacter::InitializeAbilityActorInfo()
 	if (AbilitySystemComponent)
 	{
 		AbilitySystemComponent->InitAbilityActorInfo(this, this);
+
+		// 서버/클라 양쪽에서 속성·태그 변경을 듣고 MaxWalkSpeed 를 로컬에 반영.
+		InitSpeedBindings();
 	}
 }
 
@@ -176,6 +180,72 @@ void ABaseCharacter::SetCharacterTag(const FGameplayTag& NewTag)
 	if (HasAuthority() && bGASInitialized)
 	{
 		ApplyCharacterDataRow(CharacterTag);
+	}
+
+	// 직업이 바뀌면 짐꾼 무게 면제 여부가 달라지므로 즉시 속도 재계산.
+	RecalculateMoveSpeed();
+}
+
+// ============================================================
+// 이동 속도 (무게 / 디버프 / 직업)
+// ============================================================
+
+void ABaseCharacter::InitSpeedBindings()
+{
+	if (bSpeedBindingsInitialized || !AbilitySystemComponent || !AttributeSet) return;
+	bSpeedBindingsInitialized = true;
+
+	// Speed(디버프/날씨/버프 GE 반영분) 또는 Weight 가 바뀌면 MaxWalkSpeed 재계산.
+	AbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(AttributeSet->GetSpeedAttribute())
+		.AddUObject(this, &ABaseCharacter::HandleSpeedAttributeChanged);
+	AbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(AttributeSet->GetWeightAttribute())
+		.AddUObject(this, &ABaseCharacter::HandleSpeedAttributeChanged);
+
+	// 초기 1회 적용.
+	RecalculateMoveSpeed();
+}
+
+void ABaseCharacter::HandleSpeedAttributeChanged(const FOnAttributeChangeData& /*Data*/)
+{
+	RecalculateMoveSpeed();
+}
+
+void ABaseCharacter::AddWeight(float Delta)
+{
+	if (!HasAuthority() || !AttributeSet) return;
+
+	// SetWeight 가 base value 를 갱신 → 복제(OnRep) + 속성 변경 델리게이트로 RecalculateMoveSpeed 트리거.
+	const float NewWeight = FMath::Max(0.f, AttributeSet->GetWeight() + Delta);
+	AttributeSet->SetWeight(NewWeight);
+}
+
+void ABaseCharacter::RecalculateMoveSpeed()
+{
+	UCharacterMovementComponent* CMC = GetCharacterMovement();
+	if (!CMC || !AttributeSet) return;
+
+	// Speed CurrentValue 에는 디버프/날씨/버프 GE 의 배수가 이미 GAS 로 합산돼 있다.
+	float Result = AttributeSet->GetSpeed();
+
+	// 무게 패널티 — 짐꾼(Porter)은 무게의 영향을 받지 않는다. (연속값 + 조건이라 여기서 처리)
+	const bool bIsPorter = (CharacterTag == Character::Crew::Porter.GetTag());
+	if (!bIsPorter)
+	{
+		const float Weight = FMath::Max(0.f, AttributeSet->GetWeight());
+		const float WeightMul = FMath::Max(MinWeightSpeedMultiplier, 1.f - Weight * WeightSpeedPenaltyPerUnit);
+		Result *= WeightMul;
+	}
+
+	CMC->MaxWalkSpeed = FMath::Max(0.f, Result);
+
+	// [임시 디버그] 실제 값 확인용 — 원인 파악 후 이 블록 삭제.
+	if (GEngine)
+	{
+		const TCHAR* NetRole = HasAuthority() ? TEXT("SERVER") : TEXT("CLIENT");
+		GEngine->AddOnScreenDebugMessage(
+			(int32)GetUniqueID(), 5.f, FColor::Yellow,
+			FString::Printf(TEXT("[%s] Speed=%.0f Weight=%.0f Porter=%d -> MaxWalk=%.0f"),
+				NetRole, AttributeSet->GetSpeed(), AttributeSet->GetWeight(), bIsPorter ? 1 : 0, CMC->MaxWalkSpeed));
 	}
 }
 

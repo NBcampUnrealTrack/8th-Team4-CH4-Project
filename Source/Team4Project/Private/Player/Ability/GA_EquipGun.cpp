@@ -73,10 +73,8 @@ void UGA_EquipGun::ActivateAbility(
 	ABaseWeapon* Weapon = GetWorld()->SpawnActor<ABaseWeapon>(WeaponClass, Character->GetActorTransform(), SpawnParams);
 	if (Weapon)
 	{
-		Weapon->AttachToComponent(
-			Character->GetMesh(),
-			FAttachmentTransformRules::SnapToTargetNotIncludingScale,
-			AttachSocketName);
+		// 서버 부착 + 소켓/소유자 복제 → 클라이언트도 OnRep 에서 동일하게 부착(장착 모습 동기화).
+		Weapon->AttachToCharacter(Character, AttachSocketName);
 
 		Character->SetCurrentWeapon(Weapon);
 

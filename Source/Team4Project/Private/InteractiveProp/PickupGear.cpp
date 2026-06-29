@@ -6,6 +6,7 @@
 APickupGear::APickupGear()
 {
 	EquipStateTag = State::Weapon::EquipGear.GetTag();
+	WeightAmount = 15.f;
 }
 
 void APickupGear::Server_PickUp_Implementation(ACharacter* Holder)
