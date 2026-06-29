@@ -44,6 +44,10 @@ namespace State
 		UE_DEFINE_GAMEPLAY_TAG(EquipCoal, "State.Equip.Coal")
 		UE_DEFINE_GAMEPLAY_TAG(EquipGear, "State.Equip.Gear")
 	}
+	namespace Debuff
+	{
+		UE_DEFINE_GAMEPLAY_TAG(Snow, "State.Debuff.Snow")
+	}
 }
 
 namespace Cooldown

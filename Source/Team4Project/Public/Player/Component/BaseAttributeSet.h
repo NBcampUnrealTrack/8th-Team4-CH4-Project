@@ -33,6 +33,14 @@ public:
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_MaxAmmo, Category = "Ammo")
 	FGameplayAttributeData MaxAmmo;
 	ATTRIBUTE_ACCESSORS(UBaseAttributeSet, MaxAmmo)
+	
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Weight, Category = "Weight")
+	FGameplayAttributeData Weight;
+	ATTRIBUTE_ACCESSORS(UBaseAttributeSet, Weight)
+	
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Speed, Category = "Speed")
+	FGameplayAttributeData Speed;
+	ATTRIBUTE_ACCESSORS(UBaseAttributeSet, Speed)
 
 protected:
 	UFUNCTION()
@@ -40,4 +48,10 @@ protected:
 
 	UFUNCTION()
 	void OnRep_MaxAmmo(const FGameplayAttributeData& OldValue);
+
+	UFUNCTION()
+	void OnRep_Weight(const FGameplayAttributeData& OldValue);
+	
+	UFUNCTION()
+	void OnRep_Speed(const FGameplayAttributeData& OldValue);
 };

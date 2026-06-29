@@ -3,7 +3,10 @@
 
 #include "Player/Weapon/BaseWeapon.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/Character.h"
 #include "NiagaraFunctionLibrary.h"
+#include "Net/UnrealNetwork.h"
 
 ABaseWeapon::ABaseWeapon()
 {
@@ -13,6 +16,39 @@ ABaseWeapon::ABaseWeapon()
 	WeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WeaponMesh"));
 	SetRootComponent(WeaponMesh);
 	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+}
+
+void ABaseWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ABaseWeapon, HolderCharacter);
+	DOREPLIFETIME(ABaseWeapon, AttachSocketName);
+}
+
+void ABaseWeapon::AttachToCharacter(ACharacter* InCharacter, FName InSocketName)
+{
+	HolderCharacter = InCharacter;
+	AttachSocketName = InSocketName;
+
+	// 서버에서 즉시 부착(클라는 OnRep_HolderCharacter 에서 동일하게 부착).
+	ApplyAttachment();
+}
+
+void ABaseWeapon::OnRep_HolderCharacter()
+{
+	ApplyAttachment();
+}
+
+void ABaseWeapon::ApplyAttachment()
+{
+	if (!HolderCharacter) return;
+
+	if (USkeletalMeshComponent* OwnerMesh = HolderCharacter->GetMesh())
+	{
+		AttachToComponent(OwnerMesh,
+			FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+			AttachSocketName);
+	}
 }
 
 FVector ABaseWeapon::GetMuzzleLocation() const
