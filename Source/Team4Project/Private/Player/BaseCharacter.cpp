@@ -262,6 +262,8 @@ void ABaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(ABaseCharacter, bMeshHidden);
 	// 직업 태그는 소유 클라에만 복제(다른 플레이어에게 역할 노출 방지).
 	DOREPLIFETIME_CONDITION(ABaseCharacter, CharacterTag, COND_OwnerOnly);
+	
+	DOREPLIFETIME(ABaseCharacter, bIsCoalEquipped);
 }
 
 // ============================================================
@@ -470,3 +472,111 @@ FText ABaseCharacter::GetInteractPrompt_Implementation() const
 		: FText::FromString(TEXT("수색"));
 }
 
+void ABaseCharacter::SetCoalEquipped(bool bEquip)
+{
+	if (!HasAuthority()) return;
+
+	if (bIsCoalEquipped == bEquip)
+		return;
+
+	bIsCoalEquipped = bEquip;
+	
+	
+	UpdateCoalVisual();
+}
+
+void ABaseCharacter::OnRep_CoalEquipped()
+{
+	UpdateCoalVisual();
+}
+
+
+void ABaseCharacter::UpdateCoalVisual()
+{
+	
+
+	if (bIsCoalEquipped)
+	{
+		
+		SpawnCoalHands();
+	}
+	else
+	{
+		
+		DestroyCoalHands();
+	}
+}
+void ABaseCharacter::SpawnCoalHands()
+{
+	
+
+	if (LeftCoalActor || RightCoalActor)
+	{
+		
+		return;
+	}
+
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (!MeshComp)
+	{
+		return;
+	}
+
+	if (!CoalHandClass)
+	{
+		return;
+	}
+	
+
+	FActorSpawnParameters Params;
+	Params.Owner = this;
+	Params.Instigator = this;
+
+	LeftCoalActor = GetWorld()->SpawnActor<AACoalHandVisualActor>(
+		CoalHandClass,
+		MeshComp->GetComponentTransform(),
+		Params
+	);
+	
+
+	if (LeftCoalActor)
+	{
+		LeftCoalActor->AttachToComponent(
+			MeshComp,
+			FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+			TEXT("LeftHand_end")
+		);
+		LeftCoalActor->SetActorScale3D(FVector(0.1f));
+	}
+
+	RightCoalActor = GetWorld()->SpawnActor<AACoalHandVisualActor>(
+		CoalHandClass,
+		MeshComp->GetComponentTransform(),
+		Params
+	);
+	
+
+	if (RightCoalActor)
+	{
+		RightCoalActor->AttachToComponent(
+			MeshComp,
+			FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+			TEXT("RightHand_end")
+		);
+		RightCoalActor->SetActorScale3D(FVector(0.1f));
+	}
+}
+void ABaseCharacter::DestroyCoalHands()
+{
+	if (LeftCoalActor)
+	{
+		LeftCoalActor->Destroy();
+		LeftCoalActor = nullptr;
+	}
+
+	if (RightCoalActor)
+	{
+		RightCoalActor->Destroy();
+		RightCoalActor = nullptr;
+	}
+}
