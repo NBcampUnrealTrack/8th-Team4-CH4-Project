@@ -36,6 +36,15 @@ ABaseCharacter::ABaseCharacter()
 
 	WidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("WidgetComponent"));
 	WidgetComponent->SetupAttachment(RootComponent);
+
+	// 움직이는 기차 위에서 점프해도 발판(기차)에 계속 붙어 함께 이동 → 제자리 착지.
+	// 공중에서도 기차 트랜스폼 델타로 수평 이동+회전을 따라가므로 커브 점프도 안전.
+	// (StayBasedInAirHeight=1000 아래에서 유효. 그 위로 높이 뛰면 베이스를 놓고
+	//  GODTrain::GetVelocity 기반 속도 impart로 폴백)
+	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+	{
+		CMC->bStayBasedInAir = true;
+	}
 }
 
 void ABaseCharacter::BeginPlay()
