@@ -88,6 +88,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
 	float ExplosionSpeedPenalty = 200.f;
 
+	// 압력 80% 이상 시 적용할 속도 배수
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
+	float HighPressureSpeedMultiplier = 0.5f;
+
 private:
 	UFUNCTION() void OnRep_bIsDerailed();
 
@@ -95,6 +99,12 @@ private:
 	UFUNCTION() void OnFurnaceActivated();
 	UFUNCTION() void OnFurnaceDeactivated();
 	UFUNCTION() void OnPressureExploded();
+
+	// 압력 경고 핸들러 (80% 진입/해제)
+	UFUNCTION() void OnPressureWarningStarted();
+	UFUNCTION() void OnPressureWarningEnded();
+
+	bool bHighPressure = false;
 
 	void SyncDistanceToGameState();
 };

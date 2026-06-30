@@ -16,8 +16,11 @@ enum class EGamePhase : uint8
 	MafiaWon          UMETA(DisplayName = "마피아 승리")
 };
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnChatMessageReceived, const FChatMessage&, Message);	
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnChatMessageReceived, const FChatMessage&, Message);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGamePhaseChanged, EGamePhase, NewPhase);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRemainingTimeChanged, int32, NewTime);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDistanceChanged, float, NewDistance);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPressureLevelChanged, float, NewPressure);
 
 UCLASS()
 class TEAM4PROJECT_API AGODGameState : public AGameStateBase
@@ -32,11 +35,15 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_GamePhase, BlueprintReadOnly, Category = "Game State")
 	EGamePhase CurrentPhase;
 
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Game State")
+	UPROPERTY(ReplicatedUsing = OnRep_RemainingTime, BlueprintReadOnly, Category = "Game State")
 	int32 RemainingTime;
 
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Game State")
+	UPROPERTY(ReplicatedUsing = OnRep_DistanceToDestination, BlueprintReadOnly, Category = "Game State")
 	float DistanceToDestination;
+
+	/** 압력 게이지 현재값 (0~100). GODTrain에서 매 Tick 동기화. */
+	UPROPERTY(ReplicatedUsing = OnRep_PressureLevel, BlueprintReadOnly, Category = "Game State")
+	float PressureLevel = 0.f;
 
 	/** 게임 시작 3분 후 true 로 전환 */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Game State")
@@ -56,8 +63,29 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Game State|Events")
 	FOnGamePhaseChanged OnGamePhaseChanged;
 
+	/** 남은 시간 변경 시 브로드캐스트 (1초마다). HUD 타이머 위젯에서 바인딩. */
+	UPROPERTY(BlueprintAssignable, Category = "Game State|Events")
+	FOnRemainingTimeChanged OnRemainingTimeChanged;
+
+	/** 열차 목적지까지 거리 변경 시 브로드캐스트. 진행도 프로그레스 바에서 바인딩. */
+	UPROPERTY(BlueprintAssignable, Category = "Game State|Events")
+	FOnDistanceChanged OnDistanceToDestinationChanged;
+
+	/** 압력 수치 변경 시 브로드캐스트 (0~100). 압력 게이지 위젯에서 바인딩. */
+	UPROPERTY(BlueprintAssignable, Category = "Game State|Events")
+	FOnPressureLevelChanged OnPressureLevelChanged;
+
 	UFUNCTION()
 	void OnRep_GamePhase();
+
+	UFUNCTION()
+	void OnRep_RemainingTime();
+
+	UFUNCTION()
+	void OnRep_DistanceToDestination();
+
+	UFUNCTION()
+	void OnRep_PressureLevel();
 	
 	
 	

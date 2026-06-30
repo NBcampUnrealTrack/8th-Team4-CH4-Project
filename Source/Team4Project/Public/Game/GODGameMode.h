@@ -98,6 +98,10 @@ private:
 	UFUNCTION()
 	void ReturnToMainMenu();
 
+	/** 압력 100% 폭발 시 호출 → 탈선 처리 + 마피아 승리. */
+	UFUNCTION()
+	void HandlePressureExplosion();
+
 	class AGODTrain* FindTrainActor() const;
 
 	int32 TotalMatchTime = 600;
