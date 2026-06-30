@@ -6,7 +6,11 @@
 #include "Net/UnrealNetwork.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SplineComponent.h"
+#include "Components/SceneComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
+
+// 기차 칸(피벗) 개수. BP에서 각 피벗(Car_0~) 밑에 메시를 붙인다.
+static constexpr int32 GTrainNumCars = 6;
 
 AGODTrain::AGODTrain()
 {
@@ -21,6 +25,23 @@ AGODTrain::AGODTrain()
 	// 캐릭터가 "움직이는 발판"으로 인식하려면 바닥 메시가 Movable이어야 한다.
 	TrainMesh->SetMobility(EComponentMobility::Movable);
 
+	// 기관실 + 칸 피벗 SceneComponent를 미리 생성한다. BP에서 각 피벗 밑에 메시를 붙이면
+	// 피벗이 스플라인 따라 움직일 때 자식 메시가 자동으로 따라간다.
+	// 간격은 에디터에서 둔 피벗 위치에서 BeginPlay 때 자동으로 가져온다(별도 보정 없음).
+	EngineRoom = CreateDefaultSubobject<USceneComponent>(TEXT("EngineRoom"));
+	EngineRoom->SetupAttachment(RootComponent);
+	EngineRoom->SetMobility(EComponentMobility::Movable);
+	CarPivots.Add(EngineRoom);
+
+	for (int32 i = 0; i < GTrainNumCars; ++i)
+	{
+		const FName PivotName(*FString::Printf(TEXT("Car_%d"), i));
+		USceneComponent* Pivot = CreateDefaultSubobject<USceneComponent>(PivotName);
+		Pivot->SetupAttachment(RootComponent);
+		Pivot->SetMobility(EComponentMobility::Movable);
+		CarPivots.Add(Pivot);
+	}
+
 	Furnace = CreateDefaultSubobject<UFurnanceComponent>(TEXT("Furnace"));
 	Pressure = CreateDefaultSubobject<UPressureComponent>(TEXT("Pressure"));
 }
@@ -30,7 +51,6 @@ void AGODTrain::BeginPlay()
 	Super::BeginPlay();
 
 	LocalDistanceAlongSpline = DistanceAlongSpline;
-	CollectCars();
 
 	if (HasAuthority())
 	{
@@ -133,45 +153,6 @@ void AGODTrain::Tick(float DeltaTime)
 	}
 }
 
-void AGODTrain::CollectCars()
-{
-	Cars.Reset();
-	CarAlongOffsets.Reset();
-	CarLateralOffsets.Reset();
-
-	// 구동 대상 수집: 수동 지정(CarComponents) 우선, 없으면 루트 제외 StaticMesh 자동 수집
-	TArray<USceneComponent*> Found;
-	if (CarComponents.Num() > 0)
-	{
-		for (USceneComponent* C : CarComponents)
-		{
-			if (C) Found.Add(C);
-		}
-	}
-	else
-	{
-		TArray<UStaticMeshComponent*> Meshes;
-		GetComponents(Meshes);
-		for (UStaticMeshComponent* M : Meshes)
-		{
-			if (M && M != RootComponent) Found.Add(M);
-		}
-	}
-
-	// 각 차량의 "액터 로컬" 오프셋을 캐시: X=진행축(앞뒤), (Y,Z)=좌우/상하.
-	const FTransform ActorTM = GetActorTransform();
-	for (USceneComponent* C : Found)
-	{
-		// 캐릭터가 발판으로 인식하려면 Movable 이어야 한다.
-		C->SetMobility(EComponentMobility::Movable);
-
-		const FVector Local = ActorTM.InverseTransformPosition(C->GetComponentLocation());
-		Cars.Add(C);
-		CarAlongOffsets.Add(Local.X);
-		CarLateralOffsets.Add(FVector(0.f, Local.Y, Local.Z));
-	}
-}
-
 void AGODTrain::UpdateTransformAlongSpline(float LeadDistance)
 {
 	if (!Track || !Track->Spline) return;
@@ -180,40 +161,18 @@ void AGODTrain::UpdateTransformAlongSpline(float LeadDistance)
 	const float Len = Spline->GetSplineLength();
 	if (Len <= 0.f) return;
 
-	// 차량 목록이 비었으면 액터 전체를 통째로 이동(구버전 동작)
-	if (Cars.Num() == 0)
-	{
-		const FTransform T = Spline->GetTransformAtDistanceAlongSpline(LeadDistance, ESplineCoordinateSpace::World);
-		FRotator R = T.Rotator();
-		if (bYawOnly) { R.Pitch = 0.f; R.Roll = 0.f; }
-		SetActorLocationAndRotation(T.GetLocation(), R);
-		TrainVelocity = R.Vector() * TrainSpeed;
-		return;
-	}
+	float D = FMath::Fmod(LeadDistance, Len);
+	if (D < 0.f) D += Len;
 
-	// 각 차량을 자기 오프셋 거리의 스플라인 지점·접선에 정렬 → 커브에서 자연스러운 굴절.
-	for (int32 i = 0; i < Cars.Num(); ++i)
-	{
-		USceneComponent* Car = Cars[i];
-		if (!Car) continue;
+	const FTransform RailT = Spline->GetTransformAtDistanceAlongSpline(D, ESplineCoordinateSpace::World);
+	FRotator R = RailT.Rotator();
+	if (bYawOnly) { R.Pitch = 0.f; R.Roll = 0.f; }
 
-		float D = FMath::Fmod(LeadDistance + CarAlongOffsets[i], Len);
-		if (D < 0.f) D += Len;
+	// 부모(TrainMesh 루트)를 통째로 이동 → 자식 칸들이 조립된 그대로 붙어서 따라온다(틈 없음).
+	// 크기·간격 등 네가 설정한 값은 하나도 바꾸지 않는다.
+	SetActorLocationAndRotation(RailT.GetLocation(), R);
 
-		const FTransform RailT = Spline->GetTransformAtDistanceAlongSpline(D, ESplineCoordinateSpace::World);
-		FRotator R = RailT.Rotator();
-		if (bYawOnly) { R.Pitch = 0.f; R.Roll = 0.f; }
-
-		// 레일 위 지점 + (좌우/상하) 오프셋을 차량 정렬 방향으로 회전해 적용.
-		const FVector WorldLoc = RailT.GetLocation() + R.RotateVector(CarLateralOffsets[i]);
-		Car->SetWorldLocationAndRotation(WorldLoc, R);
-
-		// 점프 impart 폴백용 대표 속도(선두 차량 전방 × 속력)
-		if (i == 0)
-		{
-			TrainVelocity = R.Vector() * TrainSpeed;
-		}
-	}
+	TrainVelocity = R.Vector() * TrainSpeed;
 }
 
 void AGODTrain::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

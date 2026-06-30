@@ -136,11 +136,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Track")
 	bool bYawOnly = true;
 
-	// 스플라인을 따라 "개별 정렬"할 차량(칸) 컴포넌트들.
-	// 비워두면 BeginPlay에서 루트를 제외한 모든 StaticMeshComponent를 자동 수집한다.
-	// 각 칸은 자기 위치(진행축 오프셋)의 스플라인 지점·접선에 정렬돼 커브에서 자연스럽게 굴절한다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Track")
-	TArray<USceneComponent*> CarComponents;
+	// 기관실 피벗. BP에서 이 밑에 메시를 붙인다. 스플라인 따라 이동(선두 기준).
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<USceneComponent> EngineRoom;
+
+	// C++가 생성한 칸 피벗들 (EngineRoom 다음 Car_0 ~ Car_N).
+	// ★ 네가 에디터에서 각 피벗을 옮겨둔 위치(상대 배치) 그대로를 간격으로 사용한다.
+	// 각 피벗 밑에 메시를 붙이면, 피벗이 스플라인 따라 움직일 때 자식 메시가 자동으로 따라간다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TArray<TObjectPtr<USceneComponent>> CarPivots;
 
 private:
 	UFUNCTION() void OnRep_bIsDerailed();
@@ -163,17 +167,8 @@ private:
 
 	void SyncDistanceToGameState();
 
-	// 선두 거리값(LeadDistance) 기준으로 각 차량을 스플라인 위에 배치 (모든 머신에서 호출)
+	// 선두 거리값(LeadDistance) 기준으로 기차(부모)를 스플라인 위에 통째로 배치 (모든 머신에서 호출)
 	void UpdateTransformAlongSpline(float LeadDistance);
-
-	// 구동 대상 차량과 각 차량의 오프셋을 수집/캐시 (BeginPlay)
-	void CollectCars();
-
-	// 실제 구동 대상 차량들과 각 차량의 진행축/측면 오프셋(액터 로컬 기준).
-	UPROPERTY()
-	TArray<TObjectPtr<USceneComponent>> Cars;
-	TArray<float> CarAlongOffsets;
-	TArray<FVector> CarLateralOffsets;
 
 	// 클라이언트 표시용 로컬 거리(보간 대상). 복제값으로 부드럽게 수렴시킨다.
 	float LocalDistanceAlongSpline = 0.f;
