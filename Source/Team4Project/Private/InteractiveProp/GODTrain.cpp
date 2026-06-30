@@ -38,6 +38,8 @@ void AGODTrain::BeginPlay()
 		if (Pressure)
 		{
 			Pressure->OnPressureExplode.AddDynamic(this, &AGODTrain::OnPressureExploded);
+			Pressure->OnPressureWarning.AddDynamic(this, &AGODTrain::OnPressureWarningStarted);
+			Pressure->OnPressureRecovered.AddDynamic(this, &AGODTrain::OnPressureWarningEnded);
 		}
 	}
 }
@@ -53,11 +55,16 @@ void AGODTrain::Tick(float DeltaTime)
 	{
 		TrainSpeed = FMath::Max(0.f, TrainSpeed - Deceleration * DeltaTime);
 	}
+	else if (Furnace && Furnace->bIsBurning)
+	{
+		// 압력 경고(80% 이상) 중에는 절반 속도로 제한
+		TrainSpeed = DefaultSpeed * (bHighPressure ? HighPressureSpeedMultiplier : 1.0f);
+	}
 
-	// 압력 컴포넌트에 연료 상태 전달
+	// 석탄 투입 + 열차 이동 중일 때만 압력 상승
 	if (Pressure && Furnace)
 	{
-		Pressure->bFurnaceActive = Furnace->bIsBurning;
+		Pressure->bFurnaceActive = Furnace->bIsBurning && TrainSpeed > 0.f;
 	}
 
 	DistanceToDestination = FMath::Max(0.f, DistanceToDestination - TrainSpeed * DeltaTime);
@@ -114,8 +121,8 @@ void AGODTrain::TriggerDerailment()
 
 void AGODTrain::OnFurnaceActivated()
 {
-	// 연료 공급 재개 시 기본 속도로 복귀
-	TrainSpeed = DefaultSpeed;
+	// 압력 경고 중이면 절반 속도, 정상이면 기본 속도
+	TrainSpeed = DefaultSpeed * (bHighPressure ? HighPressureSpeedMultiplier : 1.0f);
 }
 
 void AGODTrain::OnFurnaceDeactivated()
@@ -125,9 +132,23 @@ void AGODTrain::OnFurnaceDeactivated()
 
 void AGODTrain::OnPressureExploded()
 {
-	// 폭발 시 즉시 속도 패널티
+	// 폭발 시 즉시 속도 패널티 — GameMode가 TriggerDerailment()로 완전 정지시킴
 	TrainSpeed = FMath::Max(0.f, TrainSpeed - ExplosionSpeedPenalty);
 	// 이펙트/데미지는 BP에서 OnPressureExplode 델리게이트에 바인딩
+}
+
+void AGODTrain::OnPressureWarningStarted()
+{
+	bHighPressure = true;
+	if (Furnace && Furnace->bIsBurning)
+		TrainSpeed = DefaultSpeed * HighPressureSpeedMultiplier;
+}
+
+void AGODTrain::OnPressureWarningEnded()
+{
+	bHighPressure = false;
+	if (Furnace && Furnace->bIsBurning)
+		TrainSpeed = DefaultSpeed;
 }
 
 void AGODTrain::SyncDistanceToGameState()
@@ -135,6 +156,13 @@ void AGODTrain::SyncDistanceToGameState()
 	if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
 	{
 		GS->DistanceToDestination = DistanceToDestination;
+		GS->OnRep_DistanceToDestination(); // 리슨 서버 클라이언트 즉시 알림
+
+		if (Pressure)
+		{
+			GS->PressureLevel = Pressure->CurrentPressure;
+			GS->OnRep_PressureLevel(); // 리슨 서버 클라이언트 즉시 알림
+		}
 	}
 }
 

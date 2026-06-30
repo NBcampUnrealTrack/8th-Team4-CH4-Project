@@ -26,17 +26,17 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_CurrentPressure, BlueprintReadOnly, Category = "Pressure")
 	float CurrentPressure = 50.f;
 
-	// 연료 활성화 시 초당 압력 상승량
+	// 연료 활성화 시 초당 압력 상승량 (석탄 투입 + 열차 이동 시 1%/sec)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pressure")
-	float PressureRiseRate = 3.f;
+	float PressureRiseRate = 1.f;
 
 	// 연료 없을 때 초당 자연 감소량
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pressure")
 	float PressureDecayRate = 1.5f;
 
-	// 경고 구간 진입 임계값
+	// 속도 저하 경고 임계값 (80% 이상 시 열차 감속)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pressure")
-	float WarningThreshold = 70.f;
+	float WarningThreshold = 80.f;
 
 	// 폭발 임계값
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pressure")

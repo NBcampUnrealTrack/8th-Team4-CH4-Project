@@ -6,6 +6,7 @@
 #include "Player/BasePlayerController.h"
 #include "InteractiveProp/GODTrain.h"
 #include "InteractiveProp/PressureValve.h"
+#include "Component/PressureComponent.h"
 #include "InteractiveProp/PickupGear.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
@@ -109,7 +110,9 @@ void AGODGameMode::StartGame()
 	GODGS->RemainingTime = TotalMatchTime;
 	GODGS->bGunsUnlocked = false;
 	GODGS->LobbyCountdown = 0;
+	GODGS->PressureLevel = 0.f;
 	TimeElapsed = 0;
+	GODGS->OnRep_RemainingTime(); // 리슨 서버 클라이언트 즉시 알림
 
 	// 재시작 대비: 이전 라운드 상태 초기화
 	for (TActorIterator<APressureValve> It(GetWorld()); It; ++It)
@@ -123,6 +126,16 @@ void AGODGameMode::StartGame()
 	}
 
 	AssignRoles();
+
+	// 압력 폭발 시 마피아 승리 처리 연결 (중복 방지)
+	if (AGODTrain* Train = FindTrainActor())
+	{
+		if (Train->Pressure)
+		{
+			Train->Pressure->OnPressureExplode.RemoveDynamic(this, &AGODGameMode::HandlePressureExplosion);
+			Train->Pressure->OnPressureExplode.AddDynamic(this, &AGODGameMode::HandlePressureExplosion);
+		}
+	}
 
 	GetWorld()->GetTimerManager().SetTimer(
 		GameTimerHandle, this, &AGODGameMode::UpdateGameTimer, 1.0f, /*bLoop=*/true);
@@ -264,6 +277,7 @@ void AGODGameMode::UpdateGameTimer()
 	if (!GODGS) return;
 
 	GODGS->RemainingTime--;
+	GODGS->OnRep_RemainingTime(); // 리슨 서버 클라이언트 즉시 알림
 	TimeElapsed++;
 
 	if (TimeElapsed >= 180 && !GODGS->bGunsUnlocked)
@@ -378,6 +392,12 @@ void AGODGameMode::EndGame(EGamePhase WinningPhase)
 void AGODGameMode::ReturnToMainMenu()
 {
 	GetWorld()->ServerTravel(MainMenuMapPath);
+}
+
+void AGODGameMode::HandlePressureExplosion()
+{
+	// 압력 100% 달성 → 열차 탈선 + 마피아 승리
+	TriggerDerailment();
 }
 
 AGODTrain* AGODGameMode::FindTrainActor() const
