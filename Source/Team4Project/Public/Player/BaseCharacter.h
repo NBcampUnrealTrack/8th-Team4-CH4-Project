@@ -9,6 +9,7 @@
 #include "Interface/Interactable.h"
 #include "ActiveGameplayEffectHandle.h"
 #include "GameplayAbilitySpecHandle.h"
+#include "InteractiveProp/ACoalHandVisualActor.h"
 #include "BaseCharacter.generated.h"
 
 class UBaseAbilitySystemComponent;
@@ -119,6 +120,11 @@ public:
 	// 투명화/시체 은폐로 메시가 숨겨질 때 이 위젯도 함께 숨겨진다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "UI")
 	TObjectPtr<UWidgetComponent> WidgetComponent;
+	
+	
+	// Coal
+	FORCEINLINE bool IsCoalEquipped() const { return bIsCoalEquipped; }
+	void SetCoalEquipped(bool bEquip);
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -201,4 +207,29 @@ protected:
 
 	FTimerHandle InvisibleTimerHandle;
 	FTimerHandle CorpseHideTimerHandle;
+	
+	//손쪽 소켓
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="SocketforCoal")
+	TSubclassOf<AACoalHandVisualActor> CoalHandClass;
+	
+	UPROPERTY()
+	AACoalHandVisualActor* LeftCoalActor;
+	
+	UPROPERTY()
+	AACoalHandVisualActor* RightCoalActor;
+	
+	UPROPERTY(ReplicatedUsing=OnRep_CoalEquipped)
+	bool bIsCoalEquipped;
+	
+	
+	UFUNCTION()
+	void OnRep_CoalEquipped();
+	void UpdateCoalVisual();
+	
+	
+	void SpawnCoalHands();
+	
+	void DestroyCoalHands();
+	
 };
