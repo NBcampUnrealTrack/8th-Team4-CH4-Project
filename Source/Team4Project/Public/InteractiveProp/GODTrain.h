@@ -7,9 +7,11 @@
 class UStaticMeshComponent;
 class UFurnanceComponent;
 class UPressureComponent;
+class AGODTrainTrack;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTrainArrived);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTrainDerailed);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrainOverheatChanged, bool, bOverheated);
 
 UCLASS()
 class TEAM4PROJECT_API AGODTrain : public AActor
@@ -25,6 +27,10 @@ protected:
 public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	// 위에 탄 캐릭터가 점프로 발판을 떠날 때 CMC가 실어줄 "발판 속도"를 제공한다.
+	// 기차는 kinematic이라 컴포넌트 속도가 0이므로, CMC는 이 Owner 속도로 폴백한다.
+	virtual FVector GetVelocity() const override { return TrainVelocity; }
 
 	// ============================================================
 	// 컴포넌트
@@ -47,8 +53,17 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Train")
 	float DistanceToDestination;
 
+	// 트랙(스플라인) 위에서의 누적 이동 거리. 이 스칼라만 복제하고
+	// 각 머신이 동일 스플라인을 평가해 위치를 재구성한다.
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Train")
+	float DistanceAlongSpline = 0.f;
+
 	UPROPERTY(ReplicatedUsing = OnRep_bIsDerailed, BlueprintReadOnly, Category = "Train")
 	bool bIsDerailed;
+
+	// 연료 과투입으로 과열된 상태 (적정선 초과). UI/이펙트용
+	UPROPERTY(ReplicatedUsing = OnRep_bIsOverheated, BlueprintReadOnly, Category = "Train")
+	bool bIsOverheated = false;
 
 	// ============================================================
 	// 블루프린트 이벤트
@@ -58,6 +73,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Train|Events")
 	FOnTrainDerailed OnTrainDerailed;
+
+	// 과열 상태 진입/해제 시 브로드캐스트 (이펙트/경고음 등)
+	UPROPERTY(BlueprintAssignable, Category = "Train|Events")
+	FOnTrainOverheatChanged OnTrainOverheatChanged;
 
 	// ============================================================
 	// 서버 API
@@ -75,36 +94,90 @@ public:
 	// 에디터 설정
 	// ============================================================
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
-	float DefaultSpeed = 1000.f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
 	float TotalDistance = 10000.f;
 
-	// 연료 소진 시 초당 감속량
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
-	float Deceleration = 100.f;
+	// 연료가 없어도 유지되는 최소 속도 (기차는 절대 멈추지 않음)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
+	float MinSpeed = 200.f;
+
+	// 적정 연료 구간에서 도달하는 최고 속도
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
+	float MaxSpeed = 1500.f;
+
+	// 과열(연료 과투입) 시 떨어지는 속도
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
+	float OverheatedSpeed = 400.f;
+
+	// MaxSpeed에 도달하는 연료 비율(0~1). 이보다 더 채우면 과열 구간으로 진입.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed", meta = (ClampMin = "0.05", ClampMax = "0.95"))
+	float OptimalFuelRatio = 0.6f;
+
+	// 현재 속도가 목표 속도로 수렴하는 빠르기 (가/감속 부드러움)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
+	float SpeedInterpRate = 2.f;
 
 	// 압력 폭발 시 속도 페널티
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
 	float ExplosionSpeedPenalty = 200.f;
 
-	// 압력 80% 이상 시 적용할 속도 배수
+	// 압력 80% 이상(고압 경고) 시 적용할 속도 배수. 목표 속도에 곱해진다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
 	float HighPressureSpeedMultiplier = 0.5f;
 
+	// ============================================================
+	// 트랙 이동
+	// ============================================================
+	// 기차가 따라 달릴 루프 트랙. 레벨에서 배치한 인스턴스를 지정한다.
+	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "Train|Track")
+	AGODTrainTrack* Track;
+
+	// 위치를 yaw(좌우 방향)만 적용할지 여부.
+	// 스플라인 자체의 roll/pitch까지 따라가게 하려면 false.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Track")
+	bool bYawOnly = true;
+
+	// 스플라인을 따라 "개별 정렬"할 차량(칸) 컴포넌트들.
+	// 비워두면 BeginPlay에서 루트를 제외한 모든 StaticMeshComponent를 자동 수집한다.
+	// 각 칸은 자기 위치(진행축 오프셋)의 스플라인 지점·접선에 정렬돼 커브에서 자연스럽게 굴절한다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Track")
+	TArray<USceneComponent*> CarComponents;
+
 private:
 	UFUNCTION() void OnRep_bIsDerailed();
+	UFUNCTION() void OnRep_bIsOverheated();
+
+	// 현재 화로 연료 비율로부터 목표 속도를 계산
+	float ComputeTargetSpeed() const;
 
 	// 화로 이벤트 핸들러
 	UFUNCTION() void OnFurnaceActivated();
 	UFUNCTION() void OnFurnaceDeactivated();
 	UFUNCTION() void OnPressureExploded();
 
-	// 압력 경고 핸들러 (80% 진입/해제)
+	// 압력 경고 핸들러 (80% 진입/해제) — 고압 상태 플래그를 토글한다.
 	UFUNCTION() void OnPressureWarningStarted();
 	UFUNCTION() void OnPressureWarningEnded();
 
+	// 고압 경고 중인지 여부. 목표 속도에 HighPressureSpeedMultiplier 를 적용한다.
 	bool bHighPressure = false;
 
 	void SyncDistanceToGameState();
+
+	// 선두 거리값(LeadDistance) 기준으로 각 차량을 스플라인 위에 배치 (모든 머신에서 호출)
+	void UpdateTransformAlongSpline(float LeadDistance);
+
+	// 구동 대상 차량과 각 차량의 오프셋을 수집/캐시 (BeginPlay)
+	void CollectCars();
+
+	// 실제 구동 대상 차량들과 각 차량의 진행축/측면 오프셋(액터 로컬 기준).
+	UPROPERTY()
+	TArray<TObjectPtr<USceneComponent>> Cars;
+	TArray<float> CarAlongOffsets;
+	TArray<FVector> CarLateralOffsets;
+
+	// 클라이언트 표시용 로컬 거리(보간 대상). 복제값으로 부드럽게 수렴시킨다.
+	float LocalDistanceAlongSpline = 0.f;
+
+	// 현재 기차의 대표 월드 속도(선두 접선 × 속력). 점프 impart 폴백용.
+	FVector TrainVelocity = FVector::ZeroVector;
 };

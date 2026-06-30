@@ -1,18 +1,25 @@
 #include "InteractiveProp/GODTrain.h"
+#include "InteractiveProp/GODTrainTrack.h"
 #include "Component/FurnanceComponent.h"
 #include "Component/PressureComponent.h"
 #include "Game/GODGameState.h"
 #include "Net/UnrealNetwork.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SplineComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
 
 AGODTrain::AGODTrain()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
+	// 엔진 기본 Transform 복제는 끈다. 위치는 복제된 DistanceAlongSpline로
+	// 각 머신이 스플라인을 평가해 재구성한다 (대역폭 최소화).
+	SetReplicateMovement(false);
 
 	TrainMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TrainMesh"));
 	RootComponent = TrainMesh;
+	// 캐릭터가 "움직이는 발판"으로 인식하려면 바닥 메시가 Movable이어야 한다.
+	TrainMesh->SetMobility(EComponentMobility::Movable);
 
 	Furnace = CreateDefaultSubobject<UFurnanceComponent>(TEXT("Furnace"));
 	Pressure = CreateDefaultSubobject<UPressureComponent>(TEXT("Pressure"));
@@ -22,11 +29,16 @@ void AGODTrain::BeginPlay()
 {
 	Super::BeginPlay();
 
+	LocalDistanceAlongSpline = DistanceAlongSpline;
+	CollectCars();
+
 	if (HasAuthority())
 	{
-		TrainSpeed = DefaultSpeed;
+		TrainSpeed = MinSpeed;
 		DistanceToDestination = TotalDistance;
+		DistanceAlongSpline = 0.f;
 		bIsDerailed = false;
+		bIsOverheated = false;
 		SyncDistanceToGameState();
 
 		if (Furnace)
@@ -48,27 +60,160 @@ void AGODTrain::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (!HasAuthority() || bIsDerailed) return;
+	const float SplineLen = (Track && Track->Spline) ? Track->Spline->GetSplineLength() : 0.f;
 
-	// 연료 없으면 점진적 감속
-	if (Furnace && !Furnace->bIsBurning && TrainSpeed > 0.f)
+	// ----- 서버: 게임 로직 + 권위적 거리 적분 -----
+	if (HasAuthority())
 	{
-		TrainSpeed = FMath::Max(0.f, TrainSpeed - Deceleration * DeltaTime);
+		if (!bIsDerailed)
+		{
+			// 연료 비율에 따른 목표 속도로 부드럽게 수렴
+			// (연료↑ → 가속, 적정선 초과 → 과열로 감속, 연료 0이어도 MinSpeed 유지)
+			// 고압 경고 중이면 그 위에 배수 페널티를 곱한다.
+			float TargetSpeed = ComputeTargetSpeed();
+			if (bHighPressure)
+			{
+				TargetSpeed *= HighPressureSpeedMultiplier;
+			}
+			TrainSpeed = FMath::FInterpTo(TrainSpeed, TargetSpeed, DeltaTime, SpeedInterpRate);
+
+			// 과열 상태 갱신 (적정 연료 비율 초과 시)
+			if (Furnace && Furnace->MaxFuel > 0.f)
+			{
+				const float FuelRatio = Furnace->CurrentFuel / Furnace->MaxFuel;
+				const bool bNowOverheated = FuelRatio > OptimalFuelRatio;
+				if (bNowOverheated != bIsOverheated)
+				{
+					bIsOverheated = bNowOverheated;
+					OnRep_bIsOverheated();
+				}
+			}
+
+			// 압력 컴포넌트에 연료 상태 전달 (석탄 연소 + 주행 중일 때만 압력 상승)
+			if (Pressure && Furnace)
+			{
+				Pressure->bFurnaceActive = Furnace->bIsBurning && TrainSpeed > 0.f;
+			}
+
+			// 게임플레이용 목적지 카운트다운
+			DistanceToDestination = FMath::Max(0.f, DistanceToDestination - TrainSpeed * DeltaTime);
+			SyncDistanceToGameState();
+
+			// 트랙 위 거리 누적 (닫힌 루프이므로 길이로 wrap)
+			if (SplineLen > 0.f)
+			{
+				DistanceAlongSpline = FMath::Fmod(DistanceAlongSpline + TrainSpeed * DeltaTime, SplineLen);
+			}
+		}
+		LocalDistanceAlongSpline = DistanceAlongSpline;
 	}
-	else if (Furnace && Furnace->bIsBurning)
+	// ----- 클라이언트: 로컬 적분 후 복제값으로 부드럽게 보정 -----
+	else if (SplineLen > 0.f)
 	{
-		// 압력 경고(80% 이상) 중에는 절반 속도로 제한
-		TrainSpeed = DefaultSpeed * (bHighPressure ? HighPressureSpeedMultiplier : 1.0f);
+		LocalDistanceAlongSpline = FMath::Fmod(LocalDistanceAlongSpline + TrainSpeed * DeltaTime, SplineLen);
+
+		// 닫힌 루프에서의 최단 부호 거리차 (-L/2, L/2]
+		float Delta = FMath::Fmod(DistanceAlongSpline - LocalDistanceAlongSpline + SplineLen * 1.5f, SplineLen) - SplineLen * 0.5f;
+
+		// 큰 차이는 스냅, 작은 차이는 점진 수렴
+		if (FMath::Abs(Delta) > SplineLen * 0.25f)
+		{
+			LocalDistanceAlongSpline = DistanceAlongSpline;
+		}
+		else
+		{
+			LocalDistanceAlongSpline = FMath::Fmod(LocalDistanceAlongSpline + Delta * FMath::Clamp(10.f * DeltaTime, 0.f, 1.f) + SplineLen, SplineLen);
+		}
 	}
 
-	// 석탄 투입 + 열차 이동 중일 때만 압력 상승
-	if (Pressure && Furnace)
+	// ----- 모든 머신: 거리값으로 위치 갱신 -----
+	if (SplineLen > 0.f)
 	{
-		Pressure->bFurnaceActive = Furnace->bIsBurning && TrainSpeed > 0.f;
+		UpdateTransformAlongSpline(LocalDistanceAlongSpline);
+	}
+}
+
+void AGODTrain::CollectCars()
+{
+	Cars.Reset();
+	CarAlongOffsets.Reset();
+	CarLateralOffsets.Reset();
+
+	// 구동 대상 수집: 수동 지정(CarComponents) 우선, 없으면 루트 제외 StaticMesh 자동 수집
+	TArray<USceneComponent*> Found;
+	if (CarComponents.Num() > 0)
+	{
+		for (USceneComponent* C : CarComponents)
+		{
+			if (C) Found.Add(C);
+		}
+	}
+	else
+	{
+		TArray<UStaticMeshComponent*> Meshes;
+		GetComponents(Meshes);
+		for (UStaticMeshComponent* M : Meshes)
+		{
+			if (M && M != RootComponent) Found.Add(M);
+		}
 	}
 
-	DistanceToDestination = FMath::Max(0.f, DistanceToDestination - TrainSpeed * DeltaTime);
-	SyncDistanceToGameState();
+	// 각 차량의 "액터 로컬" 오프셋을 캐시: X=진행축(앞뒤), (Y,Z)=좌우/상하.
+	const FTransform ActorTM = GetActorTransform();
+	for (USceneComponent* C : Found)
+	{
+		// 캐릭터가 발판으로 인식하려면 Movable 이어야 한다.
+		C->SetMobility(EComponentMobility::Movable);
+
+		const FVector Local = ActorTM.InverseTransformPosition(C->GetComponentLocation());
+		Cars.Add(C);
+		CarAlongOffsets.Add(Local.X);
+		CarLateralOffsets.Add(FVector(0.f, Local.Y, Local.Z));
+	}
+}
+
+void AGODTrain::UpdateTransformAlongSpline(float LeadDistance)
+{
+	if (!Track || !Track->Spline) return;
+
+	USplineComponent* Spline = Track->Spline;
+	const float Len = Spline->GetSplineLength();
+	if (Len <= 0.f) return;
+
+	// 차량 목록이 비었으면 액터 전체를 통째로 이동(구버전 동작)
+	if (Cars.Num() == 0)
+	{
+		const FTransform T = Spline->GetTransformAtDistanceAlongSpline(LeadDistance, ESplineCoordinateSpace::World);
+		FRotator R = T.Rotator();
+		if (bYawOnly) { R.Pitch = 0.f; R.Roll = 0.f; }
+		SetActorLocationAndRotation(T.GetLocation(), R);
+		TrainVelocity = R.Vector() * TrainSpeed;
+		return;
+	}
+
+	// 각 차량을 자기 오프셋 거리의 스플라인 지점·접선에 정렬 → 커브에서 자연스러운 굴절.
+	for (int32 i = 0; i < Cars.Num(); ++i)
+	{
+		USceneComponent* Car = Cars[i];
+		if (!Car) continue;
+
+		float D = FMath::Fmod(LeadDistance + CarAlongOffsets[i], Len);
+		if (D < 0.f) D += Len;
+
+		const FTransform RailT = Spline->GetTransformAtDistanceAlongSpline(D, ESplineCoordinateSpace::World);
+		FRotator R = RailT.Rotator();
+		if (bYawOnly) { R.Pitch = 0.f; R.Roll = 0.f; }
+
+		// 레일 위 지점 + (좌우/상하) 오프셋을 차량 정렬 방향으로 회전해 적용.
+		const FVector WorldLoc = RailT.GetLocation() + R.RotateVector(CarLateralOffsets[i]);
+		Car->SetWorldLocationAndRotation(WorldLoc, R);
+
+		// 점프 impart 폴백용 대표 속도(선두 차량 전방 × 속력)
+		if (i == 0)
+		{
+			TrainVelocity = R.Vector() * TrainSpeed;
+		}
+	}
 }
 
 void AGODTrain::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -76,6 +221,8 @@ void AGODTrain::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AGODTrain, TrainSpeed);
 	DOREPLIFETIME(AGODTrain, bIsDerailed);
+	DOREPLIFETIME(AGODTrain, bIsOverheated);
+	DOREPLIFETIME(AGODTrain, DistanceAlongSpline);
 }
 
 void AGODTrain::SetTrainSpeed(float NewSpeed)
@@ -119,10 +266,31 @@ void AGODTrain::TriggerDerailment()
 	OnRep_bIsDerailed();
 }
 
+float AGODTrain::ComputeTargetSpeed() const
+{
+	// 화로가 없으면 최소 속도로만 주행
+	if (!Furnace || Furnace->MaxFuel <= 0.f)
+	{
+		return MinSpeed;
+	}
+
+	const float FuelRatio = FMath::Clamp(Furnace->CurrentFuel / Furnace->MaxFuel, 0.f, 1.f);
+
+	if (FuelRatio <= OptimalFuelRatio)
+	{
+		// 0 ~ 적정선: MinSpeed → MaxSpeed (석탄 넣을수록 가속)
+		const float Alpha = (OptimalFuelRatio > 0.f) ? (FuelRatio / OptimalFuelRatio) : 1.f;
+		return FMath::Lerp(MinSpeed, MaxSpeed, Alpha);
+	}
+
+	// 적정선 ~ 가득: MaxSpeed → OverheatedSpeed (과투입 → 과열로 감속)
+	const float Alpha = (OptimalFuelRatio < 1.f) ? ((FuelRatio - OptimalFuelRatio) / (1.f - OptimalFuelRatio)) : 1.f;
+	return FMath::Lerp(MaxSpeed, OverheatedSpeed, Alpha);
+}
+
 void AGODTrain::OnFurnaceActivated()
 {
-	// 압력 경고 중이면 절반 속도, 정상이면 기본 속도
-	TrainSpeed = DefaultSpeed * (bHighPressure ? HighPressureSpeedMultiplier : 1.0f);
+	// 속도는 ComputeTargetSpeed로 매 틱 계산되므로 여기선 이펙트 훅으로만 사용
 }
 
 void AGODTrain::OnFurnaceDeactivated()
@@ -132,23 +300,21 @@ void AGODTrain::OnFurnaceDeactivated()
 
 void AGODTrain::OnPressureExploded()
 {
-	// 폭발 시 즉시 속도 패널티 — GameMode가 TriggerDerailment()로 완전 정지시킴
+	// 폭발 시 즉시 속도 패널티
 	TrainSpeed = FMath::Max(0.f, TrainSpeed - ExplosionSpeedPenalty);
 	// 이펙트/데미지는 BP에서 OnPressureExplode 델리게이트에 바인딩
 }
 
 void AGODTrain::OnPressureWarningStarted()
 {
+	// 고압 진입: 목표 속도가 배수만큼 줄어든다(Tick에서 부드럽게 감속).
 	bHighPressure = true;
-	if (Furnace && Furnace->bIsBurning)
-		TrainSpeed = DefaultSpeed * HighPressureSpeedMultiplier;
 }
 
 void AGODTrain::OnPressureWarningEnded()
 {
+	// 고압 해제: 다시 정상 목표 속도로 복귀.
 	bHighPressure = false;
-	if (Furnace && Furnace->bIsBurning)
-		TrainSpeed = DefaultSpeed;
 }
 
 void AGODTrain::SyncDistanceToGameState()
@@ -172,4 +338,9 @@ void AGODTrain::OnRep_bIsDerailed()
 	{
 		OnTrainDerailed.Broadcast();
 	}
+}
+
+void AGODTrain::OnRep_bIsOverheated()
+{
+	OnTrainOverheatChanged.Broadcast(bIsOverheated);
 }
