@@ -12,11 +12,13 @@
 #include "GameFramework/PlayerStart.h"
 #include "TimerManager.h"
 #include "EngineUtils.h"
+#include "UI/HUD/GODHUD.h"
 
 AGODGameMode::AGODGameMode()
 {
-	GameStateClass = AGODGameState::StaticClass();
+	GameStateClass   = AGODGameState::StaticClass();
 	PlayerStateClass = AGODPlayerState::StaticClass();
+	HUDClass         = AGODHUD::StaticClass();
 	bUseSeamlessTravel = true;
 }
 
