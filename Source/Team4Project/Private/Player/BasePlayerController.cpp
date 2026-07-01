@@ -13,6 +13,7 @@
 #include "Interfaces/OnlineIdentityInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "Player/VoicePlayerState.h"
+#include "Player/GODPlayerState.h"
 #include "Engine/Engine.h"
 #include "Game/GODGameState.h"
 #include "Misc/FileHelper.h"
@@ -278,13 +279,14 @@ APawn* ABasePlayerController::FindNextSpectateTarget() const
 	{
 		if (!PS || PS == GetPlayerState<APlayerState>()) continue;
 
+		// 살아있는 플레이어만 관전 대상 (죽은 시체는 제외)
+		if (const AGODPlayerState* GPS = Cast<AGODPlayerState>(PS))
+		{
+			if (!GPS->bIsAlive) continue;
+		}
+
 		APawn* OtherPawn = PS->GetPawn();
 		if (!OtherPawn) continue;
-
-		if (ACharacter* OtherCharacter = Cast<ACharacter>(OtherPawn))
-		{
-			//if (OtherCharacter->IsDead()) continue;
-		}
 
 		AlivePlayers.Add(OtherPawn);
 	}

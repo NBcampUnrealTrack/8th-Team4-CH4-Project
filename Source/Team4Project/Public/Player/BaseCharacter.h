@@ -185,6 +185,17 @@ protected:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_HandleDeath();
 
+	// 발판(열차) 위 사망 시, 시체 부착까지 래그돌 시뮬을 유지할 시간(초).
+	// 열차는 순간이동 방식이라 값이 크면 그 사이 열차가 앞서가 시체가 뒤로 밀린다.
+	// 0이면 즉시 부착(현재 포즈로 고정)해 열차 위에서 바로 함께 이동. (기본 권장 0)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Death")
+	float CorpseSettleTime = 0.f;
+
+	// 시체를 지정 발판에 부착(kinematic 고정) → 발판을 따라 함께 이동.
+	void AttachCorpseToBase(UPrimitiveComponent* Base);
+
+	FTimerHandle CorpseAttachTimer;
+
 	UPROPERTY(ReplicatedUsing = OnRep_IsDead)
 	bool bIsDead = false;
 
