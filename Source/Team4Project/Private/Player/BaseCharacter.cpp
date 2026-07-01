@@ -22,6 +22,14 @@
 #include "AbilitySystemBlueprintLibrary.h"
 #include "Engine/Engine.h" // [임시] 디버그 화면 출력용
 
+#include "Engine/LocalPlayer.h"
+#include "Camera/CameraComponent.h"
+#include "GameFramework/SpringArmComponent.h"
+#include "GameFramework/Controller.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputActionValue.h"
+
 ABaseCharacter::ABaseCharacter()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -37,6 +45,32 @@ ABaseCharacter::ABaseCharacter()
 	WidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("WidgetComponent"));
 	WidgetComponent->SetupAttachment(RootComponent);
 
+	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
+
+	bUseControllerRotationPitch = false;
+	bUseControllerRotationYaw = false;
+	bUseControllerRotationRoll = false;
+
+	GetCharacterMovement()->bOrientRotationToMovement = true; 
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f); 
+
+	GetCharacterMovement()->JumpZVelocity = 700.f;
+	GetCharacterMovement()->AirControl = 0.35f;
+	GetCharacterMovement()->MaxWalkSpeed = 500.f;
+	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
+	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
+	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
+
+	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
+	CameraBoom->SetupAttachment(RootComponent);
+	CameraBoom->TargetArmLength = 400.0f;
+	CameraBoom->bUsePawnControlRotation = true; 
+
+	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
+	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName); 
+	FollowCamera->bUsePawnControlRotation = false; 
+	
+	
 	// 움직이는 기차 위에서 점프해도 발판(기차)에 계속 붙어 함께 이동 → 제자리 착지.
 	// 공중에서도 기차 트랜스폼 델타로 수평 이동+회전을 따라가므로 커브 점프도 안전.
 	// (StayBasedInAirHeight=1000 아래에서 유효. 그 위로 높이 뛰면 베이스를 놓고
@@ -50,6 +84,20 @@ ABaseCharacter::ABaseCharacter()
 void ABaseCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (IsLocallyControlled() == true)
+	{
+		APlayerController* PC = Cast<APlayerController>(GetController());
+		if (PC)
+		{
+			UEnhancedInputLocalPlayerSubsystem* EILPS = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer());
+			if (EILPS)
+			{
+				EILPS->AddMappingContext(DefaultMappingContext, 0);
+			}
+		}
+		
+	}
 }
 
 // ============================================================
@@ -587,5 +635,53 @@ void ABaseCharacter::DestroyCoalHands()
 	{
 		RightCoalActor->Destroy();
 		RightCoalActor = nullptr;
+	}
+}
+
+// ============================================================
+// Input
+// ============================================================
+void ABaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
+
+		// Jumping
+		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
+		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
+
+		// Moving
+		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ABaseCharacter::Move);
+
+		// Looking
+		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ABaseCharacter::Look);
+	}
+}
+
+void ABaseCharacter::Move(const FInputActionValue& Value)
+{
+	FVector2D MovementVector = Value.Get<FVector2D>();
+
+	if (Controller != nullptr)
+	{
+		const FRotator Rotation = Controller->GetControlRotation();
+		const FRotator YawRotation(0, Rotation.Yaw, 0);
+
+		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+
+		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
+		AddMovementInput(ForwardDirection, MovementVector.Y);
+		AddMovementInput(RightDirection, MovementVector.X);
+	}
+}
+
+void ABaseCharacter::Look(const FInputActionValue& Value)
+{
+	FVector2D LookAxisVector = Value.Get<FVector2D>();
+
+	if (Controller != nullptr)
+	{
+		AddControllerYawInput(LookAxisVector.X);
+		AddControllerPitchInput(LookAxisVector.Y);
 	}
 }
