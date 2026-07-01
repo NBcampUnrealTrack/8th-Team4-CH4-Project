@@ -11,7 +11,7 @@ class AGODTrainTrack;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTrainArrived);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTrainDerailed);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrainOverheatChanged, bool, bOverheated);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTrainStarted);
 
 UCLASS()
 class TEAM4PROJECT_API AGODTrain : public AActor
@@ -61,9 +61,9 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_bIsDerailed, BlueprintReadOnly, Category = "Train")
 	bool bIsDerailed;
 
-	// 연료 과투입으로 과열된 상태 (적정선 초과). UI/이펙트용
-	UPROPERTY(ReplicatedUsing = OnRep_bIsOverheated, BlueprintReadOnly, Category = "Train")
-	bool bIsOverheated = false;
+	// 열차 주행 여부. 게임 시작 전에는 false로 제자리 대기, StartRunning()으로 출발한다.
+	UPROPERTY(ReplicatedUsing = OnRep_bIsRunning, BlueprintReadOnly, Category = "Train")
+	bool bIsRunning = false;
 
 	// ============================================================
 	// 블루프린트 이벤트
@@ -74,15 +74,23 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Train|Events")
 	FOnTrainDerailed OnTrainDerailed;
 
-	// 과열 상태 진입/해제 시 브로드캐스트 (이펙트/경고음 등)
+	// 출발(주행 시작) 시 브로드캐스트 — 경적/출발 연출 등에 바인딩
 	UPROPERTY(BlueprintAssignable, Category = "Train|Events")
-	FOnTrainOverheatChanged OnTrainOverheatChanged;
+	FOnTrainStarted OnTrainStarted;
 
 	// ============================================================
 	// 서버 API
 	// ============================================================
 	UFUNCTION(BlueprintCallable, Category = "Train")
 	void SetTrainSpeed(float NewSpeed);
+
+	// 서버 전용: 열차 주행 시작 (게임 시작 시 GameMode가 호출). 이후 스플라인을 따라 이동.
+	UFUNCTION(BlueprintCallable, Category = "Train")
+	void StartRunning();
+
+	// 서버 전용: 열차 주행 정지 (다시 제자리 대기).
+	UFUNCTION(BlueprintCallable, Category = "Train")
+	void StopRunning();
 
 	UFUNCTION(BlueprintCallable, Category = "Train")
 	void ApplyTrackSwitchImpulse(float ImpulseStrength = 800.f, float ImpulseRadius = 2000.f);
@@ -100,17 +108,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
 	float MinSpeed = 200.f;
 
-	// 적정 연료 구간에서 도달하는 최고 속도
+	// 연료 가득(Full) 상태 속도
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
 	float MaxSpeed = 1500.f;
 
-	// 과열(연료 과투입) 시 떨어지는 속도
+	// 연료 상태별 목표 속도. Empty=MinSpeed, Full=MaxSpeed, 중간 단계는 아래 값.
+	// Tick에서 SpeedInterpRate로 부드럽게 수렴하므로 단계가 튀지 않는다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
-	float OverheatedSpeed = 400.f;
+	float LowFuelSpeed = 500.f;
 
-	// MaxSpeed에 도달하는 연료 비율(0~1). 이보다 더 채우면 과열 구간으로 진입.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed", meta = (ClampMin = "0.05", ClampMax = "0.95"))
-	float OptimalFuelRatio = 0.6f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
+	float MediumFuelSpeed = 850.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
+	float HighFuelSpeed = 1200.f;
 
 	// 현재 속도가 목표 속도로 수렴하는 빠르기 (가/감속 부드러움)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
@@ -136,6 +147,32 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Track")
 	bool bYawOnly = true;
 
+	// ============================================================
+	// 흔들림 연출 (순수 비주얼, 각 머신 로컬 계산 · 복제 X)
+	// ============================================================
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Shake")
+	bool bEnableShake = true;
+
+	// 흔들림 최대 위치 진폭 (cm). X는 진행방향이라 보통 0, Y=좌우, Z=상하
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Shake")
+	FVector ShakeLocAmplitude = FVector(0.f, 2.f, 1.5f);
+
+	// 흔들림 최대 회전 진폭 (deg). X=Pitch(끄덕), Y=Roll(좌우 기울기)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Shake")
+	FVector2D ShakeRotAmplitude = FVector2D(0.4f, 0.8f);
+
+	// 흔들림 기본 주파수 느낌 (클수록 빠르게 덜컹)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Shake")
+	float ShakeFrequency = 6.f;
+
+	// 이 속도에서 진폭이 100%가 된다. 정차에 가까울수록 흔들림이 잦아든다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Shake")
+	float ShakeFullSpeed = 1200.f;
+
+	// 칸마다 흔들림 위상을 얼마나 어긋나게 할지 (rad). 클수록 칸별로 따로 덜컹인다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Shake")
+	float ShakePhasePerCar = 1.3f;
+
 	// 기관실 피벗. BP에서 이 밑에 메시를 붙인다. 스플라인 따라 이동(선두 기준).
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<USceneComponent> EngineRoom;
@@ -148,7 +185,7 @@ public:
 
 private:
 	UFUNCTION() void OnRep_bIsDerailed();
-	UFUNCTION() void OnRep_bIsOverheated();
+	UFUNCTION() void OnRep_bIsRunning();
 
 	// 현재 화로 연료 비율로부터 목표 속도를 계산
 	float ComputeTargetSpeed() const;
@@ -170,7 +207,17 @@ private:
 	// 선두 거리값(LeadDistance) 기준으로 기차(부모)를 스플라인 위에 통째로 배치 (모든 머신에서 호출)
 	void UpdateTransformAlongSpline(float LeadDistance);
 
-	// 클라이언트 표시용 로컬 거리(보간 대상). 복제값으로 부드럽게 수렴시킨다.
+	// 칸별(피벗별) 절차적 흔들림을 로컬 오프셋으로 적용 (순수 비주얼)
+	void UpdateShake(float DeltaTime);
+
+	// 흔들림 누적 시간
+	float ShakeTime = 0.f;
+
+	// BeginPlay 시점의 각 피벗 상대 트랜스폼(= 에디터에서 둔 칸 간격).
+	// 흔들림은 이 베이스 위에 더해서 적용한다(간격을 덮어쓰지 않도록).
+	TArray<FTransform> CarPivotBaseTransforms;
+
+	// 클라이언트 표시용 로컬 거리(보간 대상). 복제값(DistanceAlongSpline)으로 부드럽게 수렴시킨다.
 	float LocalDistanceAlongSpline = 0.f;
 
 	// 현재 기차의 대표 월드 속도(선두 접선 × 속력). 점프 impart 폴백용.

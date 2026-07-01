@@ -16,9 +16,13 @@ AGODTrain::AGODTrain()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
-	// 엔진 기본 Transform 복제는 끈다. 위치는 복제된 DistanceAlongSpline로
-	// 각 머신이 스플라인을 평가해 재구성한다 (대역폭 최소화).
+	// 위치는 표준 이동 복제 대신, 복제된 DistanceAlongSpline로 각 머신이 스플라인을
+	// 평가해 "부드럽게" 재구성한다 (일반 액터 이동 복제는 클라에서 보간이 없어 끊긴다).
+	// based movement는 발판 기준 "상대 좌표"로 복제되므로, 클라 열차 위치가 서버와
+	// 미세하게 달라도 라이더는 발판 위 정확한 상대 위치에 배치된다(라이더 안전).
 	SetReplicateMovement(false);
+	// 열차는 핵심 게임플레이 액터이므로 항상 관련(멀리 있어도 TrainSpeed/거리값 복제 유지).
+	bAlwaysRelevant = true;
 
 	TrainMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TrainMesh"));
 	RootComponent = TrainMesh;
@@ -52,13 +56,19 @@ void AGODTrain::BeginPlay()
 
 	LocalDistanceAlongSpline = DistanceAlongSpline;
 
+	// 에디터에서 둔 각 피벗의 상대 트랜스폼(칸 간격)을 캐시해 흔들림의 베이스로 쓴다.
+	CarPivotBaseTransforms.Reset(CarPivots.Num());
+	for (const TObjectPtr<USceneComponent>& Pivot : CarPivots)
+	{
+		CarPivotBaseTransforms.Add(Pivot ? Pivot->GetRelativeTransform() : FTransform::Identity);
+	}
+
 	if (HasAuthority())
 	{
 		TrainSpeed = MinSpeed;
 		DistanceToDestination = TotalDistance;
 		DistanceAlongSpline = 0.f;
 		bIsDerailed = false;
-		bIsOverheated = false;
 		SyncDistanceToGameState();
 
 		if (Furnace)
@@ -80,6 +90,13 @@ void AGODTrain::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// 출발 전에는 제자리 대기. 게임 시작 시 서버가 StartRunning()을 호출하면 주행한다.
+	// (bIsRunning은 복제되므로 클라도 동시에 움직이기 시작한다.)
+	if (!bIsRunning)
+	{
+		return;
+	}
+
 	const float SplineLen = (Track && Track->Spline) ? Track->Spline->GetSplineLength() : 0.f;
 
 	// ----- 서버: 게임 로직 + 권위적 거리 적분 -----
@@ -87,8 +104,8 @@ void AGODTrain::Tick(float DeltaTime)
 	{
 		if (!bIsDerailed)
 		{
-			// 연료 비율에 따른 목표 속도로 부드럽게 수렴
-			// (연료↑ → 가속, 적정선 초과 → 과열로 감속, 연료 0이어도 MinSpeed 유지)
+			// 연료량에 따른 목표 속도로 부드럽게 수렴
+			// (연료↑ → 가속, 연료 0이어도 MinSpeed 유지)
 			// 고압 경고 중이면 그 위에 배수 페널티를 곱한다.
 			float TargetSpeed = ComputeTargetSpeed();
 			if (bHighPressure)
@@ -96,18 +113,6 @@ void AGODTrain::Tick(float DeltaTime)
 				TargetSpeed *= HighPressureSpeedMultiplier;
 			}
 			TrainSpeed = FMath::FInterpTo(TrainSpeed, TargetSpeed, DeltaTime, SpeedInterpRate);
-
-			// 과열 상태 갱신 (적정 연료 비율 초과 시)
-			if (Furnace && Furnace->MaxFuel > 0.f)
-			{
-				const float FuelRatio = Furnace->CurrentFuel / Furnace->MaxFuel;
-				const bool bNowOverheated = FuelRatio > OptimalFuelRatio;
-				if (bNowOverheated != bIsOverheated)
-				{
-					bIsOverheated = bNowOverheated;
-					OnRep_bIsOverheated();
-				}
-			}
 
 			// 압력 컴포넌트에 연료 상태 전달 (석탄 연소 + 주행 중일 때만 압력 상승)
 			if (Pressure && Furnace)
@@ -127,7 +132,7 @@ void AGODTrain::Tick(float DeltaTime)
 		}
 		LocalDistanceAlongSpline = DistanceAlongSpline;
 	}
-	// ----- 클라이언트: 로컬 적분 후 복제값으로 부드럽게 보정 -----
+	// ----- 클라이언트: 로컬 적분 후 복제값으로 부드럽게 보정 (끊김 없는 이동) -----
 	else if (SplineLen > 0.f)
 	{
 		LocalDistanceAlongSpline = FMath::Fmod(LocalDistanceAlongSpline + TrainSpeed * DeltaTime, SplineLen);
@@ -150,6 +155,78 @@ void AGODTrain::Tick(float DeltaTime)
 	if (SplineLen > 0.f)
 	{
 		UpdateTransformAlongSpline(LocalDistanceAlongSpline);
+	}
+
+	// ----- 모든 머신: 칸별 흔들림 연출 (비주얼 전용, 로컬 계산) -----
+	UpdateShake(DeltaTime);
+}
+
+void AGODTrain::UpdateShake(float DeltaTime)
+{
+	if (!bEnableShake)
+	{
+		return;
+	}
+
+	ShakeTime += DeltaTime;
+
+	// 속도 비례 세기 (정차 시 0, ShakeFullSpeed에서 1). 급정거/가속해도 부드럽게.
+	float Intensity = FMath::Clamp(TrainSpeed / FMath::Max(1.f, ShakeFullSpeed), 0.f, 1.f);
+	if (bIsDerailed)
+	{
+		Intensity = 0.f; // 탈선 연출은 별도 처리
+	}
+
+	// 진폭이 0이면 흔들림 없이 베이스(에디터에서 둔 간격)로 복귀
+	const bool bZero = (Intensity <= KINDA_SMALL_NUMBER);
+
+	// BeginPlay 캐시가 아직 없으면(엣지 케이스) 건드리지 않는다.
+	if (CarPivotBaseTransforms.Num() != CarPivots.Num())
+	{
+		return;
+	}
+
+	for (int32 i = 0; i < CarPivots.Num(); ++i)
+	{
+		USceneComponent* Pivot = CarPivots[i];
+		if (!Pivot)
+		{
+			continue;
+		}
+
+		const FTransform& Base = CarPivotBaseTransforms[i];
+
+		if (bZero)
+		{
+			// 흔들림 오프셋 없이 베이스 상대 트랜스폼 그대로.
+			Pivot->SetRelativeLocation(Base.GetLocation());
+			Pivot->SetRelativeRotation(Base.Rotator());
+			continue;
+		}
+
+		// 칸 인덱스마다 위상을 어긋나게 해서 칸별로 따로 덜컹이게 한다.
+		const float Phase = i * ShakePhasePerCar;
+		const float T = ShakeTime * ShakeFrequency + Phase;
+
+		// 주파수를 살짝 어긋나게 겹쳐 반복감 제거 (기차 특유의 불규칙 롤링)
+		const float Bounce = FMath::Sin(T * 2.13f) * 0.6f + FMath::Sin(T * 5.7f) * 0.4f; // 상하
+		const float Sway   = FMath::Sin(T * 1.70f) * 0.7f + FMath::Sin(T * 3.9f) * 0.3f; // 좌우
+		const float RollN  = FMath::Sin(T * 1.90f);
+		const float PitchN = FMath::Sin(T * 2.60f);
+
+		const FVector LocOffset(
+			0.f,
+			Sway   * ShakeLocAmplitude.Y * Intensity,
+			Bounce * ShakeLocAmplitude.Z * Intensity);
+
+		const FRotator RotOffset(
+			PitchN * ShakeRotAmplitude.X * Intensity, // Pitch
+			0.f,                                       // Yaw는 진행방향이라 건드리지 않음
+			RollN  * ShakeRotAmplitude.Y * Intensity); // Roll
+
+		// 베이스(칸 간격) 위에 흔들림을 더한다.
+		Pivot->SetRelativeLocation(Base.GetLocation() + LocOffset);
+		Pivot->SetRelativeRotation(Base.Rotator() + RotOffset);
 	}
 }
 
@@ -180,7 +257,7 @@ void AGODTrain::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AGODTrain, TrainSpeed);
 	DOREPLIFETIME(AGODTrain, bIsDerailed);
-	DOREPLIFETIME(AGODTrain, bIsOverheated);
+	DOREPLIFETIME(AGODTrain, bIsRunning);
 	DOREPLIFETIME(AGODTrain, DistanceAlongSpline);
 }
 
@@ -188,6 +265,32 @@ void AGODTrain::SetTrainSpeed(float NewSpeed)
 {
 	if (!HasAuthority()) return;
 	TrainSpeed = FMath::Max(0.f, NewSpeed);
+}
+
+void AGODTrain::StartRunning()
+{
+	if (!HasAuthority() || bIsRunning) return;
+
+	bIsRunning = true;
+	TrainSpeed = MinSpeed;      // 출발은 최소 속도부터
+	OnRep_bIsRunning();         // 리슨 서버(호스트) 즉시 반영
+}
+
+void AGODTrain::StopRunning()
+{
+	if (!HasAuthority() || !bIsRunning) return;
+
+	bIsRunning = false;
+	TrainSpeed = 0.f;
+	OnRep_bIsRunning();
+}
+
+void AGODTrain::OnRep_bIsRunning()
+{
+	if (bIsRunning)
+	{
+		OnTrainStarted.Broadcast();
+	}
 }
 
 void AGODTrain::ApplyTrackSwitchImpulse(float ImpulseStrength, float ImpulseRadius)
@@ -228,23 +331,22 @@ void AGODTrain::TriggerDerailment()
 float AGODTrain::ComputeTargetSpeed() const
 {
 	// 화로가 없으면 최소 속도로만 주행
-	if (!Furnace || Furnace->MaxFuel <= 0.f)
+	if (!Furnace)
 	{
 		return MinSpeed;
 	}
 
-	const float FuelRatio = FMath::Clamp(Furnace->CurrentFuel / Furnace->MaxFuel, 0.f, 1.f);
-
-	if (FuelRatio <= OptimalFuelRatio)
+	// 연료 잔량 구간(상태)에 따라 목표 속도가 단계적으로 달라진다.
+	// (실제 속도는 Tick에서 SpeedInterpRate로 부드럽게 수렴)
+	switch (Furnace->GetFuelState())
 	{
-		// 0 ~ 적정선: MinSpeed → MaxSpeed (석탄 넣을수록 가속)
-		const float Alpha = (OptimalFuelRatio > 0.f) ? (FuelRatio / OptimalFuelRatio) : 1.f;
-		return FMath::Lerp(MinSpeed, MaxSpeed, Alpha);
+	case EFuelState::Empty:  return MinSpeed;
+	case EFuelState::Low:    return LowFuelSpeed;
+	case EFuelState::Medium: return MediumFuelSpeed;
+	case EFuelState::High:   return HighFuelSpeed;
+	case EFuelState::Full:   return MaxSpeed;
+	default:                 return MinSpeed;
 	}
-
-	// 적정선 ~ 가득: MaxSpeed → OverheatedSpeed (과투입 → 과열로 감속)
-	const float Alpha = (OptimalFuelRatio < 1.f) ? ((FuelRatio - OptimalFuelRatio) / (1.f - OptimalFuelRatio)) : 1.f;
-	return FMath::Lerp(MaxSpeed, OverheatedSpeed, Alpha);
 }
 
 void AGODTrain::OnFurnaceActivated()
@@ -303,9 +405,4 @@ void AGODTrain::OnRep_bIsDerailed()
 	{
 		OnTrainDerailed.Broadcast();
 	}
-}
-
-void AGODTrain::OnRep_bIsOverheated()
-{
-	OnTrainOverheatChanged.Broadcast(bIsOverheated);
 }
