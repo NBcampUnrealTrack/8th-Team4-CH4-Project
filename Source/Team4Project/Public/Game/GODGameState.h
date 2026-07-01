@@ -21,6 +21,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGamePhaseChanged, EGamePhase, New
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRemainingTimeChanged, int32, NewTime);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDistanceChanged, float, NewDistance);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPressureLevelChanged, float, NewPressure);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrainFuelLevelChanged, float, NewFuel);
 
 UCLASS()
 class TEAM4PROJECT_API AGODGameState : public AGameStateBase
@@ -44,6 +45,10 @@ public:
 	/** 압력 게이지 현재값 (0~100). GODTrain에서 매 Tick 동기화. */
 	UPROPERTY(ReplicatedUsing = OnRep_PressureLevel, BlueprintReadOnly, Category = "Game State")
 	float PressureLevel = 0.f;
+
+	/** 연료 비율 (0~1). GODTrain Furnace에서 매 Tick 동기화. */
+	UPROPERTY(ReplicatedUsing = OnRep_FuelLevel, BlueprintReadOnly, Category = "Game State")
+	float FuelLevel = 0.f;
 
 	/** 게임 시작 3분 후 true 로 전환 */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Game State")
@@ -75,6 +80,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Game State|Events")
 	FOnPressureLevelChanged OnPressureLevelChanged;
 
+	/** 연료 비율 변경 시 브로드캐스트 (0~1). 연료 게이지 위젯에서 바인딩. */
+	UPROPERTY(BlueprintAssignable, Category = "Game State|Events")
+	FOnTrainFuelLevelChanged OnFuelLevelChanged;
+
 	UFUNCTION()
 	void OnRep_GamePhase();
 
@@ -86,6 +95,9 @@ public:
 
 	UFUNCTION()
 	void OnRep_PressureLevel();
+
+	UFUNCTION()
+	void OnRep_FuelLevel();
 	
 	
 	

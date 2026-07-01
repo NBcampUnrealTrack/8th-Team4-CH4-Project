@@ -1,0 +1,249 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "GameplayTagContainer.h"
+#include "Player/GODPlayerState.h"      // EMainRole, ECitizenClass
+#include "UI/HUD/GODAbilitySlotWidget.h" // FAbilitySlotConfig
+#include "GODMainHUDWidget.generated.h"
+
+class UImage;
+class UProgressBar;
+class UTextBlock;
+class UButton;
+class UWidget;
+class UAbilitySystemComponent;
+class ABaseCharacter;
+class AGODGameState;
+class AGODPlayerState;
+class UTexture2D;
+class UGODAbilitySlotWidget;
+
+// ─────────────────────────────────────────────
+// 역할 아이콘 / 설명 정보
+// ─────────────────────────────────────────────
+USTRUCT(BlueprintType)
+struct FRoleDisplayInfo
+{
+	GENERATED_BODY()
+
+	/** 역할 아이콘 이미지 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
+	TObjectPtr<UTexture2D> Icon;
+
+	/** 역할 이름 (툴팁에 표시) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
+	FText RoleName = FText::GetEmpty();
+
+	/** 역할 설명 (툴팁에 표시) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
+	FText RoleDescription = FText::GetEmpty();
+};
+
+// ─────────────────────────────────────────────
+// 역할별 HUD 세팅 (아이콘 + 능력 슬롯 최대 2개)
+// ─────────────────────────────────────────────
+USTRUCT(BlueprintType)
+struct FRoleHUDSetup
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
+	FRoleDisplayInfo DisplayInfo;
+
+	/** 이 역할의 능력 슬롯 설정 (최대 2개). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
+	TArray<FAbilitySlotConfig> AbilitySlots;
+};
+
+/**
+ * 인게임 메인 HUD 위젯.
+ *
+ * [레이아웃 — WBP_GODMainHUD 에서 구성]
+ *   상단 중앙  : 열차 진행도 (PB_TrainProgress, TB_TrainProgressLabel)
+ *   우 상단   : 압력 게이지 (PB_Pressure, TB_PressureValue)
+ *               연료 게이지 (PB_Fuel, TB_FuelValue)
+ *               남은 시간  (TB_RemainingTime)
+ *   중앙      : 경고 문구 (TB_PressureWarning, TB_FuelWarning)
+ *               조준선    (Img_Crosshair)
+ *   우 하단   : 역할 아이콘 + 툴팁 (Img_RoleIcon, Btn_RoleIcon, Panel_RoleTooltip …)
+ *               능력 슬롯 x2  (Slot_Ability1, Slot_Ability2)
+ *               탄약 표시    (Panel_AmmoDisplay, TB_AmmoCount)
+ *
+ * [에디터 작업]
+ * 1. WBP_GODMainHUD 를 생성하고 이 C++ 클래스를 부모로 지정.
+ * 2. 아래 이름으로 위젯을 각 위치에 배치.
+ * 3. 클래스 기본값 → RoleSetupMap 에 역할 태그별 아이콘/설명/능력 슬롯을 채움.
+ * 4. TotalDistance, FuelWarningThreshold, PressureWarningLevel 을 조정.
+ */
+UCLASS()
+class TEAM4PROJECT_API UGODMainHUDWidget : public UUserWidget
+{
+	GENERATED_BODY()
+
+public:
+	// ─── 에디터 설정 ─────────────────────────────
+
+	/**
+	 * 역할 태그 → 아이콘/설명/능력슬롯 매핑.
+	 * 키 예시: Character.Special.Mafia, Character.Crew.Mechanic …
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Role Setup")
+	TMap<FGameplayTag, FRoleHUDSetup> RoleSetupMap;
+
+	/** 열차 전체 이동 거리 (GODTrain::TotalDistance 와 동일하게 설정) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Train")
+	float TotalDistance = 10000.f;
+
+	/** 연료 경고 임계값 (0~1). 이 이하이면 경고 표시 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Warning")
+	float FuelWarningThreshold = 0.2f;
+
+	/** 압력 경고 임계값 (0~100). 이 이상이면 경고 표시 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Warning")
+	float PressureWarningLevel = 80.f;
+
+	/** 경고 문구 점멸 간격(초) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Warning")
+	float WarningBlinkInterval = 0.5f;
+
+protected:
+	virtual void NativeConstruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual void NativeDestruct() override;
+
+	// ─── BindWidget: BP 에서 반드시 동일 이름으로 위젯을 배치 ─────
+
+	// 상단 중앙 — 열차 진행도
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UProgressBar> PB_TrainProgress;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> TB_TrainProgressLabel;
+
+	// 우 상단 — 압력
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UProgressBar> PB_Pressure;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> TB_PressureValue;
+
+	// 우 상단 — 연료
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UProgressBar> PB_Fuel;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> TB_FuelValue;
+
+	// 우 상단 — 남은 시간
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> TB_RemainingTime;
+
+	// 중앙 — 경고 문구
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> TB_PressureWarning;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> TB_FuelWarning;
+
+	// 중앙 — 조준선
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> Img_Crosshair;
+
+	// 우 하단 — 역할 아이콘
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> Img_RoleIcon;
+
+	/** 역할 아이콘 위에 올려놓는 투명 호버 버튼 */
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> Btn_RoleIcon;
+
+	/** 역할 이름/설명 툴팁 패널 (기본 Collapsed) */
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> Panel_RoleTooltip;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> TB_RoleName;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> TB_RoleDescription;
+
+	// 우 하단 — 능력 슬롯 (WBP_AbilitySlot 상속 위젯을 배치)
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UGODAbilitySlotWidget> Slot_Ability1;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UGODAbilitySlotWidget> Slot_Ability2;
+
+	// 우 하단 — 탄약 (총 장착 시 표시)
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> Panel_AmmoDisplay;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> TB_AmmoCount;
+
+private:
+	// ─── 런타임 상태 ─────────────────────────────
+
+	UPROPERTY()
+	TWeakObjectPtr<AGODGameState> CachedGameState;
+
+	UPROPERTY()
+	TWeakObjectPtr<ABaseCharacter> CachedCharacter;
+
+	UPROPERTY()
+	TWeakObjectPtr<UAbilitySystemComponent> CachedASC;
+
+	float CurrentPressure  = 0.f;
+	float CurrentFuel      = 0.f;
+	float CurrentDistance  = 0.f;
+	int32 CurrentTime      = 0;
+
+	bool bWarningPressureActive = false;
+	bool bWarningFuelActive     = false;
+	bool bWarningVisible        = true;
+	float WarningBlinkTimer     = 0.f;
+
+	bool bGunEquipped = false;
+
+	// 현재 폰 변경 감지용
+	UPROPERTY()
+	TWeakObjectPtr<APawn> LastKnownPawn;
+
+	// ─── 초기화 / 이벤트 바인딩 ──────────────────
+
+	void TryBindGameState();
+	void InitializeForPawn(APawn* NewPawn);
+
+	UFUNCTION()
+	void OnRemainingTimeChanged(int32 NewTime);
+
+	UFUNCTION()
+	void OnDistanceChanged(float NewDistance);
+
+	UFUNCTION()
+	void OnPressureLevelChanged(float NewPressure);
+
+	UFUNCTION()
+	void OnFuelLevelChanged(float NewFuel);
+
+	// ─── UI 갱신 ────────────────────────────────
+
+	void UpdateTimeDisplay();
+	void UpdateTrainProgress();
+	void UpdatePressureDisplay();
+	void UpdateFuelDisplay();
+	void UpdateWarnings(float DeltaTime);
+	void UpdateAmmoDisplay();
+	void UpdateCrosshair();
+
+	void SetupRoleHUD(const FGameplayTag& CharTag);
+
+	UFUNCTION()
+	void OnRoleIconHovered();
+
+	UFUNCTION()
+	void OnRoleIconUnhovered();
+
+	static FString FormatTime(int32 TotalSeconds);
+};

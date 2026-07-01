@@ -1,0 +1,359 @@
+#include "UI/HUD/GODMainHUDWidget.h"
+
+#include "AbilitySystemComponent.h"
+#include "Components/Button.h"
+#include "Components/Image.h"
+#include "Components/ProgressBar.h"
+#include "Components/TextBlock.h"
+#include "Components/Widget.h"
+#include "Engine/Texture2D.h"
+
+#include "Game/GODGameState.h"
+#include "Player/BaseCharacter.h"
+#include "Player/Component/BaseAttributeSet.h"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 초기화
+// ─────────────────────────────────────────────────────────────────────────────
+
+void UGODMainHUDWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+
+	// 툴팁 패널 초기 숨김
+	if (Panel_RoleTooltip) Panel_RoleTooltip->SetVisibility(ESlateVisibility::Collapsed);
+	if (Panel_AmmoDisplay)  Panel_AmmoDisplay->SetVisibility(ESlateVisibility::Collapsed);
+
+	// 경고 문구 초기 숨김
+	if (TB_PressureWarning) TB_PressureWarning->SetVisibility(ESlateVisibility::Hidden);
+	if (TB_FuelWarning)     TB_FuelWarning->SetVisibility(ESlateVisibility::Hidden);
+
+	// 역할 아이콘 호버 버튼 바인딩
+	if (Btn_RoleIcon)
+	{
+		Btn_RoleIcon->OnHovered.AddDynamic(this, &UGODMainHUDWidget::OnRoleIconHovered);
+		Btn_RoleIcon->OnUnhovered.AddDynamic(this, &UGODMainHUDWidget::OnRoleIconUnhovered);
+	}
+
+	TryBindGameState();
+}
+
+void UGODMainHUDWidget::NativeDestruct()
+{
+	// GameState 델리게이트 언바인딩
+	if (AGODGameState* GS = CachedGameState.Get())
+	{
+		GS->OnRemainingTimeChanged.RemoveAll(this);
+		GS->OnDistanceToDestinationChanged.RemoveAll(this);
+		GS->OnPressureLevelChanged.RemoveAll(this);
+		GS->OnFuelLevelChanged.RemoveAll(this);
+	}
+
+	// ASC 어트리뷰트 델리게이트 언바인딩
+	if (UAbilitySystemComponent* ASC = CachedASC.Get())
+	{
+		ASC->GetGameplayAttributeValueChangeDelegate(
+			UBaseAttributeSet::GetCurrentAmmoAttribute()).RemoveAll(this);
+	}
+
+	Super::NativeDestruct();
+}
+
+void UGODMainHUDWidget::TryBindGameState()
+{
+	AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr;
+	if (!GS || CachedGameState.Get() == GS) return;
+
+	CachedGameState = GS;
+
+	GS->OnRemainingTimeChanged.AddDynamic(this,       &UGODMainHUDWidget::OnRemainingTimeChanged);
+	GS->OnDistanceToDestinationChanged.AddDynamic(this, &UGODMainHUDWidget::OnDistanceChanged);
+	GS->OnPressureLevelChanged.AddDynamic(this,       &UGODMainHUDWidget::OnPressureLevelChanged);
+	GS->OnFuelLevelChanged.AddDynamic(this,           &UGODMainHUDWidget::OnFuelLevelChanged);
+
+	// 현재 값으로 즉시 갱신
+	CurrentTime     = GS->RemainingTime;
+	CurrentDistance = GS->DistanceToDestination;
+	CurrentPressure = GS->PressureLevel;
+	CurrentFuel     = GS->FuelLevel;
+
+	UpdateTimeDisplay();
+	UpdateTrainProgress();
+	UpdatePressureDisplay();
+	UpdateFuelDisplay();
+}
+
+void UGODMainHUDWidget::InitializeForPawn(APawn* NewPawn)
+{
+	ABaseCharacter* Char = Cast<ABaseCharacter>(NewPawn);
+	CachedCharacter = Char;
+
+	if (!Char) return;
+
+	// ASC 연결
+	UAbilitySystemComponent* ASC = Cast<UAbilitySystemComponent>(Char->GetAbilitySystemComponent());
+	if (ASC && CachedASC.Get() != ASC)
+	{
+		// 이전 ASC 언바인딩
+		if (UAbilitySystemComponent* OldASC = CachedASC.Get())
+		{
+			OldASC->GetGameplayAttributeValueChangeDelegate(
+				UBaseAttributeSet::GetCurrentAmmoAttribute()).RemoveAll(this);
+		}
+
+		CachedASC = ASC;
+
+		// 탄약 변화 바인딩
+		ASC->GetGameplayAttributeValueChangeDelegate(UBaseAttributeSet::GetCurrentAmmoAttribute())
+			.AddLambda([this](const FOnAttributeChangeData&) { UpdateAmmoDisplay(); });
+
+		// 능력 슬롯에 ASC 전달
+		if (Slot_Ability1) Slot_Ability1->SetAbilitySystemComponent(ASC);
+		if (Slot_Ability2) Slot_Ability2->SetAbilitySystemComponent(ASC);
+
+		UpdateAmmoDisplay();
+	}
+
+	// 역할 태그로 HUD 세팅
+	FGameplayTag CharTag = Char->GetCharacterTag();
+	if (CharTag.IsValid())
+	{
+		SetupRoleHUD(CharTag);
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NativeTick
+// ─────────────────────────────────────────────────────────────────────────────
+
+void UGODMainHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	// GameState 연결이 아직 안 됐으면 재시도
+	if (!CachedGameState.IsValid())
+	{
+		TryBindGameState();
+	}
+
+	// 폰 변경 감지 (빙의·사망 후 재빙의 처리)
+	APawn* CurrentPawn = GetOwningPlayerPawn();
+	if (CurrentPawn != LastKnownPawn.Get())
+	{
+		LastKnownPawn = CurrentPawn;
+		InitializeForPawn(CurrentPawn);
+	}
+
+	UpdateWarnings(InDeltaTime);
+	UpdateCrosshair();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 델리게이트 콜백
+// ─────────────────────────────────────────────────────────────────────────────
+
+void UGODMainHUDWidget::OnRemainingTimeChanged(int32 NewTime)
+{
+	CurrentTime = NewTime;
+	UpdateTimeDisplay();
+}
+
+void UGODMainHUDWidget::OnDistanceChanged(float NewDistance)
+{
+	CurrentDistance = NewDistance;
+	UpdateTrainProgress();
+}
+
+void UGODMainHUDWidget::OnPressureLevelChanged(float NewPressure)
+{
+	CurrentPressure = NewPressure;
+	UpdatePressureDisplay();
+	bWarningPressureActive = (CurrentPressure >= PressureWarningLevel);
+}
+
+void UGODMainHUDWidget::OnFuelLevelChanged(float NewFuel)
+{
+	CurrentFuel = NewFuel;
+	UpdateFuelDisplay();
+	bWarningFuelActive = (CurrentFuel <= FuelWarningThreshold);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI 갱신 함수들
+// ─────────────────────────────────────────────────────────────────────────────
+
+void UGODMainHUDWidget::UpdateTimeDisplay()
+{
+	if (TB_RemainingTime)
+		TB_RemainingTime->SetText(FText::FromString(FormatTime(CurrentTime)));
+}
+
+void UGODMainHUDWidget::UpdateTrainProgress()
+{
+	const float Progress = (TotalDistance > 0.f)
+		? FMath::Clamp(1.f - CurrentDistance / TotalDistance, 0.f, 1.f)
+		: 0.f;
+
+	if (PB_TrainProgress)
+		PB_TrainProgress->SetPercent(Progress);
+
+	if (TB_TrainProgressLabel)
+	{
+		TB_TrainProgressLabel->SetText(
+			FText::FromString(FString::Printf(TEXT("도착지까지 %.0f%%"), (1.f - Progress) * 100.f)));
+	}
+}
+
+void UGODMainHUDWidget::UpdatePressureDisplay()
+{
+	const float Percent = FMath::Clamp(CurrentPressure / 100.f, 0.f, 1.f);
+
+	if (PB_Pressure)
+		PB_Pressure->SetPercent(Percent);
+
+	if (TB_PressureValue)
+		TB_PressureValue->SetText(FText::FromString(FString::Printf(TEXT("압력: %.0f%%"), CurrentPressure)));
+}
+
+void UGODMainHUDWidget::UpdateFuelDisplay()
+{
+	const float Percent = FMath::Clamp(CurrentFuel, 0.f, 1.f);
+
+	if (PB_Fuel)
+		PB_Fuel->SetPercent(Percent);
+
+	if (TB_FuelValue)
+		TB_FuelValue->SetText(FText::FromString(FString::Printf(TEXT("연료: %.0f%%"), CurrentFuel * 100.f)));
+}
+
+void UGODMainHUDWidget::UpdateWarnings(float DeltaTime)
+{
+	const bool bAnyWarning = bWarningPressureActive || bWarningFuelActive;
+
+	if (bAnyWarning)
+	{
+		WarningBlinkTimer += DeltaTime;
+		if (WarningBlinkTimer >= WarningBlinkInterval)
+		{
+			WarningBlinkTimer = 0.f;
+			bWarningVisible   = !bWarningVisible;
+		}
+	}
+	else
+	{
+		bWarningVisible   = false;
+		WarningBlinkTimer = 0.f;
+	}
+
+	const ESlateVisibility VisWhenActive = bWarningVisible
+		? ESlateVisibility::HitTestInvisible
+		: ESlateVisibility::Hidden;
+
+	if (TB_PressureWarning)
+	{
+		TB_PressureWarning->SetVisibility(bWarningPressureActive ? VisWhenActive : ESlateVisibility::Hidden);
+	}
+
+	if (TB_FuelWarning)
+	{
+		TB_FuelWarning->SetVisibility(bWarningFuelActive ? VisWhenActive : ESlateVisibility::Hidden);
+	}
+}
+
+void UGODMainHUDWidget::UpdateAmmoDisplay()
+{
+	UAbilitySystemComponent* ASC = CachedASC.Get();
+	if (!ASC || !Panel_AmmoDisplay || !TB_AmmoCount) return;
+
+	ABaseCharacter* Char = CachedCharacter.Get();
+	const bool bHasGun = Char && Char->GetCurrentWeapon() != nullptr;
+
+	Panel_AmmoDisplay->SetVisibility(bHasGun ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+
+	if (bHasGun)
+	{
+		const int32 Current = FMath::FloorToInt(ASC->GetNumericAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute()));
+		const int32 Max     = FMath::FloorToInt(ASC->GetNumericAttribute(UBaseAttributeSet::GetMaxAmmoAttribute()));
+		TB_AmmoCount->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"), Current, Max)));
+	}
+}
+
+void UGODMainHUDWidget::UpdateCrosshair()
+{
+	if (!Img_Crosshair) return;
+
+	ABaseCharacter* Char = CachedCharacter.Get();
+	// 총기 장착 시 또는 항상 표시 (디자이너가 BP에서 선택 가능)
+	const bool bShow = Char && !Char->IsDead();
+	Img_Crosshair->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 역할 HUD 세팅
+// ─────────────────────────────────────────────────────────────────────────────
+
+void UGODMainHUDWidget::SetupRoleHUD(const FGameplayTag& CharTag)
+{
+	const FRoleHUDSetup* Setup = RoleSetupMap.Find(CharTag);
+
+	// 역할 아이콘 / 툴팁
+	if (Setup)
+	{
+		if (Img_RoleIcon && Setup->DisplayInfo.Icon)
+			Img_RoleIcon->SetBrushFromTexture(Setup->DisplayInfo.Icon);
+
+		if (TB_RoleName)
+			TB_RoleName->SetText(Setup->DisplayInfo.RoleName);
+
+		if (TB_RoleDescription)
+			TB_RoleDescription->SetText(Setup->DisplayInfo.RoleDescription);
+	}
+
+	// 능력 슬롯 설정
+	UAbilitySystemComponent* ASC = CachedASC.Get();
+
+	auto ConfigureSlot = [&](UGODAbilitySlotWidget* SlotWidget, int32 Index)
+	{
+		if (!SlotWidget) return;
+
+		if (Setup && Setup->AbilitySlots.IsValidIndex(Index))
+		{
+			SlotWidget->SetupSlot(Setup->AbilitySlots[Index], ASC);
+			SlotWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		}
+		else
+		{
+			SlotWidget->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	};
+
+	ConfigureSlot(Slot_Ability1, 0);
+	ConfigureSlot(Slot_Ability2, 1);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 역할 아이콘 호버
+// ─────────────────────────────────────────────────────────────────────────────
+
+void UGODMainHUDWidget::OnRoleIconHovered()
+{
+	if (Panel_RoleTooltip)
+		Panel_RoleTooltip->SetVisibility(ESlateVisibility::HitTestInvisible);
+}
+
+void UGODMainHUDWidget::OnRoleIconUnhovered()
+{
+	if (Panel_RoleTooltip)
+		Panel_RoleTooltip->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 유틸
+// ─────────────────────────────────────────────────────────────────────────────
+
+FString UGODMainHUDWidget::FormatTime(int32 TotalSeconds)
+{
+	const int32 Minutes = TotalSeconds / 60;
+	const int32 Seconds = TotalSeconds % 60;
+	return FString::Printf(TEXT("%02d:%02d"), Minutes, Seconds);
+}

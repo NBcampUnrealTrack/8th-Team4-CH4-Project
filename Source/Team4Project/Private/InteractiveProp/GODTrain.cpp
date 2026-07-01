@@ -390,6 +390,12 @@ void AGODTrain::SyncDistanceToGameState()
 			GS->PressureLevel = Pressure->CurrentPressure;
 			GS->OnRep_PressureLevel(); // 리슨 서버 클라이언트 즉시 알림
 		}
+
+		if (Furnace && Furnace->MaxFuel > 0.f)
+		{
+			GS->FuelLevel = Furnace->CurrentFuel / Furnace->MaxFuel;
+			GS->OnRep_FuelLevel(); // 리슨 서버 클라이언트 즉시 알림
+		}
 	}
 }
 

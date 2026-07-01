@@ -18,6 +18,7 @@ void AGODGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AGODGameState, RemainingTime);
 	DOREPLIFETIME(AGODGameState, DistanceToDestination);
 	DOREPLIFETIME(AGODGameState, PressureLevel);
+	DOREPLIFETIME(AGODGameState, FuelLevel);
 	DOREPLIFETIME(AGODGameState, bGunsUnlocked);
 	DOREPLIFETIME(AGODGameState, LobbyCountdown);
 	DOREPLIFETIME(AGODGameState, ChatHistory);
@@ -41,6 +42,11 @@ void AGODGameState::OnRep_DistanceToDestination()
 void AGODGameState::OnRep_PressureLevel()
 {
 	OnPressureLevelChanged.Broadcast(PressureLevel);
+}
+
+void AGODGameState::OnRep_FuelLevel()
+{
+	OnFuelLevelChanged.Broadcast(FuelLevel);
 }
 
 void AGODGameState::AddChatMessage(const FChatMessage& Msg)
