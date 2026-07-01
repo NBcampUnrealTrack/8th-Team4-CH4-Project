@@ -9,6 +9,8 @@
 #include "Player/Weapon/BaseWeapon.h"
 #include "Component/InteractComponent.h"
 #include "InteractiveProp/ItemBase.h"
+#include "InteractiveProp/DoorBase.h"
+#include "InteractiveProp/PressureValve.h"
 #include "Game/BaseGameplayTags.h"
 #include "GameplayEffect.h"
 #include "GameplayEffectTypes.h"
@@ -16,6 +18,9 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/WidgetComponent.h"
+#include "Components/SpotLightComponent.h"
+#include "Components/DecalComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "TimerManager.h"
 #include "Game/BaseDataSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -26,6 +31,8 @@
 #include "Net/UnrealNetwork.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "Engine/Engine.h" // [임시] 디버그 화면 출력용
+#include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 #include "Engine/LocalPlayer.h"
 #include "Camera/CameraComponent.h"
@@ -49,6 +56,13 @@ ABaseCharacter::ABaseCharacter()
 
 	WidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("WidgetComponent"));
 	WidgetComponent->SetupAttachment(RootComponent);
+
+	// 순찰자 랜턴 — 기본 꺼진 상태. BP에서 hand_l 소켓에 부착 확인.
+	LanternLight = CreateDefaultSubobject<USpotLightComponent>(TEXT("LanternLight"));
+	LanternLight->SetupAttachment(GetMesh(), TEXT("hand_l"));
+	LanternLight->SetVisibility(false);
+	LanternLight->Intensity     = 3000.f;
+	LanternLight->OuterConeAngle = 35.f;
 
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 
@@ -95,6 +109,13 @@ void ABaseCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// 아웃로 가짜 시체 복귀에 필요한 초기 메시 트랜스폼 저장.
+	if (GetMesh())
+	{
+		DefaultMeshRelativeLocation = GetMesh()->GetRelativeLocation();
+		DefaultMeshRelativeRotation = GetMesh()->GetRelativeRotation();
+	}
+
 	if (IsLocallyControlled() == true)
 	{
 		APlayerController* PC = Cast<APlayerController>(GetController());
@@ -106,8 +127,14 @@ void ABaseCharacter::BeginPlay()
 				EILPS->AddMappingContext(DefaultMappingContext, 0);
 			}
 		}
-		
+
 	}
+}
+
+void ABaseCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	DeactivateRoleTimers();
+	Super::EndPlay(EndPlayReason);
 }
 
 // ============================================================
@@ -240,7 +267,13 @@ void ABaseCharacter::ClearCharacterDataRow()
 
 void ABaseCharacter::SetCharacterTag(const FGameplayTag& NewTag)
 {
+	// 기존 역할 타이머를 먼저 정리한다.
+	if (HasAuthority()) DeactivateRoleTimers();
+
 	CharacterTag = NewTag;
+
+	// 역할별 기본 수치 반영 (정비공은 수리 속도 2배).
+	RepairSpeedMultiplier = (NewTag == Character::Crew::Mechanic.GetTag()) ? 2.0f : 1.0f;
 
 	// GAS 가 이미 초기화된 뒤 역할이 바뀌면, 새 역할의 속성/어빌리티로 다시 적용한다.
 	// (아직 초기화 전이면 ServerInitGAS 가 이 태그로 최초 적용한다.)
@@ -251,6 +284,9 @@ void ABaseCharacter::SetCharacterTag(const FGameplayTag& NewTag)
 
 	// 직업이 바뀌면 짐꾼 무게 면제 여부가 달라지므로 즉시 속도 재계산.
 	RecalculateMoveSpeed();
+
+	// 새 역할에 맞는 패시브 타이머 시작.
+	if (HasAuthority()) ActivateRoleTimers();
 }
 
 // ============================================================
@@ -331,6 +367,12 @@ void ABaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME_CONDITION(ABaseCharacter, CharacterTag, COND_OwnerOnly);
 	
 	DOREPLIFETIME(ABaseCharacter, bIsCoalEquipped);
+
+	// 역할별 상태
+	DOREPLIFETIME(ABaseCharacter, bIsInVent);
+	DOREPLIFETIME(ABaseCharacter, bIsInvisible);
+	DOREPLIFETIME(ABaseCharacter, bIsFakeDead);
+	DOREPLIFETIME(ABaseCharacter, bLanternOn);
 }
 
 // ============================================================
@@ -385,6 +427,28 @@ void ABaseCharacter::OnRep_MeshHidden()
 
 void ABaseCharacter::ApplyMeshVisibility()
 {
+	// 마피아 투명화: 자신을 제외한 모든 클라이언트에서 숨김.
+	if (bIsInvisible && !IsLocallyControlled())
+	{
+		if (GetMesh())
+		{
+			GetMesh()->SetVisibility(false);
+		}
+		if (CurrentWeapon)
+		{
+			CurrentWeapon->SetActorHiddenInGame(true);
+		}
+		if (CurrentHeldItem)
+		{
+			CurrentHeldItem->SetActorHiddenInGame(true);
+		}
+		if (WidgetComponent)
+		{
+			WidgetComponent->SetVisibility(false, true);
+		}
+		return;
+	}
+
 	if (USkeletalMeshComponent* SkelMesh = GetMesh())
 	{
 		SkelMesh->SetVisibility(!bMeshHidden, true);
@@ -450,6 +514,21 @@ void ABaseCharacter::ClearEquipSlot()
 // ============================================================
 // 사망 처리
 // ============================================================
+
+float ABaseCharacter::TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
+	AController* EventInstigator, AActor* DamageCauser)
+{
+	// 화부(Stoker)는 열 피해에 완전 면역.
+	if (CharacterTag == Character::Crew::Stoker.GetTag())
+	{
+		if (DamageCauser && DamageCauser->ActorHasTag(TEXT("DamageSource.Heat")))
+		{
+			return 0.f;
+		}
+	}
+
+	return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+}
 
 void ABaseCharacter::Die(AActor* Killer)
 {
@@ -710,6 +789,363 @@ void ABaseCharacter::DestroyCoalHands()
 		RightCoalActor->Destroy();
 		RightCoalActor = nullptr;
 	}
+}
+
+// ============================================================
+// 역할 타이머 관리
+// ============================================================
+
+void ABaseCharacter::ActivateRoleTimers()
+{
+	if (!CharacterTag.IsValid()) return;
+
+	if (CharacterTag == Character::Special::Sheriff.GetTag())
+	{
+		GetWorldTimerManager().SetTimer(
+			BodyDetectionTimer, this, &ABaseCharacter::CheckForHiddenBodies,
+			BodyDetectionInterval, /*bLoop=*/true);
+	}
+	else if (CharacterTag == Character::Crew::Watchman.GetTag())
+	{
+		GetWorldTimerManager().SetTimer(
+			FootprintRecordTimer, this, &ABaseCharacter::RecordFootprintPositions,
+			RecordInterval, /*bLoop=*/true);
+	}
+}
+
+void ABaseCharacter::DeactivateRoleTimers()
+{
+	GetWorldTimerManager().ClearTimer(BodyDetectionTimer);
+	GetWorldTimerManager().ClearTimer(FootprintRecordTimer);
+}
+
+// ============================================================
+// 역할별 능력 — Mafia
+// ============================================================
+
+void ABaseCharacter::EnterVent(AActor* VentActor)
+{
+	if (!HasAuthority() || bIsInVent) return;
+	bIsInVent = true;
+	ApplyVentMovement(true);
+}
+
+void ABaseCharacter::ExitVent()
+{
+	if (!HasAuthority() || !bIsInVent) return;
+	bIsInVent = false;
+	ApplyVentMovement(false);
+}
+
+void ABaseCharacter::OnRep_IsInVent()
+{
+	ApplyVentMovement(bIsInVent);
+}
+
+void ABaseCharacter::ApplyVentMovement(bool bEntering)
+{
+	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+	{
+		if (bEntering)
+			CMC->MaxWalkSpeed = 150.f;
+		else
+			RecalculateMoveSpeed();
+	}
+
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+		Capsule->SetCapsuleHalfHeight(bEntering ? 24.f : 96.0f);
+}
+
+void ABaseCharacter::SetInvisible(bool bNewInvisible)
+{
+	if (!HasAuthority()) return;
+	bIsInvisible = bNewInvisible;
+	ApplyMeshVisibility();
+}
+
+void ABaseCharacter::OnRep_IsInvisible()
+{
+	ApplyMeshVisibility();
+}
+
+void ABaseCharacter::UseMasterKey(AActor* DoorActor)
+{
+	if (!HasAuthority() || !IsValid(DoorActor)) return;
+
+	if (ADoorBase* Door = Cast<ADoorBase>(DoorActor))
+		Door->SetLocked(true);
+}
+
+void ABaseCharacter::UseWireCutter(AActor* GearActor)
+{
+	if (!HasAuthority() || !IsValid(GearActor)) return;
+
+	if (AItemBase* Item = Cast<AItemBase>(GearActor))
+		if (Item->bIsHeld) Item->Server_Drop();
+
+	GearActor->Tags.AddUnique(FName(TEXT("Gear.Destroyed")));
+	GearActor->SetActorHiddenInGame(true);
+
+	if (UPrimitiveComponent* Root = Cast<UPrimitiveComponent>(GearActor->GetRootComponent()))
+		Root->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+}
+
+void ABaseCharacter::Multicast_HideBody_Implementation(ABaseCharacter* DeadCharacter)
+{
+	if (!IsValid(DeadCharacter)) return;
+	if (DeadCharacter->GetMesh()) DeadCharacter->GetMesh()->SetVisibility(false);
+	if (HasAuthority()) DeadCharacter->Tags.AddUnique(TEXT("Body.Hidden"));
+}
+
+void ABaseCharacter::Multicast_ShowBody_Implementation(ABaseCharacter* DeadCharacter)
+{
+	if (!IsValid(DeadCharacter)) return;
+	if (DeadCharacter->GetMesh()) DeadCharacter->GetMesh()->SetVisibility(true);
+	if (HasAuthority()) DeadCharacter->Tags.Remove(TEXT("Body.Hidden"));
+}
+
+// ============================================================
+// 역할별 능력 — Sheriff
+// ============================================================
+
+void ABaseCharacter::CheckForHiddenBodies()
+{
+	TArray<AActor*> Overlapping;
+	UKismetSystemLibrary::SphereOverlapActors(
+		GetWorld(),
+		GetActorLocation(),
+		BodyDetectionRadius,
+		TArray<TEnumAsByte<EObjectTypeQuery>>{
+			UEngineTypes::ConvertToObjectType(ECC_Pawn),
+			UEngineTypes::ConvertToObjectType(ECC_PhysicsBody)
+		},
+		ABaseCharacter::StaticClass(),
+		TArray<AActor*>{ this },
+		Overlapping
+	);
+
+	for (AActor* Actor : Overlapping)
+	{
+		ABaseCharacter* DeadChar = Cast<ABaseCharacter>(Actor);
+		if (DeadChar && DeadChar->IsDead() && DeadChar->ActorHasTag(TEXT("Body.Hidden")))
+			OnHiddenBodyDetected(DeadChar);
+	}
+}
+
+void ABaseCharacter::UnlockDoor(AActor* DoorActor)
+{
+	if (!HasAuthority() || !IsValid(DoorActor)) return;
+
+	if (ADoorBase* Door = Cast<ADoorBase>(DoorActor))
+		Door->SetLocked(false);
+}
+
+// ============================================================
+// 역할별 능력 — Outlaw
+// ============================================================
+
+void ABaseCharacter::StartFakeDeath()
+{
+	if (!HasAuthority() || bIsFakeDead || bIsDead) return;
+	bIsFakeDead = true;
+	ApplyFakeDeathPhysics(true);
+}
+
+void ABaseCharacter::StopFakeDeath()
+{
+	if (!HasAuthority() || !bIsFakeDead) return;
+	bIsFakeDead = false;
+	ApplyFakeDeathPhysics(false);
+}
+
+void ABaseCharacter::OnRep_IsFakeDead()
+{
+	ApplyFakeDeathPhysics(bIsFakeDead);
+}
+
+void ABaseCharacter::ApplyFakeDeathPhysics(bool bActivate)
+{
+	if (bActivate)
+	{
+		if (GetCharacterMovement()) GetCharacterMovement()->DisableMovement();
+		if (GetCapsuleComponent()) GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		if (GetMesh())
+		{
+			GetMesh()->SetSimulatePhysics(true);
+			GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
+		}
+		if (APlayerController* PC = Cast<APlayerController>(GetController())) DisableInput(PC);
+	}
+	else
+	{
+		if (GetMesh())
+		{
+			GetMesh()->SetSimulatePhysics(false);
+			GetMesh()->SetCollisionProfileName(TEXT("CharacterMesh"));
+			GetMesh()->AttachToComponent(GetCapsuleComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+			GetMesh()->SetRelativeLocationAndRotation(DefaultMeshRelativeLocation, DefaultMeshRelativeRotation);
+		}
+		if (GetCapsuleComponent()) GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		if (GetCharacterMovement()) GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+		if (APlayerController* PC = Cast<APlayerController>(GetController())) EnableInput(PC);
+	}
+}
+
+void ABaseCharacter::StealAmmo(ABaseCharacter* DeadCharacter)
+{
+	if (!HasAuthority() || !IsValid(DeadCharacter) || !DeadCharacter->IsDead()) return;
+
+	AGODPlayerState* OutlawPS = GetPlayerState<AGODPlayerState>();
+	AGODPlayerState* DeadPS   = DeadCharacter->GetPlayerState<AGODPlayerState>();
+	if (!OutlawPS || !DeadPS) return;
+
+	if (DeadPS->AmmoCount > 0)
+	{
+		OutlawPS->AmmoCount += DeadPS->AmmoCount;
+		DeadPS->AmmoCount = 0;
+	}
+}
+
+// ============================================================
+// 역할별 능력 — Mechanic
+// ============================================================
+
+bool ABaseCharacter::CanInstantFixGear() const
+{
+	return CharacterTag == Character::Crew::Mechanic.GetTag();
+}
+
+// ============================================================
+// 역할별 능력 — Watchman
+// ============================================================
+
+void ABaseCharacter::ToggleLantern()
+{
+	if (!HasAuthority()) return;
+	bLanternOn = !bLanternOn;
+	OnRep_LanternOn();
+}
+
+void ABaseCharacter::OnRep_LanternOn()
+{
+	if (LanternLight) LanternLight->SetVisibility(bLanternOn);
+}
+
+void ABaseCharacter::SetTrackedPlayers(ABaseCharacter* P1, ABaseCharacter* P2,
+	FLinearColor C1, FLinearColor C2)
+{
+	TrackedPlayer1 = P1;
+	TrackedPlayer2 = P2;
+	TrackColor1    = C1;
+	TrackColor2    = C2;
+
+	Footprints1.Reset();
+	Footprints2.Reset();
+}
+
+void ABaseCharacter::ActivateFootprintVision()
+{
+	if (!HasAuthority()) return;
+
+	TArray<FVector> Pos1, Pos2;
+	for (const FFootprintRecord& R : Footprints1) Pos1.Add(R.Location);
+	for (const FFootprintRecord& R : Footprints2) Pos2.Add(R.Location);
+
+	Client_ReceiveFootprints(Pos1, TrackColor1, Pos2, TrackColor2);
+}
+
+void ABaseCharacter::RecordFootprintPositions()
+{
+	const float Now = GetWorld()->GetTimeSeconds();
+
+	if (TrackedPlayer1.IsValid() && !TrackedPlayer1->IsDead())
+	{
+		FFootprintRecord R;
+		R.Location  = TrackedPlayer1->GetActorLocation();
+		R.Timestamp = Now;
+		Footprints1.Add(R);
+	}
+
+	if (TrackedPlayer2.IsValid() && !TrackedPlayer2->IsDead())
+	{
+		FFootprintRecord R;
+		R.Location  = TrackedPlayer2->GetActorLocation();
+		R.Timestamp = Now;
+		Footprints2.Add(R);
+	}
+
+	PruneOldRecords(Footprints1);
+	PruneOldRecords(Footprints2);
+}
+
+void ABaseCharacter::PruneOldRecords(TArray<FFootprintRecord>& Records)
+{
+	const float Cutoff = GetWorld()->GetTimeSeconds() - FootprintRecordDuration;
+	Records.RemoveAll([Cutoff](const FFootprintRecord& R) { return R.Timestamp < Cutoff; });
+}
+
+void ABaseCharacter::Client_ReceiveFootprints_Implementation(
+	const TArray<FVector>& Positions1, FLinearColor InColor1,
+	const TArray<FVector>& Positions2, FLinearColor InColor2)
+{
+	SpawnFootprintDecals(Positions1, InColor1);
+	SpawnFootprintDecals(Positions2, InColor2);
+}
+
+void ABaseCharacter::SpawnFootprintDecals(const TArray<FVector>& Positions, FLinearColor Color)
+{
+	if (!FootprintDecalMaterial) return;
+
+	for (const FVector& Pos : Positions)
+	{
+		UDecalComponent* Decal = UGameplayStatics::SpawnDecalAtLocation(
+			GetWorld(), FootprintDecalMaterial, DecalSize,
+			Pos, FRotator(-90.f, 0.f, 0.f), DecalLifespan);
+
+		if (!Decal) continue;
+
+		UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(FootprintDecalMaterial, this);
+		if (MID)
+		{
+			MID->SetVectorParameterValue(TEXT("FootprintColor"), Color);
+			Decal->SetMaterial(0, MID);
+		}
+	}
+}
+
+// ============================================================
+// 역할별 능력 — Stoker
+// ============================================================
+
+bool ABaseCharacter::IsHeatImmune() const
+{
+	return CharacterTag == Character::Crew::Stoker.GetTag();
+}
+
+void ABaseCharacter::ForceClosePressureValve(AActor* PressureValveActor)
+{
+	if (!HasAuthority() || !PressureValveActor) return;
+
+	if (APressureValve* Valve = Cast<APressureValve>(PressureValveActor))
+	{
+		Valve->Server_StopTurning();
+		Valve->Tags.AddUnique(TEXT("Stoker.ForceClose"));
+	}
+}
+
+// ============================================================
+// 역할별 능력 — Porter
+// ============================================================
+
+float ABaseCharacter::GetHeavyCarrySpeedPenalty() const
+{
+	// 짐꾼은 무게 패널티 없음. 다른 역할은 RecalculateMoveSpeed의 WeightSpeedPenaltyPerUnit 으로 처리.
+	return 0.f;
+}
+
+float ABaseCharacter::GetMaxCarryWeight() const
+{
+	return MaxCarryWeight;
 }
 
 // ============================================================

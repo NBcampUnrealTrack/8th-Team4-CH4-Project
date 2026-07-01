@@ -68,6 +68,7 @@ void AGODTrain::BeginPlay()
 		TrainSpeed = MinSpeed;
 		DistanceToDestination = TotalDistance;
 		DistanceAlongSpline = 0.f;
+		LocalDistanceAlongSpline = 0.f;
 		bIsDerailed = false;
 		SyncDistanceToGameState();
 
@@ -83,6 +84,14 @@ void AGODTrain::BeginPlay()
 			Pressure->OnPressureWarning.AddDynamic(this, &AGODTrain::OnPressureWarningStarted);
 			Pressure->OnPressureRecovered.AddDynamic(this, &AGODTrain::OnPressureWarningEnded);
 		}
+	}
+
+	// BeginPlay 시점에 스플라인 0번 지점으로 즉시 스냅.
+	// StartRunning() 이후 첫 Tick에서 UpdateTransformAlongSpline(0) 이 호출될 때
+	// 열차가 에디터 배치 위치에서 스플라인 0번 지점으로 순간이동하는 현상을 방지한다.
+	if (Track && Track->Spline)
+	{
+		UpdateTransformAlongSpline(LocalDistanceAlongSpline);
 	}
 }
 
