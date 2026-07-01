@@ -3,6 +3,7 @@
 
 #include "Player/BaseCharacter.h"
 #include "Player/GODPlayerState.h"
+#include "Player/BasePlayerController.h"
 #include "Player/Component/BaseAbilitySystemComponent.h"
 #include "Player/Component/BaseAttributeSet.h"
 #include "Player/Weapon/BaseWeapon.h"
@@ -13,10 +14,14 @@
 #include "GameplayEffectTypes.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/WidgetComponent.h"
+#include "TimerManager.h"
 #include "Game/BaseDataSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "InteractiveProp/GODTrain.h"
+#include "EngineUtils.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Net/UnrealNetwork.h"
 #include "AbilitySystemBlueprintLibrary.h"
@@ -78,6 +83,11 @@ ABaseCharacter::ABaseCharacter()
 	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
 	{
 		CMC->bStayBasedInAir = true;
+
+		// 캐릭터가 서로/물리 오브젝트를 힘으로 밀어내는 상호작용을 끈다(밀침 완화).
+		CMC->bEnablePhysicsInteraction = false;
+		// RVO 회피(서로 미끄러지듯 비켜가는 밀림)도 끈다.
+		CMC->bUseRVOAvoidance = false;
 	}
 }
 
@@ -469,31 +479,95 @@ void ABaseCharacter::Die(AActor* Killer)
 	}
 
 	Multicast_HandleDeath();
+
+	// 어떤 경로로 죽든(총격 등 Die 직접 호출 포함) 즉시 관전 모드로 전환한다.
+	// 서버에서 호출 → Client RPC로 해당 클라의 카메라를 살아있는 플레이어로 이동.
+	if (ABasePlayerController* PC = Cast<ABasePlayerController>(GetController()))
+	{
+		PC->Client_StartSpectating();
+	}
 }
 
 void ABaseCharacter::Multicast_HandleDeath_Implementation()
 {
+	// 사망 시점에 밟고 있던 발판(열차 등)을 먼저 기억한다. (움직임 비활성화 전에 조회)
+	UPrimitiveComponent* DeathBase = nullptr;
 	if (GetCharacterMovement())
 	{
+		DeathBase = GetCharacterMovement()->GetMovementBase();
 		GetCharacterMovement()->StopMovementImmediately();
 		GetCharacterMovement()->DisableMovement();
 	}
-	
+
 	if (GetCapsuleComponent())
 	{
 		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	}
-	
+
 	if (GetMesh())
 	{
 		GetMesh()->SetSimulatePhysics(true);
 		GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
 	}
-	
+
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		DisableInput(PC);
 	}
+
+	// 시체가 열차와 함께 이동하도록 발판(열차 메시)에 부착한다.
+	// 열차는 순간이동 방식이라, 부착 안 하고 래그돌이 시뮬 중이면 열차 콜리전에
+	// 튕겨 날아간다. GetMovementBase가 비면(클라 타이밍 등) 열차를 직접 찾아 폴백한다.
+	if (!DeathBase)
+	{
+		for (TActorIterator<AGODTrain> It(GetWorld()); It; ++It)
+		{
+			DeathBase = (*It)->TrainMesh;
+			break;
+		}
+	}
+
+	if (DeathBase)
+	{
+		if (CorpseSettleTime <= 0.f)
+		{
+			// 즉시 부착(현재 포즈로 고정) → 열차 위에서 바로 함께 이동.
+			AttachCorpseToBase(DeathBase);
+		}
+		else
+		{
+			// 짧게 래그돌 후 부착 (빠른 열차에선 그 사이 뒤로 밀릴 수 있음).
+			TWeakObjectPtr<ABaseCharacter> WeakThis(this);
+			TWeakObjectPtr<UPrimitiveComponent> WeakBase(DeathBase);
+			FTimerDelegate Del = FTimerDelegate::CreateLambda([WeakThis, WeakBase]()
+			{
+				if (WeakThis.IsValid() && WeakBase.IsValid())
+				{
+					WeakThis->AttachCorpseToBase(WeakBase.Get());
+				}
+			});
+			GetWorldTimerManager().SetTimer(CorpseAttachTimer, Del, CorpseSettleTime, /*bLoop=*/false);
+		}
+	}
+}
+
+void ABaseCharacter::AttachCorpseToBase(UPrimitiveComponent* Base)
+{
+	AActor* BaseActor = Base ? Base->GetOwner() : nullptr;
+	if (!BaseActor)
+	{
+		return;
+	}
+
+	// 래그돌 바디를 kinematic으로 전환(현재 포즈 유지, 물리 시뮬만 정지)한다.
+	// kinematic 바디는 컴포넌트를 따라가므로, 이후 열차에 부착되면 함께 이동한다.
+	if (USkeletalMeshComponent* M = GetMesh())
+	{
+		M->SetAllBodiesSimulatePhysics(false);
+	}
+
+	// 액터 전체(캡슐 루트 + 메시)를 발판(열차)에 부착 → 시체 위치/상호작용까지 열차 따라 이동.
+	AttachToActor(BaseActor, FAttachmentTransformRules::KeepWorldTransform);
 }
 
 void ABaseCharacter::OnRep_IsDead()

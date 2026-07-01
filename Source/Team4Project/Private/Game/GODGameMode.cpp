@@ -127,7 +127,7 @@ void AGODGameMode::StartGame()
 
 	AssignRoles();
 
-	// 압력 폭발 시 마피아 승리 처리 연결 (중복 방지)
+	// 압력 폭발 시 마피아 승리 처리 연결 (중복 방지) + 열차 출발
 	if (AGODTrain* Train = FindTrainActor())
 	{
 		if (Train->Pressure)
@@ -135,6 +135,9 @@ void AGODGameMode::StartGame()
 			Train->Pressure->OnPressureExplode.RemoveDynamic(this, &AGODGameMode::HandlePressureExplosion);
 			Train->Pressure->OnPressureExplode.AddDynamic(this, &AGODGameMode::HandlePressureExplosion);
 		}
+
+		// 게임 시작과 함께 열차 주행 시작 (서버 권위). 이 전까지는 제자리 대기.
+		Train->StartRunning();
 	}
 
 	GetWorld()->GetTimerManager().SetTimer(
@@ -311,11 +314,7 @@ void AGODGameMode::HandlePlayerDeath(AGODPlayerState* KillerPS, AGODPlayerState*
 		}
 	}
 
-	// 피해자 관전 모드 전환
-	if (ABasePlayerController* VictimPC = Cast<ABasePlayerController>(VictimPS->GetOwner()))
-	{
-		VictimPC->Client_StartSpectating();
-	}
+	// 관전 모드 전환은 Die() 내부에서 처리한다(총격 등 모든 사망 경로 공통).
 
 	if (KillerPS)
 	{

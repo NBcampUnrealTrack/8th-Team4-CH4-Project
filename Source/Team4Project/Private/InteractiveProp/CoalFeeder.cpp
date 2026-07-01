@@ -4,8 +4,10 @@
 #include "Player/BaseCharacter.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
+#include "Components/WidgetComponent.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Kismet/GameplayStatics.h"
+#include "TimerManager.h"
 
 ACoalFeeder::ACoalFeeder()
 {
@@ -24,6 +26,14 @@ ACoalFeeder::ACoalFeeder()
 	InteractionBox->SetCollisionObjectType(ECC_WorldDynamic);
 	InteractionBox->SetCollisionResponseToAllChannels(ECR_Overlap);
 	InteractionBox->SetGenerateOverlapEvents(true);
+
+	// 연료 상태 3D 위젯. Widget Class(WBP)는 BP 디테일에서 지정한다.
+	FuelWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("FuelWidget"));
+	FuelWidget->SetupAttachment(RootComponent);
+	FuelWidget->SetWidgetSpace(EWidgetSpace::World);
+	FuelWidget->SetDrawSize(FVector2D(200.f, 60.f));
+	FuelWidget->SetRelativeLocation(FVector(0.f, 0.f, 100.f));
+	FuelWidget->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void ACoalFeeder::BeginPlay()
@@ -36,6 +46,67 @@ void ACoalFeeder::BeginPlay()
 	{
 		AttachToActor(TrainActor, FAttachmentTransformRules::KeepWorldTransform);
 	}
+
+	// 화로 연료 변화에 위젯을 연동. 클라이언트에서 기차/화로 복제가 늦으면
+	// 타이머로 몇 차례 재시도한다(성공 시 타이머 정리).
+	if (!TryBindFurnace())
+	{
+		GetWorldTimerManager().SetTimer(
+			FurnaceBindTimer, this, &ACoalFeeder::RetryBindFurnace, 0.5f, /*bLoop=*/true);
+	}
+}
+
+bool ACoalFeeder::TryBindFurnace()
+{
+	if (BoundFurnace)
+	{
+		return true; // 이미 바인딩됨
+	}
+
+	UFurnanceComponent* Furnace = GetFurnace();
+	if (!Furnace)
+	{
+		return false;
+	}
+
+	BoundFurnace = Furnace;
+	Furnace->OnFuelLevelChanged.AddDynamic(this, &ACoalFeeder::HandleFuelLevelChanged);
+
+	// 현재 값으로 즉시 한 번 표시(델리게이트는 다음 변화 때까지 안 오므로)
+	RefreshFuelWidget();
+	return true;
+}
+
+void ACoalFeeder::RetryBindFurnace()
+{
+	if (TryBindFurnace())
+	{
+		GetWorldTimerManager().ClearTimer(FurnaceBindTimer);
+	}
+}
+
+void ACoalFeeder::HandleFuelLevelChanged(float /*FuelPercent*/)
+{
+	// 화로에서 절대값을 직접 읽어 위젯 이벤트로 넘긴다.
+	RefreshFuelWidget();
+}
+
+void ACoalFeeder::RefreshFuelWidget()
+{
+	UFurnanceComponent* Furnace = BoundFurnace ? BoundFurnace : GetFurnace();
+	if (!Furnace)
+	{
+		return;
+	}
+
+	// 숫자 표시는 소수점 없이(정수). 게이지 채움용 Percent는 부드러움을 위해 실수 유지.
+	const float Cur = FMath::RoundToFloat(Furnace->CurrentFuel);
+	const float Max = FMath::RoundToFloat(Furnace->MaxFuel);
+	const float Percent = (Furnace->MaxFuel > 0.f)
+		? FMath::Clamp(Furnace->CurrentFuel / Furnace->MaxFuel, 0.f, 1.f)
+		: 0.f;
+
+	OnFuelWidgetUpdate(Cur, Max, Percent);
 }
 
 UFurnanceComponent* ACoalFeeder::GetFurnace() const
