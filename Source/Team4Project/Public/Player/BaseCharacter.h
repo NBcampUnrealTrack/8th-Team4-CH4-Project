@@ -21,6 +21,8 @@ class AItemBase;
 class UInteractComponent;
 class UNiagaraSystem;
 class UWidgetComponent;
+class USpotLightComponent;
+class UMaterialInterface;
 
 class USpringArmComponent;
 class UCameraComponent;
@@ -32,6 +34,19 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterDied,
 	ABaseCharacter*, DeadCharacter,
 	AActor*, Killer);
 
+// 순찰자 발자국 기록 (기록 시각 + 위치)
+USTRUCT()
+struct FFootprintRecord
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FVector Location = FVector::ZeroVector;
+
+	UPROPERTY()
+	float Timestamp = 0.f;
+};
+
 UCLASS()
 class TEAM4PROJECT_API ABaseCharacter : public ACharacter, public IAbilitySystemInterface, public IInteractable
 {
@@ -41,6 +56,7 @@ public:
 	ABaseCharacter();
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// 컨트롤러 점유 시 ASC ActorInfo 초기화 + (서버) 어빌리티/속성 부여
 	virtual void PossessedBy(AController* NewController) override;
@@ -60,6 +76,9 @@ public:
 	bool IsDead() const { return bIsDead; }
 
 	void Die(AActor* Killer);
+
+	virtual float TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
+		AController* EventInstigator, AActor* DamageCauser) override;
 
 	// ============================================================
 	// 직업 / 어빌리티 보조
@@ -131,6 +150,99 @@ public:
 	// Coal
 	FORCEINLINE bool IsCoalEquipped() const { return bIsCoalEquipped; }
 	void SetCoalEquipped(bool bEquip);
+
+	// ============================================================
+	// 역할별 능력 — Mafia
+	// ============================================================
+
+	void EnterVent(AActor* VentActor);
+	void ExitVent();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mafia")
+	bool IsInVent() const { return bIsInVent; }
+
+	void SetInvisible(bool bNewInvisible);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mafia")
+	bool IsCurrentlyInvisible() const { return bIsInvisible; }
+
+	void UseMasterKey(AActor* DoorActor);
+	void UseWireCutter(AActor* GearActor);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_HideBody(ABaseCharacter* DeadCharacter);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_ShowBody(ABaseCharacter* DeadCharacter);
+
+	// ============================================================
+	// 역할별 능력 — Sheriff
+	// ============================================================
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Sheriff")
+	void OnHiddenBodyDetected(ABaseCharacter* HiddenBody);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Sheriff")
+	void OnSearchResult(bool bHasMafiaAbility, ABaseCharacter* Target);
+
+	void UnlockDoor(AActor* DoorActor);
+
+	// ============================================================
+	// 역할별 능력 — Outlaw
+	// ============================================================
+
+	void StartFakeDeath();
+	void StopFakeDeath();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Outlaw")
+	bool IsFakeDead() const { return bIsFakeDead; }
+
+	void StealAmmo(ABaseCharacter* DeadCharacter);
+
+	// ============================================================
+	// 역할별 능력 — Mechanic
+	// ============================================================
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mechanic")
+	bool CanInstantFixGear() const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mechanic")
+	float GetRepairSpeedMultiplier() const { return RepairSpeedMultiplier; }
+
+	// ============================================================
+	// 역할별 능력 — Watchman
+	// ============================================================
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Watchman")
+	TObjectPtr<USpotLightComponent> LanternLight;
+
+	void ToggleLantern();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Watchman")
+	bool IsLanternOn() const { return bLanternOn; }
+
+	void SetTrackedPlayers(ABaseCharacter* P1, ABaseCharacter* P2,
+	                       FLinearColor C1, FLinearColor C2);
+	void ActivateFootprintVision();
+
+	// ============================================================
+	// 역할별 능력 — Stoker
+	// ============================================================
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Stoker")
+	bool IsHeatImmune() const;
+
+	void ForceClosePressureValve(AActor* PressureValveActor);
+
+	// ============================================================
+	// 역할별 능력 — Porter
+	// ============================================================
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Porter")
+	float GetHeavyCarrySpeedPenalty() const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Porter")
+	float GetMaxCarryWeight() const;
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -246,8 +358,91 @@ protected:
 	
 	
 	void SpawnCoalHands();
-	
+
 	void DestroyCoalHands();
+
+	// ── Watchman 설정 ──
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Watchman")
+	TObjectPtr<UMaterialInterface> FootprintDecalMaterial;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Watchman")
+	FVector DecalSize = FVector(10.f, 8.f, 2.f);
+
+	UPROPERTY(EditDefaultsOnly, Category = "Watchman")
+	float DecalLifespan = 5.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Watchman")
+	float FootprintRecordDuration = 30.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Watchman")
+	float RecordInterval = 0.5f;
+
+	// ── Sheriff 설정 ──
+	UPROPERTY(EditDefaultsOnly, Category = "Sheriff")
+	float BodyDetectionRadius = 1000.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Sheriff")
+	float BodyDetectionInterval = 1.0f;
+
+	// ── Mechanic 설정 ──
+	UPROPERTY(EditDefaultsOnly, Category = "Mechanic")
+	float RepairSpeedMultiplier = 1.0f;
+
+	// ── Porter 설정 ──
+	UPROPERTY(EditDefaultsOnly, Category = "Porter")
+	float MaxCarryWeight = 200.f;
+
+private:
+	// ── 역할 타이머 관리 ──
+	void ActivateRoleTimers();
+	void DeactivateRoleTimers();
+
+	// ── Mafia 내부 상태 ──
+	UPROPERTY(ReplicatedUsing = OnRep_IsInVent)
+	bool bIsInVent = false;
+
+	UPROPERTY(ReplicatedUsing = OnRep_IsInvisible)
+	bool bIsInvisible = false;
+
+	UFUNCTION() void OnRep_IsInVent();
+	UFUNCTION() void OnRep_IsInvisible();
+	void ApplyVentMovement(bool bEntering);
+
+	// ── Outlaw 내부 상태 ──
+	UPROPERTY(ReplicatedUsing = OnRep_IsFakeDead)
+	bool bIsFakeDead = false;
+
+	UFUNCTION() void OnRep_IsFakeDead();
+	void ApplyFakeDeathPhysics(bool bActivate);
+	FVector DefaultMeshRelativeLocation = FVector::ZeroVector;
+	FRotator DefaultMeshRelativeRotation = FRotator::ZeroRotator;
+
+	// ── Watchman 내부 상태 ──
+	UPROPERTY(ReplicatedUsing = OnRep_LanternOn)
+	bool bLanternOn = false;
+
+	UFUNCTION() void OnRep_LanternOn();
+
+	TWeakObjectPtr<ABaseCharacter> TrackedPlayer1;
+	TWeakObjectPtr<ABaseCharacter> TrackedPlayer2;
+	FLinearColor TrackColor1 = FLinearColor(1.f, 0.4f, 0.f);
+	FLinearColor TrackColor2 = FLinearColor(0.f, 0.5f, 1.f);
+
+	TArray<FFootprintRecord> Footprints1;
+	TArray<FFootprintRecord> Footprints2;
+
+	FTimerHandle FootprintRecordTimer;
+	void RecordFootprintPositions();
+	void PruneOldRecords(TArray<FFootprintRecord>& Records);
+
+	UFUNCTION(Client, Reliable)
+	void Client_ReceiveFootprints(const TArray<FVector>& Positions1, FLinearColor InColor1,
+	                              const TArray<FVector>& Positions2, FLinearColor InColor2);
+	void SpawnFootprintDecals(const TArray<FVector>& Positions, FLinearColor Color);
+
+	// ── Sheriff 내부 상태 ──
+	FTimerHandle BodyDetectionTimer;
+	void CheckForHiddenBodies();
 
 #pragma region Input
 protected:

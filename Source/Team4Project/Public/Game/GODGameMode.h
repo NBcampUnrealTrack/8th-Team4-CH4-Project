@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "GODGameState.h"
+#include "GameplayTagContainer.h"
 #include "GODGameMode.generated.h"
 
 class ABaseCharacter;
@@ -27,6 +28,9 @@ public:
 	/** 카운트다운 종료 후 자동 호출. BP에서 강제 시작용으로도 사용 가능 */
 	UFUNCTION(BlueprintCallable, Category = "Game Logic")
 	void StartGame();
+
+	/**모든 플레이어 같은 PlayerStart에서 시작(하나만 배치)*/
+	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 
 	UFUNCTION(BlueprintCallable, Category = "Game Logic")
 	void HandlePlayerDeath(class AGODPlayerState* KillerPS, class AGODPlayerState* VictimPS);
@@ -90,6 +94,7 @@ private:
 	void CheckWinConditions();
 	void EndGame(EGamePhase WinningPhase);
 
+	FGameplayTag GetTagForRole(AGODPlayerState* PS) const;
 	TSubclassOf<ABaseCharacter> GetClassForRole(AGODPlayerState* PS) const;
 	void RespawnPlayerAsRole(APlayerController* PC, TSubclassOf<ABaseCharacter> CharClass);
 	void SetupWatchmanTracking();

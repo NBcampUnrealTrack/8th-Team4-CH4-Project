@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Player/Ability/GA_StartFakeDeath.h"
-#include "Player/Role/GODCharacterOutlaw.h"
+#include "Player/BaseCharacter.h"
 #include "Game/BaseGameplayTags.h"
 
 UGA_StartFakeDeath::UGA_StartFakeDeath()
@@ -18,8 +18,8 @@ void UGA_StartFakeDeath::ActivateAbility(
 	const FGameplayAbilityActivationInfo ActivationInfo,
 	const FGameplayEventData* TriggerEventData)
 {
-	AGODCharacterOutlaw* Outlaw = ActorInfo
-		? Cast<AGODCharacterOutlaw>(ActorInfo->AvatarActor.Get()) : nullptr;
+	ABaseCharacter* Outlaw = ActorInfo
+		? Cast<ABaseCharacter>(ActorInfo->AvatarActor.Get()) : nullptr;
 
 	// 이미 죽은 척 중이거나 실제 사망 상태면 발동 불가
 	if (!Outlaw || Outlaw->IsFakeDead() || Outlaw->IsDead())

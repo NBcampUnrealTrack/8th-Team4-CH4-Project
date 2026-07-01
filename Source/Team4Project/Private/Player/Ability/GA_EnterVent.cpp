@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Player/Ability/GA_EnterVent.h"
-#include "Player/Role/GODCharacterMafia.h"
+#include "Player/BaseCharacter.h"
 #include "Game/BaseGameplayTags.h"
 
 UGA_EnterVent::UGA_EnterVent()
@@ -17,8 +17,8 @@ void UGA_EnterVent::ActivateAbility(
 	const FGameplayAbilityActivationInfo ActivationInfo,
 	const FGameplayEventData* TriggerEventData)
 {
-	AGODCharacterMafia* Mafia = ActorInfo
-		? Cast<AGODCharacterMafia>(ActorInfo->AvatarActor.Get()) : nullptr;
+	ABaseCharacter* Mafia = ActorInfo
+		? Cast<ABaseCharacter>(ActorInfo->AvatarActor.Get()) : nullptr;
 
 	if (!Mafia)
 	{

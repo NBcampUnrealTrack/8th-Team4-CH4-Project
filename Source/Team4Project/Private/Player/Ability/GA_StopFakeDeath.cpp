@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Player/Ability/GA_StopFakeDeath.h"
-#include "Player/Role/GODCharacterOutlaw.h"
+#include "Player/BaseCharacter.h"
 #include "Game/BaseGameplayTags.h"
 
 UGA_StopFakeDeath::UGA_StopFakeDeath()
@@ -17,8 +17,8 @@ void UGA_StopFakeDeath::ActivateAbility(
 	const FGameplayAbilityActivationInfo ActivationInfo,
 	const FGameplayEventData* TriggerEventData)
 {
-	AGODCharacterOutlaw* Outlaw = ActorInfo
-		? Cast<AGODCharacterOutlaw>(ActorInfo->AvatarActor.Get()) : nullptr;
+	ABaseCharacter* Outlaw = ActorInfo
+		? Cast<ABaseCharacter>(ActorInfo->AvatarActor.Get()) : nullptr;
 
 	if (!Outlaw || !Outlaw->IsFakeDead())
 	{

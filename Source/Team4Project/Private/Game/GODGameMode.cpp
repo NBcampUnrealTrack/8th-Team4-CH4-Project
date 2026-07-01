@@ -2,7 +2,7 @@
 #include "Game/GODGameState.h"
 #include "Player/GODPlayerState.h"
 #include "Player/BaseCharacter.h"
-#include "Player/Role/GODCharacterWatchman.h"
+#include "Game/BaseGameplayTags.h"
 #include "Player/BasePlayerController.h"
 #include "InteractiveProp/GODTrain.h"
 #include "InteractiveProp/PressureValve.h"
@@ -13,6 +13,7 @@
 #include "TimerManager.h"
 #include "EngineUtils.h"
 #include "UI/HUD/GODHUD.h"
+
 
 AGODGameMode::AGODGameMode()
 {
@@ -190,10 +191,67 @@ void AGODGameMode::AssignRoles()
 		PS->AmmoCount = 1;
 		PS->bIsAlive  = true;
 
-		RespawnPlayerAsRole(PC, GetClassForRole(PS));
+		// 로비 캐릭터를 그대로 유지하고 태그만 부여 (열차 위 위치 보존).
+		FGameplayTag AssignedTag = GetTagForRole(PS);
+		if (ABaseCharacter* ExistingPawn = Cast<ABaseCharacter>(PC->GetPawn()))
+		{
+			ExistingPawn->SetCharacterTag(AssignedTag);
+		}
+
+		// 역할 배정 디버그 출력
+		FString PlayerName = PS->GetPlayerName();
+		FString RoleStr;
+		switch (PS->MainRole)
+		{
+			case EMainRole::Mafia:   RoleStr = TEXT("Mafia");   break;
+			case EMainRole::Sheriff: RoleStr = TEXT("Sheriff"); break;
+			case EMainRole::Outlaw:  RoleStr = TEXT("Outlaw");  break;
+			case EMainRole::Citizen:
+				switch (PS->CitizenClass)
+				{
+					case ECitizenClass::Mechanic: RoleStr = TEXT("Mechanic"); break;
+					case ECitizenClass::Watchman: RoleStr = TEXT("Watchman"); break;
+					case ECitizenClass::Stoker:   RoleStr = TEXT("Stoker");   break;
+					case ECitizenClass::Porter:   RoleStr = TEXT("Porter");   break;
+					default:                      RoleStr = TEXT("Citizen");  break;
+				}
+				break;
+			default: RoleStr = TEXT("Unknown"); break;
+		}
+		FString PawnOk = PC->GetPawn() ? TEXT("OK") : TEXT("NO PAWN");
+		UE_LOG(LogTemp, Warning, TEXT("[AssignRoles] %s → %s (Tag:%s, Pawn:%s)"),
+			*PlayerName, *RoleStr, *AssignedTag.ToString(), *PawnOk);
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				i, 10.f, FColor::Cyan,
+				FString::Printf(TEXT("[역할] %s → %s"), *PlayerName, *RoleStr));
+		}
 	}
 
 	SetupWatchmanTracking();
+}
+
+FGameplayTag AGODGameMode::GetTagForRole(AGODPlayerState* PS) const
+{
+	if (!PS) return FGameplayTag();
+
+	switch (PS->MainRole)
+	{
+		case EMainRole::Mafia:   return Character::Special::Mafia.GetTag();
+		case EMainRole::Sheriff: return Character::Special::Sheriff.GetTag();
+		case EMainRole::Outlaw:  return Character::Special::Outlaw.GetTag();
+		case EMainRole::Citizen:
+			switch (PS->CitizenClass)
+			{
+				case ECitizenClass::Mechanic: return Character::Crew::Mechanic.GetTag();
+				case ECitizenClass::Watchman: return Character::Crew::Watchman.GetTag();
+				case ECitizenClass::Stoker:   return Character::Crew::Stoker.GetTag();
+				case ECitizenClass::Porter:   return Character::Crew::Porter.GetTag();
+				default: return FGameplayTag();
+			}
+		default: return FGameplayTag();
+	}
 }
 
 TSubclassOf<ABaseCharacter> AGODGameMode::GetClassForRole(AGODPlayerState* PS) const
@@ -248,7 +306,7 @@ void AGODGameMode::RespawnPlayerAsRole(APlayerController* PC, TSubclassOf<ABaseC
 
 void AGODGameMode::SetupWatchmanTracking()
 {
-	AGODCharacterWatchman* Watchman = nullptr;
+	ABaseCharacter* Watchman = nullptr;
 	TArray<ABaseCharacter*> SpecialChars;
 
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
@@ -259,14 +317,16 @@ void AGODGameMode::SetupWatchmanTracking()
 		AGODPlayerState* PS = PC->GetPlayerState<AGODPlayerState>();
 		if (!PS) continue;
 
+		ABaseCharacter* Char = Cast<ABaseCharacter>(PC->GetPawn());
+		if (!Char) continue;
+
 		if (PS->MainRole == EMainRole::Citizen && PS->CitizenClass == ECitizenClass::Watchman)
 		{
-			Watchman = Cast<AGODCharacterWatchman>(PC->GetPawn());
+			Watchman = Char;
 		}
 		else if (PS->MainRole == EMainRole::Mafia || PS->MainRole == EMainRole::Outlaw)
 		{
-			if (ABaseCharacter* Char = Cast<ABaseCharacter>(PC->GetPawn()))
-				SpecialChars.Add(Char);
+			SpecialChars.Add(Char);
 		}
 	}
 
@@ -298,6 +358,15 @@ void AGODGameMode::UpdateGameTimer()
 	{
 		EndGame(EGamePhase::CitizensWon);
 	}
+}
+
+AActor* AGODGameMode::ChoosePlayerStart_Implementation(AController* Player)
+{
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+	{
+		return *It;
+	}
+	return Super::ChoosePlayerStart_Implementation(Player);
 }
 
 void AGODGameMode::HandlePlayerDeath(AGODPlayerState* KillerPS, AGODPlayerState* VictimPS)

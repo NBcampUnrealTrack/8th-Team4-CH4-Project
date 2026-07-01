@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Player/Ability/GA_UnlockDoor.h"
-#include "Player/Role/GODCharacterSheriff.h"
+#include "Player/BaseCharacter.h"
 #include "Game/BaseGameplayTags.h"
 
 UGA_UnlockDoor::UGA_UnlockDoor()
@@ -17,8 +17,8 @@ void UGA_UnlockDoor::ActivateAbility(
 	const FGameplayAbilityActivationInfo ActivationInfo,
 	const FGameplayEventData* TriggerEventData)
 {
-	AGODCharacterSheriff* Sheriff = ActorInfo
-		? Cast<AGODCharacterSheriff>(ActorInfo->AvatarActor.Get()) : nullptr;
+	ABaseCharacter* Sheriff = ActorInfo
+		? Cast<ABaseCharacter>(ActorInfo->AvatarActor.Get()) : nullptr;
 
 	AActor* DoorActor = TriggerEventData
 		? const_cast<AActor*>(Cast<AActor>(TriggerEventData->OptionalObject.Get())) : nullptr;

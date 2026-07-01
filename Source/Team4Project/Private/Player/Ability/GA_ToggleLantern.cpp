@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Player/Ability/GA_ToggleLantern.h"
-#include "Player/Role/GODCharacterWatchman.h"
+#include "Player/BaseCharacter.h"
 #include "Game/BaseGameplayTags.h"
 
 UGA_ToggleLantern::UGA_ToggleLantern()
@@ -17,8 +17,8 @@ void UGA_ToggleLantern::ActivateAbility(
 	const FGameplayAbilityActivationInfo ActivationInfo,
 	const FGameplayEventData* TriggerEventData)
 {
-	AGODCharacterWatchman* Watchman = ActorInfo
-		? Cast<AGODCharacterWatchman>(ActorInfo->AvatarActor.Get()) : nullptr;
+	ABaseCharacter* Watchman = ActorInfo
+		? Cast<ABaseCharacter>(ActorInfo->AvatarActor.Get()) : nullptr;
 
 	if (!Watchman)
 	{

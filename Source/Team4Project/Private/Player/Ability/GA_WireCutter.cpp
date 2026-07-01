@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Player/Ability/GA_WireCutter.h"
-#include "Player/Role/GODCharacterMafia.h"
+#include "Player/BaseCharacter.h"
 #include "Component/InteractComponent.h"
 #include "InteractiveProp/PickupGear.h"
 #include "Game/BaseGameplayTags.h"
@@ -20,8 +20,8 @@ void UGA_WireCutter::ActivateAbility(
 	const FGameplayAbilityActivationInfo ActivationInfo,
 	const FGameplayEventData* TriggerEventData)
 {
-	AGODCharacterMafia* Mafia = ActorInfo
-		? Cast<AGODCharacterMafia>(ActorInfo->AvatarActor.Get()) : nullptr;
+	ABaseCharacter* Mafia = ActorInfo
+		? Cast<ABaseCharacter>(ActorInfo->AvatarActor.Get()) : nullptr;
 
 	// 능력 버튼으로 직접 발동 시 InteractComponent에서 가장 가까운 기어를 탐색
 	AActor* GearActor = nullptr;
