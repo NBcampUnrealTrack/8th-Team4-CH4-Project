@@ -11,6 +11,7 @@
 #include "Game/GODGameState.h"
 
 #include "OnlineSubsystem.h"
+#include "OnlineSubsystemUtils.h"
 #include "OnlineSessionSettings.h"
 #include "Online/OnlineSessionNames.h"
 #include "Interfaces/OnlineSessionInterface.h"
@@ -46,17 +47,17 @@ void UPlayerGameInstance::Init()
 {
 	Super::Init();
 	
-	IOnlineSubsystem* Subsystem = IOnlineSubsystem::Get();
+	IOnlineSubsystem* Subsystem = Online::GetSubsystem(GetWorld());
 	if (Subsystem != nullptr)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Found Subsysytem %s"), *Subsystem->GetSubsystemName().ToString());
 		SessionInterface = Subsystem->GetSessionInterface();
 		if (SessionInterface.IsValid())
 		{
-			SessionInterface->OnCreateSessionCompleteDelegates.AddUObject(this, &UPlayerGameInstance::OnCreateSessionComplete);
-			SessionInterface->OnDestroySessionCompleteDelegates.AddUObject(this, &UPlayerGameInstance::OnDestorySessionComplete);
-			SessionInterface->OnFindSessionsCompleteDelegates.AddUObject(this, &UPlayerGameInstance::OnFindSessionComplete);
-			SessionInterface->OnJoinSessionCompleteDelegates.AddUObject(this, &UPlayerGameInstance::OnJoinSessionComplete);
+			CreateSessionCompleteDelegateHandle = SessionInterface->OnCreateSessionCompleteDelegates.AddUObject(this, &UPlayerGameInstance::OnCreateSessionComplete);
+			DestroySessionCompleteDelegateHandle = SessionInterface->OnDestroySessionCompleteDelegates.AddUObject(this, &UPlayerGameInstance::OnDestorySessionComplete);
+			FindSessionsCompleteDelegateHandle = SessionInterface->OnFindSessionsCompleteDelegates.AddUObject(this, &UPlayerGameInstance::OnFindSessionComplete);
+			JoinSessionCompleteDelegateHandle = SessionInterface->OnJoinSessionCompleteDelegates.AddUObject(this, &UPlayerGameInstance::OnJoinSessionComplete);
 		}
 	}
 	else
@@ -66,8 +67,33 @@ void UPlayerGameInstance::Init()
 
 	if (GEngine != nullptr)
 	{
-		GEngine->OnNetworkFailure().AddUObject(this, &UPlayerGameInstance::OnNetworkFailure);
+		NetworkFailureDelegateHandle = GEngine->OnNetworkFailure().AddUObject(this, &UPlayerGameInstance::OnNetworkFailure);
 	}
+}
+
+void UPlayerGameInstance::Shutdown()
+{
+	// 등록했던 델리게이트를 해제하고, 캐싱한 세션 인터페이스 참조를 놓아준다.
+	// (놓아주지 않으면 PIE 종료 시 OnlineSubsystemNull이 SessionInterface.IsUnique() ensure로 터진다.)
+	if (SessionInterface.IsValid())
+	{
+		if (CreateSessionCompleteDelegateHandle.IsValid())
+			SessionInterface->ClearOnCreateSessionCompleteDelegate_Handle(CreateSessionCompleteDelegateHandle);
+		if (DestroySessionCompleteDelegateHandle.IsValid())
+			SessionInterface->ClearOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteDelegateHandle);
+		if (FindSessionsCompleteDelegateHandle.IsValid())
+			SessionInterface->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegateHandle);
+		if (JoinSessionCompleteDelegateHandle.IsValid())
+			SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegateHandle);
+	}
+	SessionInterface.Reset();
+
+	if (GEngine != nullptr && NetworkFailureDelegateHandle.IsValid())
+	{
+		GEngine->OnNetworkFailure().Remove(NetworkFailureDelegateHandle);
+	}
+
+	Super::Shutdown();
 }
 
 void UPlayerGameInstance::LoadMenuWidget()
