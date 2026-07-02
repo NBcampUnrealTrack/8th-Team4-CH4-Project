@@ -4,6 +4,7 @@
 #include "Component/PressureComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
+#include "Components/ChildActorComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
 #include "TimerManager.h"
@@ -28,11 +29,43 @@ void AGearSlot::BeginPlay()
 {
 	Super::BeginPlay();
 
+	if (!MountedGear)
+	{
+		MountedGear = ResolveMountedGear();
+	}
+
 	if (MountedGear)
 	{
 		OriginalGearTransform = MountedGear->GetActorTransform();
 		MountedGear->Tags.AddUnique(FName(TEXT("Gear.Mounted")));
 	}
+}
+
+APickupGear* AGearSlot::ResolveMountedGear() const
+{
+	// 1) Child Actor Component로 붙인 PickupGear 탐색
+	TArray<UChildActorComponent*> ChildActorComps;
+	GetComponents<UChildActorComponent>(ChildActorComps);
+	for (UChildActorComponent* Comp : ChildActorComps)
+	{
+		if (APickupGear* Gear = Cast<APickupGear>(Comp->GetChildActor()))
+		{
+			return Gear;
+		}
+	}
+
+	// 2) 일반 액터 부착(AttachToActor)으로 붙인 경우 대비
+	TArray<AActor*> AttachedActors;
+	GetAttachedActors(AttachedActors);
+	for (AActor* Actor : AttachedActors)
+	{
+		if (APickupGear* Gear = Cast<APickupGear>(Actor))
+		{
+			return Gear;
+		}
+	}
+
+	return nullptr;
 }
 
 void AGearSlot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -162,13 +195,38 @@ void AGearSlot::OnQTETimeout()
 		FailedPlayer->Client_EndGearQTE(false);
 	}
 
+	if (UPressureComponent* Pressure = GetPressureComponent())
+	{
+		Pressure->ForceExplode();
+	}
+}
+
+UPressureComponent* AGearSlot::GetPressureComponent() const
+{
+	// 1) 디테일에서 명시적으로 지정한 TrainActor 우선
 	if (TrainActor)
 	{
 		if (UPressureComponent* Pressure = TrainActor->FindComponentByClass<UPressureComponent>())
 		{
-			Pressure->ForceExplode();
+			return Pressure;
 		}
 	}
+
+	// 2) 미지정이면 부모 액터에서 자동 탐색 (CoalFeeder::GetFurnace()와 동일한 패턴)
+	AActor* Parent = GetAttachParentActor();
+	if (!Parent)
+	{
+		Parent = GetParentActor();
+	}
+	for (; Parent; Parent = Parent->GetAttachParentActor())
+	{
+		if (UPressureComponent* Pressure = Parent->FindComponentByClass<UPressureComponent>())
+		{
+			return Pressure;
+		}
+	}
+
+	return nullptr;
 }
 
 void AGearSlot::Interact_Implementation(ACharacter* Interactor)
