@@ -45,6 +45,8 @@ public:
 
 	virtual void Init() override;
 
+	virtual void Shutdown() override;
+
 	UFUNCTION(BlueprintCallable)
 	void LoadMenuWidget();
 
@@ -124,6 +126,13 @@ private:
 
 	IOnlineSessionPtr SessionInterface;
 	TSharedPtr<class FOnlineSessionSearch> SessionSearch;
+
+	// 세션 델리게이트 핸들 — Shutdown에서 해제하기 위해 보관.
+	FDelegateHandle CreateSessionCompleteDelegateHandle;
+	FDelegateHandle DestroySessionCompleteDelegateHandle;
+	FDelegateHandle FindSessionsCompleteDelegateHandle;
+	FDelegateHandle JoinSessionCompleteDelegateHandle;
+	FDelegateHandle NetworkFailureDelegateHandle;
 
 	void OnCreateSessionComplete(FName Sessionname, bool Success);
 	void OnDestorySessionComplete(FName Sessionname, bool Success);

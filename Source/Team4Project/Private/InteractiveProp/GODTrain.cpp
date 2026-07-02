@@ -95,6 +95,20 @@ void AGODTrain::BeginPlay()
 	}
 }
 
+void AGODTrain::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+
+	// 에디터에서 열차를 배치/이동/편집할 때마다 스플라인 0번 지점으로 스냅한다.
+	// 런타임 시작 시 가는 위치(스플라인 0번)와 에디터 미리보기를 일치시켜,
+	// 시작 순간 순간이동처럼 보이는 현상을 없앤다.
+	// Track이 아직 지정되지 않았으면 아무것도 하지 않는다(어느 트랙 기준인지 모름).
+	if (Track && Track->Spline)
+	{
+		UpdateTransformAlongSpline(0.f);
+	}
+}
+
 void AGODTrain::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);

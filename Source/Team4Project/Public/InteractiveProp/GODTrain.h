@@ -24,6 +24,10 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
+	// 에디터에서 배치/이동/편집할 때마다 스플라인 0번 지점으로 스냅 →
+	// 에디터 미리보기가 런타임 시작 위치(스플라인 0번)와 일치한다.
+	virtual void OnConstruction(const FTransform& Transform) override;
+
 public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
