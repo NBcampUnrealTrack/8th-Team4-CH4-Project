@@ -114,6 +114,11 @@ void ABaseCharacter::BeginPlay()
 	{
 		DefaultMeshRelativeLocation = GetMesh()->GetRelativeLocation();
 		DefaultMeshRelativeRotation = GetMesh()->GetRelativeRotation();
+
+		// 툰 포스트프로세스(PP_ToonShader)용 캐릭터 마스크.
+		// CustomStencil=1 인 픽셀만 셀 셰이딩/외곽선을 받고, 배경은 색보정만 받는다.
+		GetMesh()->SetRenderCustomDepth(true);
+		GetMesh()->SetCustomDepthStencilValue(1);
 	}
 
 	if (IsLocallyControlled() == true)
@@ -366,7 +371,7 @@ void ABaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	// 직업 태그는 소유 클라에만 복제(다른 플레이어에게 역할 노출 방지).
 	DOREPLIFETIME_CONDITION(ABaseCharacter, CharacterTag, COND_OwnerOnly);
 	
-	DOREPLIFETIME(ABaseCharacter, bIsCoalEquipped);
+	DOREPLIFETIME(ABaseCharacter, CurrentCoal);
 
 	// 역할별 상태
 	DOREPLIFETIME(ABaseCharacter, bIsInVent);
@@ -686,108 +691,37 @@ void ABaseCharacter::SetCoalEquipped(bool bEquip)
 {
 	if (!HasAuthority()) return;
 
-	if (bIsCoalEquipped == bEquip)
+	// 이미 원하는 상태면 무시 (무기 장착 토글과 동일한 아이덤포턴트 처리).
+	if ((CurrentCoal != nullptr) == bEquip)
 		return;
 
-	bIsCoalEquipped = bEquip;
-	
-	
-	UpdateCoalVisual();
-}
-
-void ABaseCharacter::OnRep_CoalEquipped()
-{
-	UpdateCoalVisual();
-}
-
-
-void ABaseCharacter::UpdateCoalVisual()
-{
-	
-
-	if (bIsCoalEquipped)
+	if (bEquip)
 	{
-		
-		SpawnCoalHands();
+		// ── 장착: 무기(GA_EquipGun)와 동일하게 단일 액터 스폰 → 소켓 부착 → 포인터 보관 ──
+		if (!CoalHandClass) return;
+
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.Owner = this;
+		SpawnParams.Instigator = this;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		AACoalHandVisualActor* Coal = GetWorld()->SpawnActor<AACoalHandVisualActor>(
+			CoalHandClass, GetActorTransform(), SpawnParams);
+		if (Coal)
+		{
+			// 서버 부착 + 소켓/소유자 복제 → 클라도 OnRep 에서 동일하게 부착 (무기와 동일).
+			Coal->AttachToCharacter(this, CoalAttachSocketName);
+			CurrentCoal = Coal;
+		}
 	}
 	else
 	{
-		
-		DestroyCoalHands();
-	}
-}
-void ABaseCharacter::SpawnCoalHands()
-{
-	
-
-	if (LeftCoalActor || RightCoalActor)
-	{
-		
-		return;
-	}
-
-	USkeletalMeshComponent* MeshComp = GetMesh();
-	if (!MeshComp)
-	{
-		return;
-	}
-
-	if (!CoalHandClass)
-	{
-		return;
-	}
-	
-
-	FActorSpawnParameters Params;
-	Params.Owner = this;
-	Params.Instigator = this;
-
-	LeftCoalActor = GetWorld()->SpawnActor<AACoalHandVisualActor>(
-		CoalHandClass,
-		MeshComp->GetComponentTransform(),
-		Params
-	);
-	
-
-	if (LeftCoalActor)
-	{
-		LeftCoalActor->AttachToComponent(
-			MeshComp,
-			FAttachmentTransformRules::SnapToTargetNotIncludingScale,
-			TEXT("LeftHand_end")
-		);
-		LeftCoalActor->SetActorScale3D(FVector(0.1f));
-	}
-
-	RightCoalActor = GetWorld()->SpawnActor<AACoalHandVisualActor>(
-		CoalHandClass,
-		MeshComp->GetComponentTransform(),
-		Params
-	);
-	
-
-	if (RightCoalActor)
-	{
-		RightCoalActor->AttachToComponent(
-			MeshComp,
-			FAttachmentTransformRules::SnapToTargetNotIncludingScale,
-			TEXT("RightHand_end")
-		);
-		RightCoalActor->SetActorScale3D(FVector(0.1f));
-	}
-}
-void ABaseCharacter::DestroyCoalHands()
-{
-	if (LeftCoalActor)
-	{
-		LeftCoalActor->Destroy();
-		LeftCoalActor = nullptr;
-	}
-
-	if (RightCoalActor)
-	{
-		RightCoalActor->Destroy();
-		RightCoalActor = nullptr;
+		// ── 해제: 무기와 동일하게 액터 파괴 + 포인터 정리 ──
+		if (CurrentCoal)
+		{
+			CurrentCoal->Destroy();
+			CurrentCoal = nullptr;
+		}
 	}
 }
 
