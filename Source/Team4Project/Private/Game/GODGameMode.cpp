@@ -7,7 +7,7 @@
 #include "InteractiveProp/GODTrain.h"
 #include "InteractiveProp/PressureValve.h"
 #include "Component/PressureComponent.h"
-#include "InteractiveProp/PickupGear.h"
+#include "InteractiveProp/GearSlot.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
 #include "TimerManager.h"
@@ -122,10 +122,10 @@ void AGODGameMode::StartGame()
 	{
 		(*It)->Tags.Remove(FName(TEXT("Stoker.ForceClose")));
 	}
-	for (TActorIterator<APickupGear> It(GetWorld()); It; ++It)
+	for (TActorIterator<AGearSlot> It(GetWorld()); It; ++It)
 	{
-		if ((*It)->ActorHasTag(TEXT("Gear.Destroyed")))
-			(*It)->Destroy();
+		if (!(*It)->bIsAssembled)
+			(*It)->ForceReassemble();
 	}
 
 	AssignRoles();

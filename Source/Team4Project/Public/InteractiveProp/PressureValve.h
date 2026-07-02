@@ -8,6 +8,7 @@
 class UStaticMeshComponent;
 class UBoxComponent;
 class UPressureComponent;
+class ABaseCharacter;
 
 UCLASS()
 class TEAM4PROJECT_API APressureValve : public AActor, public IInteractable
@@ -21,7 +22,6 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
-	virtual void Tick(float DeltaTime) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
@@ -31,36 +31,72 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UBoxComponent* InteractionBox;
 
-	// 밸브 회전 시각화 (복제 → 모든 클라이언트 동기화)
-	UPROPERTY(ReplicatedUsing = OnRep_ValveRotation, BlueprintReadOnly, Category = "Valve")
-	float ValveRotation = 0.f;
-
-	// 조작 중 여부
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Valve")
-	bool bIsTurning = false;
-
-	// 초당 감압량
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valve")
-	float ReducePerSecond = 10.f;
-
 	// 에디터에서 GODTrain Actor를 드래그해서 연결
 	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "Valve")
 	AActor* TrainActor;
 
-	// 밸브 조작 시작 (클라이언트 → 서버)
-	UFUNCTION(BlueprintCallable, Server, Reliable, Category = "Valve")
-	void Server_StartTurning(AController* Operator);
+	// 미니게임 진행 중 여부
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Valve")
+	bool bMinigameActive = false;
 
-	// 밸브 조작 중지
-	UFUNCTION(BlueprintCallable, Server, Reliable, Category = "Valve")
-	void Server_StopTurning();
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Valve")
+	int32 SuccessCount = 0;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Valve")
+	int32 MissCount = 0;
+
+	// 현재 라운드(바늘 왕복) 시작 시각 (서버 월드시간)
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Valve")
+	float RoundStartServerTime = 0.f;
+
+	// 1회 시도 제한시간(초)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valve")
+	float RoundDuration = 8.f;
+
+	// 바늘이 왕복 1회 완주하는 데 걸리는 시간(초)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valve")
+	float NeedleOscillationPeriod = 2.f;
+
+	// 정답 구간 (0~1 정규화)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valve")
+	float RedZoneStart = 0.4f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valve")
+	float RedZoneEnd = 0.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valve")
+	int32 RequiredSuccesses = 3;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valve")
+	int32 MaxMisses = 3;
+
+	// 1회 성공 시 감압량
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valve")
+	float PressureReductionPerSuccess = 20.f;
+
+	// 경과시간 기반 바늘 위치(0~1, 왕복 삼각파). 서버 판정과 위젯 표시가 동일 공식을 공유.
+	static float ComputeNeedlePosition(float Elapsed, float Period);
+
+	// BaseCharacter가 스페이스 입력을 relay할 때 호출 (서버 전용)
+	void SubmitStopInput();
+
+	// 화부가 강제 차단 시 진행 중인 미니게임을 즉시 중단 (서버 전용)
+	void ForceStop();
 
 	// IInteractable
 	virtual void Interact_Implementation(ACharacter* Interactor) override;
 	virtual FText GetInteractPrompt_Implementation() const override;
 
 private:
-	UFUNCTION() void OnRep_ValveRotation();
+	void StartMinigame(ABaseCharacter* Player);
+	void StartNextRound();
+	void OnRoundTimeout();
+	void EvaluateRoundResult();
 
 	UPressureComponent* GetPressureComponent() const;
+
+	FTimerHandle RoundTimeoutHandle;
+
+	UPROPERTY()
+	TObjectPtr<ABaseCharacter> MinigamePlayer;
 };

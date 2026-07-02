@@ -2,6 +2,8 @@
 #include "Interface/Interactable.h"
 #include "Components/SphereComponent.h"
 #include "GameFramework/Character.h"
+#include "Player/BaseCharacter.h"
+#include "InteractiveProp/ItemBase.h"
 
 UInteractComponent::UInteractComponent()
 {
@@ -75,15 +77,25 @@ void UInteractComponent::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActo
 	NearbyInteractables.Remove(OtherActor);
 }
 
+AActor* UInteractComponent::GetHeldItemActor() const
+{
+	if (const ABaseCharacter* BaseChar = Cast<ABaseCharacter>(GetOwner()))
+	{
+		return BaseChar->GetCurrentHeldItem();
+	}
+	return nullptr;
+}
+
 AActor* UInteractComponent::GetClosestInteractable() const
 {
 	AActor* Closest = nullptr;
 	float BestDistSq = FLT_MAX;
 	const FVector OwnerLoc = GetOwner()->GetActorLocation();
+	const AActor* HeldItem = GetHeldItemActor();
 
 	for (AActor* Actor : NearbyInteractables)
 	{
-		if (!IsValid(Actor)) continue;
+		if (!IsValid(Actor) || Actor == HeldItem) continue;
 		const float DistSq = FVector::DistSquared(OwnerLoc, Actor->GetActorLocation());
 		if (DistSq < BestDistSq)
 		{
@@ -101,10 +113,11 @@ AActor* UInteractComponent::GetClosestInteractableOfClass(TSubclassOf<AActor> Ac
 	AActor* Closest = nullptr;
 	float BestDistSq = FLT_MAX;
 	const FVector OwnerLoc = GetOwner()->GetActorLocation();
+	const AActor* HeldItem = GetHeldItemActor();
 
 	for (AActor* Actor : NearbyInteractables)
 	{
-		if (!IsValid(Actor) || !Actor->IsA(ActorClass)) continue;
+		if (!IsValid(Actor) || Actor == HeldItem || !Actor->IsA(ActorClass)) continue;
 		const float DistSq = FVector::DistSquared(OwnerLoc, Actor->GetActorLocation());
 		if (DistSq < BestDistSq)
 		{

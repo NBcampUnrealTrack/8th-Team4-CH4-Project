@@ -3,7 +3,7 @@
 #include "Player/Ability/GA_WireCutter.h"
 #include "Player/BaseCharacter.h"
 #include "Component/InteractComponent.h"
-#include "InteractiveProp/PickupGear.h"
+#include "InteractiveProp/GearSlot.h"
 #include "Game/BaseGameplayTags.h"
 
 UGA_WireCutter::UGA_WireCutter()
@@ -23,14 +23,15 @@ void UGA_WireCutter::ActivateAbility(
 	ABaseCharacter* Mafia = ActorInfo
 		? Cast<ABaseCharacter>(ActorInfo->AvatarActor.Get()) : nullptr;
 
-	// 능력 버튼으로 직접 발동 시 InteractComponent에서 가장 가까운 기어를 탐색
+	// 능력 버튼으로 직접 발동 시 InteractComponent에서 가장 가까운 기어 슬롯을 탐색
 	AActor* GearActor = nullptr;
 	if (Mafia && Mafia->InteractComponent)
 	{
-		GearActor = Mafia->InteractComponent->GetClosestInteractableOfClass(APickupGear::StaticClass());
+		GearActor = Mafia->InteractComponent->GetClosestInteractableOfClass(AGearSlot::StaticClass());
 	}
 
-	if (!Mafia || !IsValid(GearActor))
+	AGearSlot* GearSlot = Cast<AGearSlot>(GearActor);
+	if (!Mafia || !GearSlot || !GearSlot->bIsAssembled)
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;

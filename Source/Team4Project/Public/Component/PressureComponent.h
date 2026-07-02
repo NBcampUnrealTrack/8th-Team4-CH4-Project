@@ -58,6 +58,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Pressure")
 	void ResetAfterExplosion();
 
+	// 미니게임 실패 등으로 즉시 폭발을 강제 (기존 Tick 폭발과 동일한 파이프라인 사용)
+	UFUNCTION(BlueprintCallable, Category = "Pressure")
+	void ForceExplode();
+
 	// 이벤트
 	UPROPERTY(BlueprintAssignable, Category = "Pressure|Events")
 	FOnPressureChanged OnPressureChanged;

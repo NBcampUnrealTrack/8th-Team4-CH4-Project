@@ -11,6 +11,7 @@
 #include "InteractiveProp/ItemBase.h"
 #include "InteractiveProp/DoorBase.h"
 #include "InteractiveProp/PressureValve.h"
+#include "InteractiveProp/GearSlot.h"
 #include "Game/BaseGameplayTags.h"
 #include "GameplayEffect.h"
 #include "GameplayEffectTypes.h"
@@ -26,6 +27,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "InteractiveProp/GODTrain.h"
+#include "UI/HUD/GODHUD.h"
 #include "EngineUtils.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Net/UnrealNetwork.h"
@@ -880,14 +882,8 @@ void ABaseCharacter::UseWireCutter(AActor* GearActor)
 {
 	if (!HasAuthority() || !IsValid(GearActor)) return;
 
-	if (AItemBase* Item = Cast<AItemBase>(GearActor))
-		if (Item->bIsHeld) Item->Server_Drop();
-
-	GearActor->Tags.AddUnique(FName(TEXT("Gear.Destroyed")));
-	GearActor->SetActorHiddenInGame(true);
-
-	if (UPrimitiveComponent* Root = Cast<UPrimitiveComponent>(GearActor->GetRootComponent()))
-		Root->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (AGearSlot* Slot = Cast<AGearSlot>(GearActor))
+		Slot->BreakGear();
 }
 
 void ABaseCharacter::Multicast_HideBody_Implementation(ABaseCharacter* DeadCharacter)
@@ -1128,8 +1124,7 @@ void ABaseCharacter::ForceClosePressureValve(AActor* PressureValveActor)
 
 	if (APressureValve* Valve = Cast<APressureValve>(PressureValveActor))
 	{
-		Valve->Server_StopTurning();
-		Valve->Tags.AddUnique(TEXT("Stoker.ForceClose"));
+		Valve->ForceStop();
 	}
 }
 
@@ -1156,7 +1151,7 @@ void ABaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
 
 		// Jumping
-		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
+		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ABaseCharacter::HandleJumpInput);
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
 
 		// Moving
@@ -1165,10 +1160,20 @@ void ABaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ABaseCharacter::Look);
 	}
+
+	// 기어 QTE(화살표) / 압력밸브 정지(스페이스) — 새 IA 에셋 없이 BasePlayerController와 동일한
+	// 레거시 raw key 바인딩 방식 사용. 화살표는 WASD/Enhanced Input과 겹치지 않는다.
+	PlayerInputComponent->BindKey(EKeys::Up, IE_Pressed, this, &ABaseCharacter::OnQTEUpPressed);
+	PlayerInputComponent->BindKey(EKeys::Down, IE_Pressed, this, &ABaseCharacter::OnQTEDownPressed);
+	PlayerInputComponent->BindKey(EKeys::Left, IE_Pressed, this, &ABaseCharacter::OnQTELeftPressed);
+	PlayerInputComponent->BindKey(EKeys::Right, IE_Pressed, this, &ABaseCharacter::OnQTERightPressed);
+	PlayerInputComponent->BindKey(EKeys::SpaceBar, IE_Pressed, this, &ABaseCharacter::OnValveSpacePressed);
 }
 
 void ABaseCharacter::Move(const FInputActionValue& Value)
 {
+	if (bInputLockedByMinigame) return;
+
 	FVector2D MovementVector = Value.Get<FVector2D>();
 
 	if (Controller != nullptr)
@@ -1193,5 +1198,108 @@ void ABaseCharacter::Look(const FInputActionValue& Value)
 	{
 		AddControllerYawInput(LookAxisVector.X);
 		AddControllerPitchInput(LookAxisVector.Y);
+	}
+}
+
+void ABaseCharacter::HandleJumpInput()
+{
+	if (bInputLockedByMinigame) return;
+	Jump();
+}
+
+void ABaseCharacter::OnQTEUpPressed()
+{
+	if (ActiveGearQTESlot.IsValid()) Server_SubmitQTEDirection(EQTEDirection::Up);
+}
+
+void ABaseCharacter::OnQTEDownPressed()
+{
+	if (ActiveGearQTESlot.IsValid()) Server_SubmitQTEDirection(EQTEDirection::Down);
+}
+
+void ABaseCharacter::OnQTELeftPressed()
+{
+	if (ActiveGearQTESlot.IsValid()) Server_SubmitQTEDirection(EQTEDirection::Left);
+}
+
+void ABaseCharacter::OnQTERightPressed()
+{
+	if (ActiveGearQTESlot.IsValid()) Server_SubmitQTEDirection(EQTEDirection::Right);
+}
+
+void ABaseCharacter::OnValveSpacePressed()
+{
+	if (ActivePressureValve.IsValid()) Server_SubmitValveStop();
+}
+
+void ABaseCharacter::Server_SubmitQTEDirection_Implementation(EQTEDirection Dir)
+{
+	if (ActiveGearQTESlot.IsValid())
+	{
+		ActiveGearQTESlot->SubmitQTEInput(Dir);
+	}
+}
+
+void ABaseCharacter::Server_SubmitValveStop_Implementation()
+{
+	if (ActivePressureValve.IsValid())
+	{
+		ActivePressureValve->SubmitStopInput();
+	}
+}
+
+void ABaseCharacter::Client_StartGearQTE_Implementation(AGearSlot* Slot)
+{
+	ActiveGearQTESlot = Slot;
+	bInputLockedByMinigame = true;
+
+	if (ABasePlayerController* PC = Cast<ABasePlayerController>(GetController()))
+	{
+		if (AGODHUD* HUD = Cast<AGODHUD>(PC->GetHUD()))
+		{
+			HUD->ShowGearQTE(Slot);
+		}
+	}
+}
+
+void ABaseCharacter::Client_EndGearQTE_Implementation(bool bSuccess)
+{
+	ActiveGearQTESlot = nullptr;
+	bInputLockedByMinigame = false;
+
+	if (ABasePlayerController* PC = Cast<ABasePlayerController>(GetController()))
+	{
+		if (AGODHUD* HUD = Cast<AGODHUD>(PC->GetHUD()))
+		{
+			HUD->HideGearQTE(bSuccess);
+		}
+	}
+}
+
+void ABaseCharacter::Client_StartPressureMinigame_Implementation(APressureValve* Valve)
+{
+	ActivePressureValve = Valve;
+	bInputLockedByMinigame = true;
+
+	if (ABasePlayerController* PC = Cast<ABasePlayerController>(GetController()))
+	{
+		if (AGODHUD* HUD = Cast<AGODHUD>(PC->GetHUD()))
+		{
+			HUD->ShowPressureMinigame(Valve);
+		}
+	}
+}
+
+void ABaseCharacter::Client_EndPressureMinigame_Implementation(bool bSuccess)
+{
+	ActivePressureValve = nullptr;
+	bInputLockedByMinigame = false;
+
+	if (ABasePlayerController* PC = Cast<ABasePlayerController>(GetController()))
+	{
+		if (AGODHUD* HUD = Cast<AGODHUD>(PC->GetHUD()))
+		{
+			HUD->HidePressureMinigame(bSuccess);
+		}
 	}
 }
