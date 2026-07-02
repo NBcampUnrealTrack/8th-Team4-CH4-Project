@@ -31,7 +31,8 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UBoxComponent* InteractionBox;
 
-	// 에디터에서 GODTrain Actor를 드래그해서 연결
+	// 에디터에서 GODTrain Actor를 드래그해서 연결. 비워두면 부모 액터(Child Actor Component로
+	// GODTrain 밑에 붙인 경우 등)에서 자동 탐색한다 (CoalFeeder::GetFurnace()와 동일한 패턴).
 	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "Valve")
 	AActor* TrainActor;
 

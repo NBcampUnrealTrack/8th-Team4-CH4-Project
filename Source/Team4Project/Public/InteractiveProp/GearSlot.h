@@ -10,6 +10,7 @@ class UStaticMeshComponent;
 class UBoxComponent;
 class APickupGear;
 class ABaseCharacter;
+class UPressureComponent;
 
 // 메인 기어가 장착되는 고정 축(소켓). 와이어커터로 깨지면 MountedGear가 물리적으로 튕겨나가고,
 // 기어를 들고 온 플레이어가 F로 화살표 QTE를 통과하면 재조립된다.
@@ -34,11 +35,14 @@ public:
 	UBoxComponent* InteractionBox;
 
 	// 레벨에 미리 배치된 조립 상태 기어. 에디터에서 드래그로 연결.
+	// 비워두면 BeginPlay에서 이 액터의 자식(Child Actor Component로 PickupGear를
+	// 붙인 경우 등)에서 자동 탐색해 채운다.
 	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Gear")
 	APickupGear* MountedGear;
 
 	// 실패(QTE 타임아웃) 시 ForceExplode를 호출할 PressureComponent를 찾기 위한 열차 참조.
-	// PressureValve::TrainActor 와 동일한 패턴.
+	// 비워두면 BeginPlay/QTE 실패 시점에 부모 액터(Child Actor Component로 GODTrain 밑에
+	// 붙인 경우 등)에서 자동 탐색한다 (CoalFeeder::GetFurnace()와 동일한 패턴).
 	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Gear")
 	AActor* TrainActor;
 
@@ -88,6 +92,11 @@ private:
 	void StartQTE(ABaseCharacter* Player);
 	void OnQTETimeout();
 	void CompleteRepair();
+
+	UPressureComponent* GetPressureComponent() const;
+
+	// MountedGear가 비어있을 때 자식(Child Actor Component 등)에서 자동 탐색
+	APickupGear* ResolveMountedGear() const;
 
 	FTransform OriginalGearTransform;
 	FTimerHandle QTETimeoutHandle;

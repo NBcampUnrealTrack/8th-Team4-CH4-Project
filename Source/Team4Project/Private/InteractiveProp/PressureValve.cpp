@@ -47,8 +47,30 @@ float APressureValve::ComputeNeedlePosition(float Elapsed, float Period)
 
 UPressureComponent* APressureValve::GetPressureComponent() const
 {
-	if (!TrainActor) return nullptr;
-	return TrainActor->FindComponentByClass<UPressureComponent>();
+	// 1) 디테일에서 명시적으로 지정한 TrainActor 우선
+	if (TrainActor)
+	{
+		if (UPressureComponent* Pressure = TrainActor->FindComponentByClass<UPressureComponent>())
+		{
+			return Pressure;
+		}
+	}
+
+	// 2) 미지정이면 부모 액터에서 자동 탐색 (CoalFeeder::GetFurnace()와 동일한 패턴)
+	AActor* Parent = GetAttachParentActor();
+	if (!Parent)
+	{
+		Parent = GetParentActor();
+	}
+	for (; Parent; Parent = Parent->GetAttachParentActor())
+	{
+		if (UPressureComponent* Pressure = Parent->FindComponentByClass<UPressureComponent>())
+		{
+			return Pressure;
+		}
+	}
+
+	return nullptr;
 }
 
 void APressureValve::StartMinigame(ABaseCharacter* Player)
