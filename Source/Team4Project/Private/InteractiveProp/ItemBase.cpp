@@ -31,7 +31,7 @@ void AItemBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 
 void AItemBase::Server_PickUp_Implementation(ACharacter* Holder)
 {
-	if (!Holder || bIsHeld || ActorHasTag(TEXT("Gear.Destroyed"))) return;
+	if (!Holder || bIsHeld || ActorHasTag(TEXT("Gear.Destroyed")) || ActorHasTag(TEXT("Gear.Mounted"))) return;
 	
 	ABaseCharacter* BaseChar = Cast<ABaseCharacter>(Holder);
 	if (BaseChar)
@@ -153,7 +153,7 @@ void AItemBase::Interact_Implementation(ACharacter* Interactor)
 
 FText AItemBase::GetInteractPrompt_Implementation() const
 {
-	if (ActorHasTag(TEXT("Gear.Destroyed")))
+	if (ActorHasTag(TEXT("Gear.Destroyed")) || ActorHasTag(TEXT("Gear.Mounted")))
 		return FText::GetEmpty();
 	return FText::FromString(TEXT("집기"));
 }

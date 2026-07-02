@@ -5,6 +5,10 @@
 #include "GODHUD.generated.h"
 
 class UGODMainHUDWidget;
+class UGearQTEWidget;
+class UPressureMinigameWidget;
+class AGearSlot;
+class APressureValve;
 
 UCLASS()
 class TEAM4PROJECT_API AGODHUD : public AHUD
@@ -31,4 +35,26 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "HUD")
 	void HideMainHUD();
+
+	// ============================================================
+	// 미니게임 오버레이 (기어 QTE / 압력밸브 바늘)
+	// ============================================================
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD|Minigame")
+	TSubclassOf<UGearQTEWidget> GearQTEWidgetClass;
+
+	UPROPERTY(BlueprintReadOnly, Category = "HUD|Minigame")
+	TObjectPtr<UGearQTEWidget> GearQTEWidget;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD|Minigame")
+	TSubclassOf<UPressureMinigameWidget> PressureMinigameWidgetClass;
+
+	UPROPERTY(BlueprintReadOnly, Category = "HUD|Minigame")
+	TObjectPtr<UPressureMinigameWidget> PressureMinigameWidget;
+
+	void ShowGearQTE(AGearSlot* Slot);
+	void HideGearQTE(bool bSuccess);
+
+	void ShowPressureMinigame(APressureValve* Valve);
+	void HidePressureMinigame(bool bSuccess);
 };

@@ -66,6 +66,15 @@ void UPressureComponent::ResetAfterExplosion()
 	bWasWarning = false;
 }
 
+void UPressureComponent::ForceExplode()
+{
+	if (!GetOwner()->HasAuthority() || bExploded) return;
+
+	bExploded = true;
+	CurrentPressure = ExplosionThreshold;
+	OnPressureExplode.Broadcast();
+}
+
 void UPressureComponent::OnRep_CurrentPressure()
 {
 	OnPressureChanged.Broadcast(CurrentPressure / ExplosionThreshold);

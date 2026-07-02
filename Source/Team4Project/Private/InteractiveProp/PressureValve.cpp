@@ -1,13 +1,15 @@
 #include "InteractiveProp/PressureValve.h"
 #include "Component/PressureComponent.h"
+#include "Player/BaseCharacter.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
+#include "TimerManager.h"
 
 APressureValve::APressureValve()
 {
-	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bCanEverTick = false;
 	bReplicates = true;
 
 	ValveMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ValveMesh"));
@@ -26,49 +28,21 @@ void APressureValve::BeginPlay()
 	Super::BeginPlay();
 }
 
-void APressureValve::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-
-	if (!HasAuthority() || !bIsTurning) return;
-
-	if (UPressureComponent* PC = GetPressureComponent())
-	{
-		PC->ReducePressure(ReducePerSecond * DeltaTime);
-	}
-
-	// 밸브 시각 회전 (초당 180도)
-	ValveRotation = FMath::Fmod(ValveRotation + 180.f * DeltaTime, 360.f);
-}
-
 void APressureValve::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(APressureValve, ValveRotation);
-	DOREPLIFETIME(APressureValve, bIsTurning);
+	DOREPLIFETIME(APressureValve, bMinigameActive);
+	DOREPLIFETIME(APressureValve, SuccessCount);
+	DOREPLIFETIME(APressureValve, MissCount);
+	DOREPLIFETIME(APressureValve, RoundStartServerTime);
 }
 
-void APressureValve::Server_StartTurning_Implementation(AController* Operator)
+float APressureValve::ComputeNeedlePosition(float Elapsed, float Period)
 {
-	// 화부가 강제 차단한 밸브는 재조작 불가
-	if (bIsTurning || ActorHasTag(TEXT("Stoker.ForceClose"))) return;
-	bIsTurning = true;
-}
+	if (Period <= KINDA_SMALL_NUMBER) return 0.f;
 
-void APressureValve::Server_StopTurning_Implementation()
-{
-	bIsTurning = false;
-}
-
-void APressureValve::OnRep_ValveRotation()
-{
-	// ValveRotation으로 메시 Roll 회전 (축은 BP에서 필요 시 조정)
-	if (ValveMesh)
-	{
-		FRotator Current = ValveMesh->GetRelativeRotation();
-		Current.Roll = ValveRotation;
-		ValveMesh->SetRelativeRotation(Current);
-	}
+	const float Phase = FMath::Fmod(FMath::Max(Elapsed, 0.f), Period) / Period;
+	return Phase < 0.5f ? Phase * 2.f : 2.f - Phase * 2.f;
 }
 
 UPressureComponent* APressureValve::GetPressureComponent() const
@@ -77,15 +51,113 @@ UPressureComponent* APressureValve::GetPressureComponent() const
 	return TrainActor->FindComponentByClass<UPressureComponent>();
 }
 
+void APressureValve::StartMinigame(ABaseCharacter* Player)
+{
+	bMinigameActive = true;
+	SuccessCount = 0;
+	MissCount = 0;
+	MinigamePlayer = Player;
+
+	StartNextRound();
+
+	Player->Client_StartPressureMinigame(this);
+}
+
+void APressureValve::StartNextRound()
+{
+	RoundStartServerTime = GetWorld()->GetTimeSeconds();
+	GetWorldTimerManager().SetTimer(RoundTimeoutHandle, this, &APressureValve::OnRoundTimeout, RoundDuration, false);
+}
+
+void APressureValve::SubmitStopInput()
+{
+	if (!HasAuthority() || !bMinigameActive) return;
+
+	GetWorldTimerManager().ClearTimer(RoundTimeoutHandle);
+
+	const float Elapsed = GetWorld()->GetTimeSeconds() - RoundStartServerTime;
+	const float NeedlePos = ComputeNeedlePosition(Elapsed, NeedleOscillationPeriod);
+	const bool bHit = NeedlePos >= RedZoneStart && NeedlePos <= RedZoneEnd;
+
+	if (bHit)
+	{
+		++SuccessCount;
+		if (UPressureComponent* Pressure = GetPressureComponent())
+		{
+			Pressure->ReducePressure(PressureReductionPerSuccess);
+		}
+	}
+	else
+	{
+		++MissCount;
+	}
+
+	EvaluateRoundResult();
+}
+
+void APressureValve::OnRoundTimeout()
+{
+	if (!bMinigameActive) return;
+
+	++MissCount;
+	EvaluateRoundResult();
+}
+
+void APressureValve::EvaluateRoundResult()
+{
+	if (SuccessCount >= RequiredSuccesses)
+	{
+		bMinigameActive = false;
+		ABaseCharacter* Player = MinigamePlayer;
+		MinigamePlayer = nullptr;
+		if (Player) Player->Client_EndPressureMinigame(true);
+	}
+	else if (MissCount >= MaxMisses)
+	{
+		bMinigameActive = false;
+		ABaseCharacter* Player = MinigamePlayer;
+		MinigamePlayer = nullptr;
+		if (Player) Player->Client_EndPressureMinigame(false);
+
+		if (UPressureComponent* Pressure = GetPressureComponent())
+		{
+			Pressure->ForceExplode();
+		}
+	}
+	else
+	{
+		StartNextRound();
+	}
+}
+
+void APressureValve::ForceStop()
+{
+	if (!HasAuthority()) return;
+
+	Tags.AddUnique(TEXT("Stoker.ForceClose"));
+
+	if (!bMinigameActive) return;
+
+	GetWorldTimerManager().ClearTimer(RoundTimeoutHandle);
+	bMinigameActive = false;
+
+	ABaseCharacter* Player = MinigamePlayer;
+	MinigamePlayer = nullptr;
+	if (Player) Player->Client_EndPressureMinigame(false);
+}
+
 void APressureValve::Interact_Implementation(ACharacter* Interactor)
 {
-	if (bIsTurning)
-		Server_StopTurning();
-	else
-		Server_StartTurning(Interactor ? Interactor->GetController() : nullptr);
+	if (bMinigameActive || ActorHasTag(TEXT("Stoker.ForceClose"))) return;
+
+	ABaseCharacter* BaseChar = Cast<ABaseCharacter>(Interactor);
+	if (!BaseChar) return;
+
+	StartMinigame(BaseChar);
 }
 
 FText APressureValve::GetInteractPrompt_Implementation() const
 {
-	return bIsTurning ? FText::FromString(TEXT("밸브 정지")) : FText::FromString(TEXT("밸브 조작"));
+	if (bMinigameActive) return FText::GetEmpty();
+	return FText::FromString(TEXT("밸브 조작"));
 }

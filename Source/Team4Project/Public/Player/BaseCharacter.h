@@ -10,6 +10,7 @@
 #include "ActiveGameplayEffectHandle.h"
 #include "GameplayAbilitySpecHandle.h"
 #include "InteractiveProp/ACoalHandVisualActor.h"
+#include "Game/MinigameTypes.h"
 #include "BaseCharacter.generated.h"
 
 class UBaseAbilitySystemComponent;
@@ -23,6 +24,8 @@ class UNiagaraSystem;
 class UWidgetComponent;
 class USpotLightComponent;
 class UMaterialInterface;
+class AGearSlot;
+class APressureValve;
 
 class USpringArmComponent;
 class UCameraComponent;
@@ -137,6 +140,34 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction")
 	TObjectPtr<UInteractComponent> InteractComponent;
+
+	// ============================================================
+	// 미니게임 (기어 QTE / 압력밸브 바늘) — 입력 relay & HUD 트리거
+	// ============================================================
+
+	// 미니게임 진행 중 이동/점프 억제용
+	bool bInputLockedByMinigame = false;
+
+	TWeakObjectPtr<class AGearSlot> ActiveGearQTESlot;
+	TWeakObjectPtr<class APressureValve> ActivePressureValve;
+
+	UFUNCTION(Server, Reliable)
+	void Server_SubmitQTEDirection(EQTEDirection Dir);
+
+	UFUNCTION(Server, Reliable)
+	void Server_SubmitValveStop();
+
+	UFUNCTION(Client, Reliable)
+	void Client_StartGearQTE(AGearSlot* Slot);
+
+	UFUNCTION(Client, Reliable)
+	void Client_EndGearQTE(bool bSuccess);
+
+	UFUNCTION(Client, Reliable)
+	void Client_StartPressureMinigame(APressureValve* Valve);
+
+	UFUNCTION(Client, Reliable)
+	void Client_EndPressureMinigame(bool bSuccess);
 
 	// IInteractable — 죽은 캐릭터: 탄약 빼앗기 / 살아있는 캐릭터: 수색
 	virtual void Interact_Implementation(ACharacter* Interactor) override;
@@ -451,6 +482,15 @@ protected:
 	void Move(const FInputActionValue& Value);
 
 	void Look(const FInputActionValue& Value);
+
+	// 미니게임 중에는 점프 억제 (스페이스바가 밸브 정지와 겹치므로)
+	void HandleJumpInput();
+
+	void OnQTEUpPressed();
+	void OnQTEDownPressed();
+	void OnQTELeftPressed();
+	void OnQTERightPressed();
+	void OnValveSpacePressed();
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	USpringArmComponent* CameraBoom;

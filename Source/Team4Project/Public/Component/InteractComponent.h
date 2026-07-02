@@ -49,6 +49,10 @@ private:
 	UPROPERTY()
 	TArray<AActor*> NearbyInteractables;
 
+	// 현재 손에 든 아이템(있다면). 손에 든 아이템은 자기 자신과 가까이 있어
+	// 다른 프롭보다 우선 선택될 수 있으므로 후보에서 제외한다.
+	AActor* GetHeldItemActor() const;
+
 	UFUNCTION(Server, Reliable)
 	void Server_TryInteract();
 
