@@ -109,6 +109,15 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Match")
 	float PendingDifficulty = 1.0f;
 
+	// ============================================================
+	// 스킨 선택
+	// ============================================================
+
+	// 메인 메뉴에서 고른 스킨 인덱스 (BaseCharacter.SkinOptions 배열 인덱스).
+	// 클라 로컬 값 — 캐릭터 스폰 후 Server_SetSkin 으로 서버에 전달된다.
+	UPROPERTY(BlueprintReadWrite, Category = "Skin")
+	int32 SelectedSkinIndex = 0;
+
 private:
 	int32 PendingSharedCredits = 0;
 

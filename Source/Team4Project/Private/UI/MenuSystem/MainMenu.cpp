@@ -10,6 +10,13 @@
 #include "Components/TextBlock.h"
 
 #include "UI/MenuSystem/ServerRow.h"
+#include "Game/PlayerGameInstance.h"
+
+namespace
+{
+	// 인덱스 = BaseCharacter.SkinOptions / BP_TestCharacter 스킨 배열 순서
+	const TCHAR* GSkinDisplayNames[] = { TEXT("강아지"), TEXT("개구리"), TEXT("판다"), TEXT("토끼"), TEXT("너구리") };
+}
 
 UMainMenu::UMainMenu(const FObjectInitializer& ObjectInitializer)
 {
@@ -51,7 +58,93 @@ bool UMainMenu::Initialize()
         return false;
     QuitButton->OnClicked.AddDynamic(this, &UMainMenu::QuitPressed);
 
+    // 스킨 선택 위젯은 Optional — WBP 에 추가된 경우에만 바인딩
+    if (SkinButton) SkinButton->OnClicked.AddDynamic(this, &UMainMenu::OpenSkinMenu);
+    if (BackFromSkinMenuButton) BackFromSkinMenuButton->OnClicked.AddDynamic(this, &UMainMenu::OpenMainMenu);
+    if (SkinDogButton) SkinDogButton->OnClicked.AddDynamic(this, &UMainMenu::SelectSkinDog);
+    if (SkinFrogButton) SkinFrogButton->OnClicked.AddDynamic(this, &UMainMenu::SelectSkinFrog);
+    if (SkinPandaButton) SkinPandaButton->OnClicked.AddDynamic(this, &UMainMenu::SelectSkinPanda);
+    if (SkinRabbitButton) SkinRabbitButton->OnClicked.AddDynamic(this, &UMainMenu::SelectSkinRabbit);
+    if (SkinRaccoonButton) SkinRaccoonButton->OnClicked.AddDynamic(this, &UMainMenu::SelectSkinRaccoon);
+    if (ConfirmSkinButton) ConfirmSkinButton->OnClicked.AddDynamic(this, &UMainMenu::ConfirmSkinSelection);
+    UpdateSelectedSkinText();
+
     return true;
+}
+
+FReply UMainMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+    // 스킨 메뉴에서 ESC → 메인 메뉴 복귀
+    if (InKeyEvent.GetKey() == EKeys::Escape &&
+        MenuSwitcher && SkinMenu && MenuSwitcher->GetActiveWidget() == SkinMenu)
+    {
+        OpenMainMenu();
+        return FReply::Handled();
+    }
+    return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+}
+
+// ============================================================
+// 스킨 선택
+// ============================================================
+
+void UMainMenu::OpenSkinMenu()
+{
+    if (!ensure(MenuSwitcher != nullptr)) return;
+    if (!ensure(SkinMenu != nullptr)) return;
+
+    MenuSwitcher->SetActiveWidget(SkinMenu);
+
+    // 미리보기를 현재 저장된 스킨으로 초기화
+    UWorld* World = GetWorld();
+    if (const UPlayerGameInstance* GI = World ? World->GetGameInstance<UPlayerGameInstance>() : nullptr)
+    {
+        PreviewSkinIndex = GI->SelectedSkinIndex;
+    }
+    OnSkinPreviewChanged(PreviewSkinIndex);
+    UpdateSelectedSkinText();
+
+    // ESC 키를 받으려면 이 위젯에 포커스가 있어야 한다.
+    SetKeyboardFocus();
+
+    PlayMenuTransition(EMenuState::Skin);
+}
+
+void UMainMenu::SelectSkinDog()     { PreviewSkin(0); }
+void UMainMenu::SelectSkinFrog()    { PreviewSkin(1); }
+void UMainMenu::SelectSkinPanda()   { PreviewSkin(2); }
+void UMainMenu::SelectSkinRabbit()  { PreviewSkin(3); }
+void UMainMenu::SelectSkinRaccoon() { PreviewSkin(4); }
+
+void UMainMenu::PreviewSkin(int32 SkinIndex)
+{
+    PreviewSkinIndex = SkinIndex;
+    OnSkinPreviewChanged(SkinIndex);
+    UpdateSelectedSkinText();
+}
+
+void UMainMenu::ConfirmSkinSelection()
+{
+    UWorld* World = GetWorld();
+    if (!ensure(World != nullptr)) return;
+
+    if (UPlayerGameInstance* GI = World->GetGameInstance<UPlayerGameInstance>())
+    {
+        GI->SelectedSkinIndex = PreviewSkinIndex;
+    }
+    OpenMainMenu();
+}
+
+void UMainMenu::UpdateSelectedSkinText()
+{
+    if (!SelectedSkinText) return;
+
+    if (PreviewSkinIndex >= 0 && PreviewSkinIndex < UE_ARRAY_COUNT(GSkinDisplayNames))
+    {
+        SelectedSkinText->SetText(FText::Format(
+            NSLOCTEXT("MainMenu", "SelectedSkin", "{0}"),
+            FText::FromString(GSkinDisplayNames[PreviewSkinIndex])));
+    }
 }
 
 void UMainMenu::OpenHostMenu()
