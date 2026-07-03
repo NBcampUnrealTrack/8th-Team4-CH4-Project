@@ -19,8 +19,10 @@ void AGODPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AGODPlayerState, bIsReady);
-	DOREPLIFETIME(AGODPlayerState, MainRole);
-	DOREPLIFETIME(AGODPlayerState, CitizenClass);
+	// 역할은 소유 클라에만 복제 — 소셜 디덕션이라 다른 플레이어에게 역할이 노출되면 안 된다.
+	// (ABaseCharacter::CharacterTag 의 COND_OwnerOnly 와 동일한 정책)
+	DOREPLIFETIME_CONDITION(AGODPlayerState, MainRole, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(AGODPlayerState, CitizenClass, COND_OwnerOnly);
 	DOREPLIFETIME(AGODPlayerState, bIsAlive);
 	DOREPLIFETIME(AGODPlayerState, AmmoCount);
 	DOREPLIFETIME(AGODPlayerState, SootLevel);

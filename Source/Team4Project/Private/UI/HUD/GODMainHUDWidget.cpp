@@ -12,6 +12,7 @@
 #include "Player/BaseCharacter.h"
 #include "Player/Component/BaseAttributeSet.h"
 #include "Component/InteractComponent.h"
+#include "TimerManager.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 초기화
@@ -32,6 +33,9 @@ void UGODMainHUDWidget::NativeConstruct()
 	// 인터랙트 프롬프트 초기 숨김 (대상 생기면 OnInteractTargetChanged가 켠다)
 	if (TB_InteractPrompt)  TB_InteractPrompt->SetVisibility(ESlateVisibility::Collapsed);
 
+	// 총기 해제 알림 초기 숨김
+	if (TB_GunsUnlockedNotice) TB_GunsUnlockedNotice->SetVisibility(ESlateVisibility::Collapsed);
+
 	// 역할 아이콘 호버 버튼 바인딩
 	if (Btn_RoleIcon)
 	{
@@ -51,6 +55,13 @@ void UGODMainHUDWidget::NativeDestruct()
 		GS->OnDistanceToDestinationChanged.RemoveAll(this);
 		GS->OnPressureLevelChanged.RemoveAll(this);
 		GS->OnFuelLevelChanged.RemoveAll(this);
+		GS->OnGunsUnlocked.RemoveAll(this);
+	}
+
+	// 캐릭터 태그 변경 델리게이트 언바인딩
+	if (ABaseCharacter* Char = CachedCharacter.Get())
+	{
+		Char->OnCharacterTagChanged.RemoveAll(this);
 	}
 
 	// ASC 어트리뷰트 델리게이트 언바인딩
@@ -80,6 +91,7 @@ void UGODMainHUDWidget::TryBindGameState()
 	GS->OnDistanceToDestinationChanged.AddDynamic(this, &UGODMainHUDWidget::OnDistanceChanged);
 	GS->OnPressureLevelChanged.AddDynamic(this,       &UGODMainHUDWidget::OnPressureLevelChanged);
 	GS->OnFuelLevelChanged.AddDynamic(this,           &UGODMainHUDWidget::OnFuelLevelChanged);
+	GS->OnGunsUnlocked.AddDynamic(this,               &UGODMainHUDWidget::OnGunsUnlocked);
 
 	// 현재 값으로 즉시 갱신
 	CurrentTime     = GS->RemainingTime;
@@ -95,10 +107,20 @@ void UGODMainHUDWidget::TryBindGameState()
 
 void UGODMainHUDWidget::InitializeForPawn(APawn* NewPawn)
 {
+	// 이전 캐릭터의 태그 변경 델리게이트 언바인딩
+	if (ABaseCharacter* OldChar = CachedCharacter.Get())
+	{
+		OldChar->OnCharacterTagChanged.RemoveAll(this);
+	}
+
 	ABaseCharacter* Char = Cast<ABaseCharacter>(NewPawn);
 	CachedCharacter = Char;
 
 	if (!Char) return;
+
+	// 게임 시작 시 리스폰 없이 SetCharacterTag 만 호출되므로(역할 배정),
+	// 태그 변경 델리게이트로 역할 HUD 를 갱신한다. (없으면 로비 BP 기본 태그로 고정됨)
+	Char->OnCharacterTagChanged.AddDynamic(this, &UGODMainHUDWidget::OnCharacterTagChanged);
 
 	// ASC 연결
 	UAbilitySystemComponent* ASC = Cast<UAbilitySystemComponent>(Char->GetAbilitySystemComponent());
@@ -145,6 +167,40 @@ void UGODMainHUDWidget::InitializeForPawn(APawn* NewPawn)
 		}
 		// 새 폰 기준으로 초기화 (대상 없음 상태에서 시작)
 		OnInteractTargetChanged(nullptr, FText::GetEmpty());
+	}
+}
+
+void UGODMainHUDWidget::OnCharacterTagChanged(const FGameplayTag& NewTag)
+{
+	if (NewTag.IsValid())
+	{
+		SetupRoleHUD(NewTag);
+	}
+}
+
+void UGODMainHUDWidget::OnGunsUnlocked()
+{
+	// "총기 제한 해제" 알림 — 일정 시간 표시 후 자동 숨김. BP 연출 확장 포인트도 호출.
+	if (TB_GunsUnlockedNotice)
+	{
+		TB_GunsUnlockedNotice->SetText(NSLOCTEXT("HUD", "GunsUnlocked", "총기 제한 해제"));
+		TB_GunsUnlockedNotice->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(GunsNoticeTimer, this,
+				&UGODMainHUDWidget::HideGunsUnlockedNotice, GunsUnlockedNoticeDuration, /*bLoop=*/false);
+		}
+	}
+
+	BP_OnGunsUnlocked();
+}
+
+void UGODMainHUDWidget::HideGunsUnlockedNotice()
+{
+	if (TB_GunsUnlockedNotice)
+	{
+		TB_GunsUnlockedNotice->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 

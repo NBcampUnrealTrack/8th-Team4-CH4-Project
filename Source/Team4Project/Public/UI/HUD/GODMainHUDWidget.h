@@ -172,6 +172,19 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TB_InteractPrompt;
 
+	// 중앙 — 3분 발포 잠금 해제 알림 ("총기 제한 해제").
+	// WBP에 이 이름의 TextBlock을 배치하면 해제 시점에 잠깐 표시된다 (Optional).
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> TB_GunsUnlockedNotice;
+
+	// 알림 표시 유지 시간(초)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Warning")
+	float GunsUnlockedNoticeDuration = 4.f;
+
+	// 발포 잠금 해제 시 WBP 확장 포인트 (사운드/애니메이션 등 BP 연출용)
+	UFUNCTION(BlueprintImplementableEvent, Category = "HUD|Warning")
+	void BP_OnGunsUnlocked();
+
 	// 현재 인터랙트 대상 (없으면 None). WBP에서 월드 마커 위치 투영 등에 사용.
 	UPROPERTY(BlueprintReadOnly, Category = "HUD|Interact")
 	TObjectPtr<AActor> CurrentInteractTarget;
@@ -231,6 +244,18 @@ private:
 	// InteractComponent::OnInteractTargetChanged 콜백 — 프롬프트 표시/숨김
 	UFUNCTION()
 	void OnInteractTargetChanged(AActor* NewTarget, FText Prompt);
+
+	// BaseCharacter::OnCharacterTagChanged 콜백 — 게임 시작 시 역할 배정(SetCharacterTag)에
+	// 맞춰 역할 아이콘/능력 슬롯 갱신 (리스폰이 없어 폰 변경 감지로는 잡히지 않는다).
+	UFUNCTION()
+	void OnCharacterTagChanged(const FGameplayTag& NewTag);
+
+	// GODGameState::OnGunsUnlocked 콜백 — "총기 제한 해제" 알림 표시
+	UFUNCTION()
+	void OnGunsUnlocked();
+
+	void HideGunsUnlockedNotice();
+	FTimerHandle GunsNoticeTimer;
 
 	// ─── UI 갱신 ────────────────────────────────
 

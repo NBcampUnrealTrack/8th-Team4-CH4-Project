@@ -54,6 +54,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic")
 	float EndGameDelay = 5.f;
 
+	/** 게임 시작 후 발포 잠금이 해제되기까지의 시간 (초) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic")
+	int32 GunUnlockDelay = 60;
+
 	/** 게임 종료 후 복귀할 메인 메뉴 맵 경로 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic|Maps")
 	FString MainMenuMapPath = TEXT("/Game/Level/TitleMap");

@@ -28,6 +28,8 @@
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerStart.h"
+#include "Game/GODGameState.h"
 #include "InteractiveProp/GODTrain.h"
 #include "UI/HUD/GODHUD.h"
 #include "EngineUtils.h"
@@ -148,6 +150,13 @@ void ABaseCharacter::BeginPlay()
 		}
 
 		SendSkinSelectionToServer();
+	}
+
+	// 로비 페이즈에서 열차 밖으로 떨어졌을 때 복귀 감시 (서버 전용, KillZ 미설정 맵 대비).
+	if (HasAuthority())
+	{
+		GetWorldTimerManager().SetTimer(
+			FallRescueTimer, this, &ABaseCharacter::CheckLobbyFallRescue, 1.f, /*bLoop=*/true);
 	}
 }
 
@@ -296,6 +305,15 @@ void ABaseCharacter::ApplyCharacterDataRow(const FGameplayTag& RowTag)
 		}
 	}
 
+	// 게임 시작 전(대기/카운트다운)에는 어빌리티를 부여하지 않는다 — 속성/이펙트 GE 만 적용.
+	// 로비에서 총 장착/발사, 역할 능력이 쓰이는 것을 막는다.
+	// 어빌리티는 StartGame() → AssignRoles() → SetCharacterTag() 재적용 시(Playing 페이즈) 부여된다.
+	const AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr;
+	if (!GS || GS->CurrentPhase != EGamePhase::Playing)
+	{
+		return;
+	}
+
 	// 공통 어빌리티 부여 (예: 총기 발사)
 	for (const TSubclassOf<UGameplayAbility>& AbilityClass : Row->CommonAbilities)
 	{
@@ -364,6 +382,16 @@ void ABaseCharacter::SetCharacterTag(const FGameplayTag& NewTag)
 
 	// 새 역할에 맞는 패시브 타이머 시작.
 	if (HasAuthority()) ActivateRoleTimers();
+
+	// 리슨 서버(호스트) 본인 HUD 갱신용 — 원격 클라는 OnRep_CharacterTag 에서 발화.
+	OnCharacterTagChanged.Broadcast(CharacterTag);
+}
+
+void ABaseCharacter::OnRep_CharacterTag()
+{
+	// 짐꾼 무게 면제 등 태그 의존 로직을 클라에서도 즉시 반영.
+	RecalculateMoveSpeed();
+	OnCharacterTagChanged.Broadcast(CharacterTag);
 }
 
 // ============================================================
@@ -601,6 +629,22 @@ void ABaseCharacter::ClearEquipSlot()
 	CurrentHeldItem = nullptr;
 }
 
+void ABaseCharacter::DropHeldItem()
+{
+	if (bInputLockedByMinigame || bIsDead) return;
+	Server_DropHeldItem();
+}
+
+void ABaseCharacter::Server_DropHeldItem_Implementation()
+{
+	if (bIsDead) return;
+
+	if (IsValid(CurrentHeldItem))
+	{
+		CurrentHeldItem->Server_Drop(); // 서버 로컬 호출 → 즉시 실행
+	}
+}
+
 // ============================================================
 // 사망 처리
 // ============================================================
@@ -632,6 +676,14 @@ void ABaseCharacter::Die(AActor* Killer)
 		bLanternOn = false;
 		OnRep_LanternOn();
 	}
+
+	// 들고 있던 아이템은 시체 손에 남으면 다시 주울 수 없으므로 그 자리에 떨어뜨린다.
+	// (석탄 비주얼은 떨어뜨릴 실물이 없으므로 제거만 한다)
+	if (IsValid(CurrentHeldItem))
+	{
+		CurrentHeldItem->Server_Drop();
+	}
+	SetCoalEquipped(false);
 
 	// HandlePlayerDeath를 거치지 않는 직접 호출에서도 두 사망 상태가 일치하도록 동기화.
 	if (AGODPlayerState* PS = GetPlayerState<AGODPlayerState>())
@@ -666,11 +718,13 @@ void ABaseCharacter::Die(AActor* Killer)
 
 void ABaseCharacter::Multicast_HandleDeath_Implementation()
 {
-	// 사망 시점에 밟고 있던 발판(열차 등)을 먼저 기억한다. (움직임 비활성화 전에 조회)
+	// 사망 시점에 밟고 있던 발판(열차 등)과 공중 여부를 먼저 기억한다. (움직임 비활성화 전에 조회)
 	UPrimitiveComponent* DeathBase = nullptr;
+	bool bDiedInAir = false;
 	if (GetCharacterMovement())
 	{
 		DeathBase = GetCharacterMovement()->GetMovementBase();
+		bDiedInAir = GetCharacterMovement()->IsFalling();
 		GetCharacterMovement()->StopMovementImmediately();
 		GetCharacterMovement()->DisableMovement();
 	}
@@ -705,7 +759,13 @@ void ABaseCharacter::Multicast_HandleDeath_Implementation()
 
 	if (DeathBase)
 	{
-		if (CorpseSettleTime <= 0.f)
+		if (bDiedInAir)
+		{
+			// 공중 사망: 즉시 kinematic 고정하면 시체가 공중에 뜬 채 남으므로,
+			// 래그돌이 바닥에 떨어져 멈춘 뒤에 부착한다.
+			WaitForCorpseToLand(DeathBase);
+		}
+		else if (CorpseSettleTime <= 0.f)
 		{
 			// 즉시 부착(현재 포즈로 고정) → 열차 위에서 바로 함께 이동.
 			AttachCorpseToBase(DeathBase);
@@ -744,6 +804,37 @@ void ABaseCharacter::AttachCorpseToBase(UPrimitiveComponent* Base)
 
 	// 액터 전체(캡슐 루트 + 메시)를 발판(열차)에 부착 → 시체 위치/상호작용까지 열차 따라 이동.
 	AttachToActor(BaseActor, FAttachmentTransformRules::KeepWorldTransform);
+}
+
+void ABaseCharacter::WaitForCorpseToLand(UPrimitiveComponent* Base)
+{
+	TWeakObjectPtr<ABaseCharacter> WeakThis(this);
+	TWeakObjectPtr<UPrimitiveComponent> WeakBase(Base);
+	const float StartTime = GetWorld()->GetTimeSeconds();
+
+	FTimerDelegate Del = FTimerDelegate::CreateLambda([WeakThis, WeakBase, StartTime]()
+	{
+		if (!WeakThis.IsValid()) return;
+		ABaseCharacter* Self = WeakThis.Get();
+
+		const float Elapsed = Self->GetWorld()->GetTimeSeconds() - StartTime;
+
+		// 래그돌 속도가 거의 0이면 착지로 판정. (첫 0.3초는 낙하 시작 직후라 제외)
+		// 제한 시간을 넘기면 그 자리에서라도 부착해 열차 콜리전에 튕기는 것을 막는다.
+		USkeletalMeshComponent* M = Self->GetMesh();
+		const bool bSettled = (Elapsed > 0.3f) && M && M->GetComponentVelocity().Size() < 50.f;
+
+		if (bSettled || Elapsed > Self->CorpseFallAttachTimeout)
+		{
+			Self->GetWorldTimerManager().ClearTimer(Self->CorpseAttachTimer);
+			if (WeakBase.IsValid())
+			{
+				Self->AttachCorpseToBase(WeakBase.Get());
+			}
+		}
+	});
+
+	GetWorldTimerManager().SetTimer(CorpseAttachTimer, Del, 0.15f, /*bLoop=*/true);
 }
 
 void ABaseCharacter::OnRep_IsDead()
@@ -952,6 +1043,70 @@ void ABaseCharacter::CheckForHiddenBodies()
 	}
 }
 
+// ============================================================
+// 로비(게임 시작 전) 낙하 복귀
+// ============================================================
+
+void ABaseCharacter::CheckLobbyFallRescue()
+{
+	if (!HasAuthority() || bIsDead) return;
+
+	// 게임 시작 전(대기/카운트다운)에만 복귀. 진행 중 낙하는 기존 규칙 유지.
+	const AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>();
+	if (!GS || (GS->CurrentPhase != EGamePhase::WaitingForPlayers &&
+	            GS->CurrentPhase != EGamePhase::Countdown))
+	{
+		return;
+	}
+
+	// 로비 동안 열차는 스타트 지점에 정차해 있으므로 PlayerStart 높이를 기준으로 낙하를 판정.
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+	{
+		if (GetActorLocation().Z < It->GetActorLocation().Z - LobbyFallRescueDepth)
+		{
+			RescueToStart();
+		}
+		break;
+	}
+}
+
+bool ABaseCharacter::RescueToStart()
+{
+	APlayerStart* Start = nullptr;
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+	{
+		Start = *It;
+		break;
+	}
+	if (!Start) return false;
+
+	if (GetCharacterMovement())
+	{
+		GetCharacterMovement()->StopMovementImmediately(); // 낙하 속도 제거
+	}
+
+	if (!TeleportTo(Start->GetActorLocation(), Start->GetActorRotation()))
+	{
+		// 다른 플레이어와 겹치는 등으로 실패하면 강제 이동.
+		SetActorLocation(Start->GetActorLocation(), false, nullptr, ETeleportType::TeleportPhysics);
+	}
+	return true;
+}
+
+void ABaseCharacter::FellOutOfWorld(const UDamageType& dmgType)
+{
+	// 로비 페이즈면 파괴하지 않고 열차(스타트 지점)로 복귀.
+	const AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr;
+	const bool bLobbyPhase = GS && (GS->CurrentPhase == EGamePhase::WaitingForPlayers ||
+	                                GS->CurrentPhase == EGamePhase::Countdown);
+	if (HasAuthority() && bLobbyPhase && !bIsDead && RescueToStart())
+	{
+		return;
+	}
+
+	Super::FellOutOfWorld(dmgType);
+}
+
 void ABaseCharacter::UnlockDoor(AActor* DoorActor)
 {
 	if (!HasAuthority() || !IsValid(DoorActor)) return;
@@ -1015,15 +1170,17 @@ void ABaseCharacter::StealAmmo(ABaseCharacter* DeadCharacter)
 {
 	if (!HasAuthority() || !IsValid(DeadCharacter) || !DeadCharacter->IsDead()) return;
 
-	AGODPlayerState* OutlawPS = GetPlayerState<AGODPlayerState>();
-	AGODPlayerState* DeadPS   = DeadCharacter->GetPlayerState<AGODPlayerState>();
-	if (!OutlawPS || !DeadPS) return;
+	// 탄약 단일 소스 = CurrentAmmo 어트리뷰트 (GA_FireGun 소모와 동일 소스 — PS.AmmoCount 사용 안 함).
+	UAbilitySystemComponent* MyASC   = GetAbilitySystemComponent();
+	UAbilitySystemComponent* DeadASC = DeadCharacter->GetAbilitySystemComponent();
+	if (!MyASC || !DeadASC) return;
 
-	if (DeadPS->AmmoCount > 0)
-	{
-		OutlawPS->AmmoCount += DeadPS->AmmoCount;
-		DeadPS->AmmoCount = 0;
-	}
+	const float DeadAmmo = DeadASC->GetNumericAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute());
+	if (DeadAmmo <= 0.f) return;
+
+	// 내 MaxAmmo 는 PreAttributeChange 에서 클램프된다.
+	MyASC->ApplyModToAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute(), EGameplayModOp::Additive, DeadAmmo);
+	DeadASC->SetNumericAttributeBase(UBaseAttributeSet::GetCurrentAmmoAttribute(), 0.f);
 }
 
 // ============================================================
@@ -1190,13 +1347,17 @@ void ABaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ABaseCharacter::Look);
 	}
 
-	// 기어 QTE(화살표) / 압력밸브 정지(스페이스) — 새 IA 에셋 없이 BasePlayerController와 동일한
+	// 기어 QTE(화살표) — 새 IA 에셋 없이 BasePlayerController와 동일한
 	// 레거시 raw key 바인딩 방식 사용. 화살표는 WASD/Enhanced Input과 겹치지 않는다.
+	// 압력밸브 정지(스페이스)는 IA_Jump 가 스페이스바 입력을 소비해 raw 바인딩으로는
+	// 전달되지 않으므로 HandleJumpInput 에서 relay 한다.
 	PlayerInputComponent->BindKey(EKeys::Up, IE_Pressed, this, &ABaseCharacter::OnQTEUpPressed);
 	PlayerInputComponent->BindKey(EKeys::Down, IE_Pressed, this, &ABaseCharacter::OnQTEDownPressed);
 	PlayerInputComponent->BindKey(EKeys::Left, IE_Pressed, this, &ABaseCharacter::OnQTELeftPressed);
 	PlayerInputComponent->BindKey(EKeys::Right, IE_Pressed, this, &ABaseCharacter::OnQTERightPressed);
-	PlayerInputComponent->BindKey(EKeys::SpaceBar, IE_Pressed, this, &ABaseCharacter::OnValveSpacePressed);
+
+	// 손에 든 아이템 버리기.
+	PlayerInputComponent->BindKey(EKeys::G, IE_Pressed, this, &ABaseCharacter::DropHeldItem);
 }
 
 void ABaseCharacter::Move(const FInputActionValue& Value)
@@ -1232,7 +1393,15 @@ void ABaseCharacter::Look(const FInputActionValue& Value)
 
 void ABaseCharacter::HandleJumpInput()
 {
-	if (bInputLockedByMinigame) return;
+	// 압력밸브 미니게임 중에는 스페이스바를 점프 대신 "바늘 정지" 입력으로 사용한다.
+	if (bInputLockedByMinigame)
+	{
+		if (ActivePressureValve.IsValid())
+		{
+			Server_SubmitValveStop();
+		}
+		return;
+	}
 	Jump();
 }
 
@@ -1254,11 +1423,6 @@ void ABaseCharacter::OnQTELeftPressed()
 void ABaseCharacter::OnQTERightPressed()
 {
 	if (ActiveGearQTESlot.IsValid()) Server_SubmitQTEDirection(EQTEDirection::Right);
-}
-
-void ABaseCharacter::OnValveSpacePressed()
-{
-	if (ActivePressureValve.IsValid()) Server_SubmitValveStop();
 }
 
 void ABaseCharacter::Server_SubmitQTEDirection_Implementation(EQTEDirection Dir)

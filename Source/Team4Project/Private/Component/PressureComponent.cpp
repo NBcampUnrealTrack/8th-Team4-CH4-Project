@@ -25,10 +25,16 @@ void UPressureComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 
 	if (!GetOwner()->HasAuthority() || bExploded) return;
 
-	if (bFurnaceActive)
-		CurrentPressure = FMath::Min(CurrentPressure + PressureRiseRate * DeltaTime, ExplosionThreshold);
+	if (bTrainRunning)
+	{
+		// 운행 중에는 기본 상승, 석탄 연소로 가속 중이면 배수 적용.
+		const float RiseRate = PressureRiseRate * (bFurnaceActive ? FurnaceRiseMultiplier : 1.f);
+		CurrentPressure = FMath::Min(CurrentPressure + RiseRate * DeltaTime, ExplosionThreshold);
+	}
 	else
+	{
 		CurrentPressure = FMath::Max(CurrentPressure - PressureDecayRate * DeltaTime, 0.f);
+	}
 
 	OnPressureChanged.Broadcast(CurrentPressure / ExplosionThreshold);
 

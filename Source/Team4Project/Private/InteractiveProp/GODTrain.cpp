@@ -113,6 +113,14 @@ void AGODTrain::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// 서버: 압력 컴포넌트에 주행/화로 상태 전달.
+	// 주행 중에만 압력이 오르고(출발 전에는 0 유지), 석탄 연소 중이면 상승률이 배가된다.
+	if (HasAuthority() && Pressure)
+	{
+		Pressure->bTrainRunning = bIsRunning && !bIsDerailed;
+		Pressure->bFurnaceActive = Furnace && Furnace->bIsBurning;
+	}
+
 	// 출발 전에는 제자리 대기. 게임 시작 시 서버가 StartRunning()을 호출하면 주행한다.
 	// (bIsRunning은 복제되므로 클라도 동시에 움직이기 시작한다.)
 	if (!bIsRunning)
@@ -136,12 +144,6 @@ void AGODTrain::Tick(float DeltaTime)
 				TargetSpeed *= HighPressureSpeedMultiplier;
 			}
 			TrainSpeed = FMath::FInterpTo(TrainSpeed, TargetSpeed, DeltaTime, SpeedInterpRate);
-
-			// 압력 컴포넌트에 연료 상태 전달 (석탄 연소 + 주행 중일 때만 압력 상승)
-			if (Pressure && Furnace)
-			{
-				Pressure->bFurnaceActive = Furnace->bIsBurning && TrainSpeed > 0.f;
-			}
 
 			// 게임플레이용 목적지 카운트다운
 			DistanceToDestination = FMath::Max(0.f, DistanceToDestination - TrainSpeed * DeltaTime);

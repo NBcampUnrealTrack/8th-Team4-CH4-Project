@@ -47,7 +47,11 @@ void AItemBase::Server_PickUp_Implementation(ACharacter* Holder)
 
 	bIsHeld = true;
 	HolderCharacter = Holder;
-	
+
+	// 홀더를 Owner 로 지정 — 소유 클라이언트가 이 아이템의 Server RPC(Server_Drop 등)를
+	// 보낼 수 있게 한다. (Owner 가 없으면 클라가 보낸 RPC 를 서버가 버린다)
+	SetOwner(Holder);
+
 	RefreshHeldAttachment();
 	
 	if (BaseChar)
@@ -104,6 +108,7 @@ void AItemBase::Server_Drop_Implementation()
 
 	bIsHeld = false;
 	HolderCharacter = nullptr;
+	SetOwner(nullptr);
 
 	// 서버에서 즉시 분리(클라는 OnRep 에서 동일하게 분리).
 	RefreshHeldAttachment();

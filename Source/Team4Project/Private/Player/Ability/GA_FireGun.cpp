@@ -3,8 +3,13 @@
 
 #include "Player/Ability/GA_FireGun.h"
 #include "Player/BaseCharacter.h"
+#include "Player/GODPlayerState.h"
 #include "Player/Weapon/BaseWeapon.h"
+#include "Player/Component/BaseAttributeSet.h"
 #include "Game/BaseGameplayTags.h"
+#include "Game/GODGameMode.h"
+#include "Game/GODGameState.h"
+#include "AbilitySystemComponent.h"
 #include "DrawDebugHelpers.h"
 
 UGA_FireGun::UGA_FireGun()
@@ -32,8 +37,17 @@ void UGA_FireGun::ActivateAbility(
 	const FGameplayAbilityActivationInfo ActivationInfo,
 	const FGameplayEventData* TriggerEventData)
 {
-	// 쿨다운 + 탄약 비용(Cost GE) 커밋. 실패 시(쿨다운 중/탄약 없음) 종료.
-	if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
+	// 3분 발포 잠금 (기획: 게임 시작 3분 후 해제). 쿨다운 커밋 전에 검사해 쿨다운 낭비 방지.
+	const AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr;
+	if (!GS || !GS->bGunsUnlocked)
+	{
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	// 쿨다운만 커밋. 탄약은 아래에서 CurrentAmmo 어트리뷰트로 직접 검사/소모한다
+	// (PlayerState.AmmoCount 와 이원화돼 있던 탄약을 어트리뷰트로 단일화).
+	if (!CommitAbilityCooldown(Handle, ActorInfo, ActivationInfo, /*ForceCooldown=*/false))
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
@@ -48,6 +62,16 @@ void UGA_FireGun::ActivateAbility(
 
 	if (Character->HasAuthority())
 	{
+		// 탄약 검사/소모 (서버 권위).
+		UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+		const float Ammo = ASC ? ASC->GetNumericAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute()) : 0.f;
+		if (Ammo < 1.f)
+		{
+			EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+			return;
+		}
+		ASC->ApplyModToAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute(), EGameplayModOp::Additive, -1.f);
+
 		ABaseWeapon* Weapon = Character->GetCurrentWeapon();
 
 		const FRotator AimRot = Character->GetBaseAimRotation();
@@ -70,7 +94,18 @@ void UGA_FireGun::ActivateAbility(
 			{
 				if (!Target->IsDead())
 				{
-					Target->Die(Character);
+					// Die() 직접 호출이 아니라 게임모드 공통 사망 경로를 태운다
+					// (승리 조건 체크 + 특수직 사살 시 탄약 리필까지 처리).
+					AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>();
+					AGODPlayerState* VictimPS = Target->GetPlayerState<AGODPlayerState>();
+					if (GM && VictimPS)
+					{
+						GM->HandlePlayerDeath(Character->GetPlayerState<AGODPlayerState>(), VictimPS);
+					}
+					else
+					{
+						Target->Die(Character);
+					}
 				}
 			}
 		}

@@ -34,7 +34,7 @@ public:
 
 	// 부착 소켓 이름 (스켈레톤에 소켓 추가 후 BP에서 재지정 가능)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item")
-	FName AttachSocketName = TEXT("RightHand");
+	FName AttachSocketName = TEXT("WeaponSocket");
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item")
 	FGameplayTag EquipStateTag;

@@ -22,6 +22,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRemainingTimeChanged, int32, NewT
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDistanceChanged, float, NewDistance);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPressureLevelChanged, float, NewPressure);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrainFuelLevelChanged, float, NewFuel);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGunsUnlocked);
 
 UCLASS()
 class TEAM4PROJECT_API AGODGameState : public AGameStateBase
@@ -50,8 +51,8 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_FuelLevel, BlueprintReadOnly, Category = "Game State")
 	float FuelLevel = 0.f;
 
-	/** 게임 시작 3분 후 true 로 전환 */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Game State")
+	/** 게임 시작 3분 후 true 로 전환 (발포 잠금 해제) */
+	UPROPERTY(ReplicatedUsing = OnRep_bGunsUnlocked, BlueprintReadOnly, Category = "Game State")
 	bool bGunsUnlocked;
 
 	/**
@@ -83,6 +84,13 @@ public:
 	/** 연료 비율 변경 시 브로드캐스트 (0~1). 연료 게이지 위젯에서 바인딩. */
 	UPROPERTY(BlueprintAssignable, Category = "Game State|Events")
 	FOnTrainFuelLevelChanged OnFuelLevelChanged;
+
+	/** 3분 발포 잠금 해제 시 브로드캐스트. HUD "총기 제한 해제" 알림에서 바인딩. */
+	UPROPERTY(BlueprintAssignable, Category = "Game State|Events")
+	FOnGunsUnlocked OnGunsUnlocked;
+
+	UFUNCTION()
+	void OnRep_bGunsUnlocked();
 
 	UFUNCTION()
 	void OnRep_GamePhase();
