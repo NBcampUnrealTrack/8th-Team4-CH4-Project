@@ -237,7 +237,55 @@ void ABasePlayerController::SetupInputComponent()
 
 	InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ABasePlayerController::OnSpectateNextClicked);
 	InputComponent->BindKey(EKeys::T, IE_Pressed, this, &ABasePlayerController::OnChatToggle);
-	
+
+	// 왼쪽 Alt 홀드: 커서 표시 + HUD 클릭 모드 (떼면 다시 마우스 시야 전환)
+	InputComponent->BindKey(EKeys::LeftAlt, IE_Pressed, this, &ABasePlayerController::OnHUDCursorPressed);
+	InputComponent->BindKey(EKeys::LeftAlt, IE_Released, this, &ABasePlayerController::OnHUDCursorReleased);
+}
+
+// ============================================================
+// HUD 커서 모드
+// ============================================================
+
+void ABasePlayerController::SetHUDCursorMode(bool bEnable)
+{
+	// 가짜 시체 등 게임플레이가 강제로 켜는 지속형 커서 (Alt 를 뗐다고 꺼지지 않는다).
+	bCursorForced = bEnable;
+	ApplyHUDCursorMode();
+}
+
+void ABasePlayerController::OnHUDCursorPressed()
+{
+	bCursorHeldByKey = true;
+	ApplyHUDCursorMode();
+}
+
+void ABasePlayerController::OnHUDCursorReleased()
+{
+	bCursorHeldByKey = false;
+	ApplyHUDCursorMode();
+}
+
+void ABasePlayerController::ApplyHUDCursorMode()
+{
+	// 관전/채팅은 자체적으로 입력 모드를 관리하므로 덮어쓰지 않는다.
+	if (!IsLocalController() || bIsSpectating || bChatOpen) return;
+
+	if (bCursorForced || bCursorHeldByKey)
+	{
+		bShowMouseCursor = true;
+		FInputModeGameAndUI Mode;
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
+		Mode.SetHideCursorDuringCapture(false);
+		SetInputMode(Mode);
+	}
+	else
+	{
+		bShowMouseCursor = false;
+		FInputModeGameOnly Mode;
+		Mode.SetConsumeCaptureMouseDown(false);
+		SetInputMode(Mode);
+	}
 }
 
 // ============================================================

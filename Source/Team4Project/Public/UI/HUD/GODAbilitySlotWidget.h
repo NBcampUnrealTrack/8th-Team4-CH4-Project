@@ -78,6 +78,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ability Slot")
 	void SetAbilitySystemComponent(UAbilitySystemComponent* InASC);
 
+	/**
+	 * 슬롯의 어빌리티 발동 시도. 버튼 클릭에 자동 바인딩되며,
+	 * 나중에 키보드 입력으로 바꿀 때 BP/C++ 어디서든 이 함수를 호출하면 된다.
+	 * DT 에 BP 서브클래스(GA_xxx 상속 BP)로 부여된 경우도 잡히도록 자식 클래스까지 매칭한다.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Ability Slot")
+	bool TryActivateSlotAbility();
+
 	/** 에디터 기본값으로 슬롯을 미리 설정할 수도 있음 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ability Slot")
 	FAbilitySlotConfig SlotConfig;
@@ -124,4 +132,7 @@ private:
 
 	UFUNCTION()
 	void OnSlotUnhovered();
+
+	UFUNCTION()
+	void OnSlotClicked();
 };

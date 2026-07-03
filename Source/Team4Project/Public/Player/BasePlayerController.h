@@ -51,6 +51,10 @@ protected:
 	bool bNicknameSent = false;
 	
 public:
+	// HUD 커서 모드: true 면 커서 표시 + UI 클릭 가능(GameAndUI), false 면 게임 전용(마우스 시야 전환).
+	// Alt 홀드(아래 바인딩)와 가짜 시체(해제 버튼 클릭용) 등에서 사용. 관전/채팅 중에는 무시된다.
+	void SetHUDCursorMode(bool bEnable);
+
 	UFUNCTION(Client, Reliable)
 	void Client_StartSpectating();
 
@@ -98,4 +102,13 @@ protected:
 
 	// 마우스 클릭으로 다음 관전 대상 전환
 	void OnSpectateNextClicked();
+
+	// Alt 홀드 → HUD 커서 모드 토글
+	void OnHUDCursorPressed();
+	void OnHUDCursorReleased();
+
+	// 두 소스(Alt 홀드 / 가짜 시체 등 강제)를 합성해 실제 입력 모드에 반영
+	void ApplyHUDCursorMode();
+	bool bCursorHeldByKey = false;
+	bool bCursorForced = false;
 };
