@@ -179,7 +179,7 @@ public:
 	
 	
 	// Coal
-	FORCEINLINE bool IsCoalEquipped() const { return bIsCoalEquipped; }
+	FORCEINLINE bool IsCoalEquipped() const { return CurrentCoal != nullptr; }
 	void SetCoalEquipped(bool bEquip);
 
 	// ============================================================
@@ -372,25 +372,14 @@ protected:
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="SocketforCoal")
 	TSubclassOf<AACoalHandVisualActor> CoalHandClass;
-	
-	UPROPERTY()
-	AACoalHandVisualActor* LeftCoalActor;
-	
-	UPROPERTY()
-	AACoalHandVisualActor* RightCoalActor;
-	
-	UPROPERTY(ReplicatedUsing=OnRep_CoalEquipped)
-	bool bIsCoalEquipped;
-	
-	
-	UFUNCTION()
-	void OnRep_CoalEquipped();
-	void UpdateCoalVisual();
-	
-	
-	void SpawnCoalHands();
 
-	void DestroyCoalHands();
+	// 석탄을 붙일 손 소켓 (무기의 AttachSocketName 과 동일한 역할).
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="SocketforCoal")
+	FName CoalAttachSocketName = TEXT("Right_HandSocket");
+
+	// 현재 장착 석탄 (서버에서 스폰 후 설정, 클라에 복제) — 무기 CurrentWeapon 과 동일 패턴.
+	UPROPERTY(Replicated)
+	TObjectPtr<AACoalHandVisualActor> CurrentCoal;
 
 	// ── Watchman 설정 ──
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Watchman")

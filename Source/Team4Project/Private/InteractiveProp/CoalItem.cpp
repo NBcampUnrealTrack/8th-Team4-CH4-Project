@@ -7,7 +7,14 @@
 ACoalItem::ACoalItem()
 {
 	EquipStateTag = State::Weapon::EquipCoal.GetTag();
-	WeightAmount = 30.f; 
+	WeightAmount = 30.f;
+
+	// 손 소켓에 부착 (스켈레톤에 동일 이름의 소켓이 있어야 함).
+	AttachSocketName = TEXT("Right_HandSocket");
+
+	// 떨궜을 때 잘 안 굴러가도록 감쇠를 크게 (구르기 억제엔 각 감쇠가 핵심).
+	DroppedAngularDamping = 8.f;
+	DroppedLinearDamping = 1.f;
 }
 
 void ACoalItem::Server_PickUp_Implementation(ACharacter* Holder)
