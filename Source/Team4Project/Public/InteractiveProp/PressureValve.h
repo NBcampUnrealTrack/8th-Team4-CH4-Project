@@ -84,6 +84,9 @@ public:
 	// 화부가 강제 차단 시 진행 중인 미니게임을 즉시 중단 (서버 전용)
 	void ForceStop();
 
+	// 미니게임 플레이어 사망/이탈 시: 실패(강제 폭발) 없이 중단 (서버 전용)
+	void AbortMinigame();
+
 	// IInteractable
 	virtual void Interact_Implementation(ACharacter* Interactor) override;
 	virtual FText GetInteractPrompt_Implementation() const override;
@@ -93,6 +96,12 @@ private:
 	void StartNextRound();
 	void OnRoundTimeout();
 	void EvaluateRoundResult();
+
+	// MinigamePlayer 를 비우고 사망 델리게이트를 언바인딩한 뒤 반환 (모든 종료 경로 공용).
+	ABaseCharacter* ReleaseMinigamePlayer();
+
+	UFUNCTION()
+	void OnMinigamePlayerDied(ABaseCharacter* DeadCharacter, AActor* Killer);
 
 	UPressureComponent* GetPressureComponent() const;
 

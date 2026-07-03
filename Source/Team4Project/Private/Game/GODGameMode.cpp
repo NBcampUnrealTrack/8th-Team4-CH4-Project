@@ -8,6 +8,9 @@
 #include "InteractiveProp/PressureValve.h"
 #include "Component/PressureComponent.h"
 #include "InteractiveProp/GearSlot.h"
+#include "InteractiveProp/ItemBase.h"
+#include "Player/Component/BaseAttributeSet.h"
+#include "AbilitySystemComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
 #include "TimerManager.h"
@@ -54,9 +57,26 @@ void AGODGameMode::PostLogin(APlayerController* NewPlayer)
 
 void AGODGameMode::Logout(AController* Exiting)
 {
+	AGODGameState* GODGS = GetGameState<AGODGameState>();
+
+	// Playing 중 이탈: 사망 처리 + 들고 있던 아이템 드롭. (Super 이후엔 폰/PS 접근이 불안정하므로 먼저 처리)
+	if (GODGS && GODGS->CurrentPhase == EGamePhase::Playing && Exiting)
+	{
+		if (AGODPlayerState* PS = Exiting->GetPlayerState<AGODPlayerState>())
+		{
+			PS->bIsAlive = false;
+		}
+		if (ABaseCharacter* Char = Cast<ABaseCharacter>(Exiting->GetPawn()))
+		{
+			if (AItemBase* Held = Char->GetCurrentHeldItem())
+			{
+				Held->Server_Drop();
+			}
+		}
+	}
+
 	Super::Logout(Exiting);
 
-	AGODGameState* GODGS = GetGameState<AGODGameState>();
 	if (!GODGS) return;
 
 	// 카운트다운 중 이탈 → 인원 부족이므로 카운트다운 취소
@@ -66,6 +86,11 @@ void AGODGameMode::Logout(AController* Exiting)
 		GODGS->CurrentPhase = EGamePhase::WaitingForPlayers;
 		GODGS->LobbyCountdown = 0;
 		GODGS->OnRep_GamePhase();
+	}
+	// 게임 중 이탈 → 특수 직군(마피아 등)이 나가면 게임이 안 끝나던 문제. 승리 조건 재검사.
+	else if (GODGS->CurrentPhase == EGamePhase::Playing)
+	{
+		CheckWinConditions();
 	}
 }
 
@@ -115,6 +140,7 @@ void AGODGameMode::StartGame()
 	GODGS->LobbyCountdown = 0;
 	GODGS->PressureLevel = 0.f;
 	TimeElapsed = 0;
+	GODGS->OnRep_GamePhase();     // 리슨 서버(호스트)에도 Playing 페이즈 전환 브로드캐스트 (출발 연출 등)
 	GODGS->OnRep_RemainingTime(); // 리슨 서버 클라이언트 즉시 알림
 
 	// 재시작 대비: 이전 라운드 상태 초기화
@@ -188,7 +214,6 @@ void AGODGameMode::AssignRoles()
 		PS->CitizenClass = (PS->MainRole == EMainRole::Citizen)
 			? CitizenPool[CitizenIndex++]
 			: ECitizenClass::None;
-		PS->AmmoCount = 1;
 		PS->bIsAlive  = true;
 
 		// 로비 캐릭터를 그대로 유지하고 태그만 부여 (열차 위 위치 보존).
@@ -196,6 +221,12 @@ void AGODGameMode::AssignRoles()
 		if (ABaseCharacter* ExistingPawn = Cast<ABaseCharacter>(PC->GetPawn()))
 		{
 			ExistingPawn->SetCharacterTag(AssignedTag);
+
+			// 기획: 게임 시작 시 전원 탄약 1발 지급. (탄약 단일 소스 = CurrentAmmo 어트리뷰트)
+			if (UAbilitySystemComponent* ASC = ExistingPawn->GetAbilitySystemComponent())
+			{
+				ASC->SetNumericAttributeBase(UBaseAttributeSet::GetCurrentAmmoAttribute(), 1.f);
+			}
 		}
 
 		// 역할 배정 디버그 출력
@@ -345,9 +376,10 @@ void AGODGameMode::UpdateGameTimer()
 	GODGS->OnRep_RemainingTime(); // 리슨 서버 클라이언트 즉시 알림
 	TimeElapsed++;
 
-	if (TimeElapsed >= 180 && !GODGS->bGunsUnlocked)
+	if (TimeElapsed >= GunUnlockDelay && !GODGS->bGunsUnlocked)
 	{
 		GODGS->bGunsUnlocked = true;
+		GODGS->OnRep_bGunsUnlocked(); // 리슨 서버(호스트)에도 "총기 제한 해제" 알림 발화
 	}
 
 	if (GODGS->RemainingTime <= 0)
@@ -387,14 +419,21 @@ void AGODGameMode::HandlePlayerDeath(AGODPlayerState* KillerPS, AGODPlayerState*
 
 	// 관전 모드 전환은 Die() 내부에서 처리한다(총격 등 모든 사망 경로 공통).
 
-	if (KillerPS)
+	// 탄약 소모는 GA_FireGun 이 발사 시점에 CurrentAmmo 어트리뷰트로 처리한다.
+	// 여기서는 기획의 리필 규칙만: 특수 직군이 다른 특수 직군 사살 시 1발 리필 (시민 사살은 리필 없음).
+	if (KillerPS && KillerPS->MainRole != EMainRole::Citizen && VictimPS->MainRole != EMainRole::Citizen)
 	{
-		KillerPS->AmmoCount--;
-
-		// 특수 직군이 다른 특수 직군 사살 시 탄약 1발 리필
-		if (KillerPS->MainRole != EMainRole::Citizen && VictimPS->MainRole != EMainRole::Citizen)
+		if (AController* KillerPC = Cast<AController>(KillerPS->GetOwner()))
 		{
-			KillerPS->AmmoCount = 1;
+			if (ABaseCharacter* KillerChar = Cast<ABaseCharacter>(KillerPC->GetPawn()))
+			{
+				if (UAbilitySystemComponent* ASC = KillerChar->GetAbilitySystemComponent())
+				{
+					// MaxAmmo 는 PreAttributeChange 에서 클램프된다.
+					ASC->ApplyModToAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute(),
+						EGameplayModOp::Additive, 1.f);
+				}
+			}
 		}
 	}
 

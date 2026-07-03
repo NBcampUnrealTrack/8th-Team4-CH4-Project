@@ -53,6 +53,8 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "State")
 	bool bIsAlive;
 
+	// [사용 안 함] 탄약은 UBaseAttributeSet::CurrentAmmo 어트리뷰트로 단일화됨.
+	// (발사 소모 = GA_FireGun, 리필 = GODGameMode::HandlePlayerDeath, 도둑질 = StealAmmo)
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "State")
 	int32 AmmoCount;
 

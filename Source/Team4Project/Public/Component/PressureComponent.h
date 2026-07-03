@@ -22,13 +22,17 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	// 현재 압력 (0 ~ 100)
+	// 현재 압력 (0 ~ 100). 게임 시작 전에는 0에서 대기, 운행 시작 후 오른다.
 	UPROPERTY(ReplicatedUsing = OnRep_CurrentPressure, BlueprintReadOnly, Category = "Pressure")
-	float CurrentPressure = 50.f;
+	float CurrentPressure = 0.f;
 
-	// 연료 활성화 시 초당 압력 상승량 (석탄 투입 + 열차 이동 시 1%/sec)
+	// 주행 중 초당 압력 상승량 (기본). 석탄 연소 중이면 FurnaceRiseMultiplier 배로 오른다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pressure")
 	float PressureRiseRate = 1.f;
+
+	// 석탄 연소(가속) 중 압력 상승 배수.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pressure")
+	float FurnaceRiseMultiplier = 2.f;
 
 	// 연료 없을 때 초당 자연 감소량
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pressure")
@@ -42,9 +46,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pressure")
 	float ExplosionThreshold = 100.f;
 
-	// FurnaceComponent 활성화 상태 (GODTrain이 매 Tick 설정)
+	// FurnaceComponent 활성화 상태 (GODTrain이 매 Tick 설정) — 압력 상승률 2배 조건.
 	UPROPERTY(BlueprintReadOnly, Category = "Pressure")
 	bool bFurnaceActive = false;
+
+	// 열차 주행 여부 (GODTrain이 매 Tick 설정). 주행 중에만 압력이 오른다.
+	UPROPERTY(BlueprintReadOnly, Category = "Pressure")
+	bool bTrainRunning = false;
 
 	// 폭발 발생 여부 (재폭발 방지용)
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Pressure")

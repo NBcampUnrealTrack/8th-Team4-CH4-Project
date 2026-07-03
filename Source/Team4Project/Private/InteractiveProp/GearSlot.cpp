@@ -101,7 +101,7 @@ void AGearSlot::BreakGear()
 	bIsAssembled = false;
 	bQTEActive = false;
 	QTEProgressIndex = 0;
-	QTEPlayer = nullptr;
+	ReleaseQTEPlayer();
 }
 
 void AGearSlot::ForceReassemble()
@@ -134,7 +134,41 @@ void AGearSlot::CompleteRepair()
 	bIsAssembled = true;
 	bQTEActive = false;
 	QTEProgressIndex = 0;
+
+	// QTE 진행 중 완료(정상 성공/라운드 재시작 ForceReassemble 포함)라면 플레이어에게
+	// 종료를 알린다. 안 보내면 클라 쪽 bInputLockedByMinigame 이 남아 조작 불능이 된다.
+	if (ABaseCharacter* Player = ReleaseQTEPlayer())
+	{
+		Player->Client_EndGearQTE(true);
+	}
+}
+
+ABaseCharacter* AGearSlot::ReleaseQTEPlayer()
+{
+	ABaseCharacter* Player = QTEPlayer;
 	QTEPlayer = nullptr;
+	if (Player)
+	{
+		Player->OnCharacterDied.RemoveDynamic(this, &AGearSlot::OnQTEPlayerDied);
+	}
+	return Player;
+}
+
+void AGearSlot::OnQTEPlayerDied(ABaseCharacter* /*DeadCharacter*/, AActor* /*Killer*/)
+{
+	AbortQTE();
+}
+
+void AGearSlot::AbortQTE()
+{
+	if (!HasAuthority() || !bQTEActive) return;
+
+	GetWorldTimerManager().ClearTimer(QTETimeoutHandle);
+	bQTEActive = false;
+	QTEProgressIndex = 0;
+
+	ABaseCharacter* Player = ReleaseQTEPlayer();
+	if (IsValid(Player)) Player->Client_EndGearQTE(false);
 }
 
 void AGearSlot::StartQTE(ABaseCharacter* Player)
@@ -151,6 +185,9 @@ void AGearSlot::StartQTE(ABaseCharacter* Player)
 
 	QTEPlayer = Player;
 
+	// 진행 중 사망하면 실패(폭발) 없이 중단하도록 감시.
+	Player->OnCharacterDied.AddDynamic(this, &AGearSlot::OnQTEPlayerDied);
+
 	GetWorldTimerManager().SetTimer(QTETimeoutHandle, this, &AGearSlot::OnQTETimeout, QTETimeLimit, false);
 
 	Player->Client_StartGearQTE(this);
@@ -166,12 +203,7 @@ void AGearSlot::SubmitQTEInput(EQTEDirection Dir)
 
 		if (QTEProgressIndex >= QTESequence.Num())
 		{
-			ABaseCharacter* SuccessPlayer = QTEPlayer;
-			CompleteRepair();
-			if (SuccessPlayer)
-			{
-				SuccessPlayer->Client_EndGearQTE(true);
-			}
+			CompleteRepair(); // 내부에서 QTE 종료(성공) 알림까지 처리
 		}
 	}
 	else
@@ -184,12 +216,17 @@ void AGearSlot::OnQTETimeout()
 {
 	if (!bQTEActive) return;
 
+	// 플레이어가 나갔거나(폰 파괴) 죽었으면 실패(폭발) 처리 없이 중단.
+	if (!IsValid(QTEPlayer) || QTEPlayer->IsDead())
+	{
+		AbortQTE();
+		return;
+	}
+
 	bQTEActive = false;
 	QTEProgressIndex = 0;
 
-	ABaseCharacter* FailedPlayer = QTEPlayer;
-	QTEPlayer = nullptr;
-
+	ABaseCharacter* FailedPlayer = ReleaseQTEPlayer();
 	if (FailedPlayer)
 	{
 		FailedPlayer->Client_EndGearQTE(false);

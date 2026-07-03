@@ -27,6 +27,8 @@ class UMaterialInterface;
 class AGearSlot;
 class APressureValve;
 
+class UDamageType;
+
 class USpringArmComponent;
 class UCameraComponent;
 class UInputMappingContext;
@@ -36,6 +38,10 @@ struct FInputActionValue;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterDied,
 	ABaseCharacter*, DeadCharacter,
 	AActor*, Killer);
+
+// 직업 태그가 배정/변경될 때 발화 (서버 + 소유 클라). HUD 역할 아이콘 갱신용 —
+// 게임 시작 시 리스폰 없이 SetCharacterTag 만 호출되므로 HUD 는 이 델리게이트로 갱신해야 한다.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCharacterTagChanged, const FGameplayTag&, NewTag);
 
 // 선택 가능한 스킨 하나 (동물 스켈레탈 메시 + 전용 ABP)
 USTRUCT(BlueprintType)
@@ -121,6 +127,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Role")
 	void SetCharacterTag(const FGameplayTag& NewTag);
 
+	// 직업 태그 변경 알림 (서버 SetCharacterTag / 클라 OnRep 양쪽에서 발화).
+	UPROPERTY(BlueprintAssignable, Category = "Role")
+	FOnCharacterTagChanged OnCharacterTagChanged;
+
 	// Speed 속성(디버프/날씨/버프 GE 반영분) × 무게배수(짐꾼 면제)로 MaxWalkSpeed 재계산.
 	// Speed/Weight 속성 변경 시 자동 호출된다.
 	UFUNCTION(BlueprintCallable, Category = "Stats|Speed")
@@ -165,10 +175,17 @@ public:
 	// 현재 손에 든 물리 아이템(석탄/기어 등). 무기는 CurrentWeapon 으로 별도 관리.
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Item")
 	AItemBase* GetCurrentHeldItem() const { return CurrentHeldItem; }
-	
+
 	void SetCurrentHeldItem(AItemBase* InItem) { CurrentHeldItem = InItem; }
-	
+
 	void ClearEquipSlot();
+
+	// 손에 든 아이템 버리기 (G키 / BP 공용). 클라에서 호출하면 서버로 relay 된다.
+	UFUNCTION(BlueprintCallable, Category = "Item")
+	void DropHeldItem();
+
+	UFUNCTION(Server, Reliable)
+	void Server_DropHeldItem();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction")
 	TObjectPtr<UInteractComponent> InteractComponent;
@@ -316,8 +333,11 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UBaseAttributeSet> AttributeSet;
 	
-	UPROPERTY(EditDefaultsOnly, Replicated, Category = "Stats")
+	UPROPERTY(EditDefaultsOnly, ReplicatedUsing = OnRep_CharacterTag, Category = "Stats")
 	FGameplayTag CharacterTag;
+
+	UFUNCTION()
+	void OnRep_CharacterTag();
 
 	void InitializeAbilityActorInfo();
 	void ServerInitGAS();
@@ -396,6 +416,14 @@ protected:
 
 	// 시체를 지정 발판에 부착(kinematic 고정) → 발판을 따라 함께 이동.
 	void AttachCorpseToBase(UPrimitiveComponent* Base);
+
+	// 공중 사망 시: 래그돌이 바닥에 떨어져 멈출 때까지 기다렸다가 발판에 부착.
+	// (즉시 부착하면 시체가 공중에 고정된 채 남는다)
+	void WaitForCorpseToLand(UPrimitiveComponent* Base);
+
+	// 공중 사망 시 착지를 기다리는 최대 시간(초). 초과하면 그 자리에서 부착.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Death")
+	float CorpseFallAttachTimeout = 3.f;
 
 	FTimerHandle CorpseAttachTimer;
 
@@ -518,6 +546,25 @@ private:
 	FTimerHandle BodyDetectionTimer;
 	void CheckForHiddenBodies();
 
+	// ── 로비(게임 시작 전) 낙하 복귀 ──
+public:
+	// 월드 KillZ 아래로 떨어졌을 때: 로비 페이즈면 파괴하지 않고 열차(스타트 지점)로 복귀.
+	virtual void FellOutOfWorld(const UDamageType& dmgType) override;
+
+protected:
+	// 로비 페이즈에서 스타트 지점보다 이만큼 낮아지면 열차로 복귀시킨다 (cm).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rescue")
+	float LobbyFallRescueDepth = 2000.f;
+
+private:
+	FTimerHandle FallRescueTimer;
+
+	// 타이머 콜백(서버, 1초 주기): 로비 페이즈에서 낙하 감지 → 복귀.
+	void CheckLobbyFallRescue();
+
+	// 스타트 지점(PlayerStart)으로 텔레포트. 성공 여부 반환. (서버 전용)
+	bool RescueToStart();
+
 #pragma region Input
 protected:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -533,7 +580,6 @@ protected:
 	void OnQTEDownPressed();
 	void OnQTELeftPressed();
 	void OnQTERightPressed();
-	void OnValveSpacePressed();
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	USpringArmComponent* CameraBoom;

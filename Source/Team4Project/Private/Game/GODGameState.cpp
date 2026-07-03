@@ -49,6 +49,14 @@ void AGODGameState::OnRep_FuelLevel()
 	OnFuelLevelChanged.Broadcast(FuelLevel);
 }
 
+void AGODGameState::OnRep_bGunsUnlocked()
+{
+	if (bGunsUnlocked)
+	{
+		OnGunsUnlocked.Broadcast();
+	}
+}
+
 void AGODGameState::AddChatMessage(const FChatMessage& Msg)
 {
 	ChatHistory.Add(Msg);

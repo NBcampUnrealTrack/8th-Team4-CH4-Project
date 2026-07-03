@@ -80,9 +80,39 @@ void APressureValve::StartMinigame(ABaseCharacter* Player)
 	MissCount = 0;
 	MinigamePlayer = Player;
 
+	// 진행 중 사망하면 실패(폭발) 없이 중단하도록 감시.
+	Player->OnCharacterDied.AddDynamic(this, &APressureValve::OnMinigamePlayerDied);
+
 	StartNextRound();
 
 	Player->Client_StartPressureMinigame(this);
+}
+
+ABaseCharacter* APressureValve::ReleaseMinigamePlayer()
+{
+	ABaseCharacter* Player = MinigamePlayer;
+	MinigamePlayer = nullptr;
+	if (Player)
+	{
+		Player->OnCharacterDied.RemoveDynamic(this, &APressureValve::OnMinigamePlayerDied);
+	}
+	return Player;
+}
+
+void APressureValve::OnMinigamePlayerDied(ABaseCharacter* /*DeadCharacter*/, AActor* /*Killer*/)
+{
+	AbortMinigame();
+}
+
+void APressureValve::AbortMinigame()
+{
+	if (!HasAuthority() || !bMinigameActive) return;
+
+	GetWorldTimerManager().ClearTimer(RoundTimeoutHandle);
+	bMinigameActive = false;
+
+	ABaseCharacter* Player = ReleaseMinigamePlayer();
+	if (IsValid(Player)) Player->Client_EndPressureMinigame(false);
 }
 
 void APressureValve::StartNextRound()
@@ -121,6 +151,13 @@ void APressureValve::OnRoundTimeout()
 {
 	if (!bMinigameActive) return;
 
+	// 플레이어가 나갔거나(폰 파괴) 죽었으면 실패(폭발) 처리 없이 중단.
+	if (!IsValid(MinigamePlayer) || MinigamePlayer->IsDead())
+	{
+		AbortMinigame();
+		return;
+	}
+
 	++MissCount;
 	EvaluateRoundResult();
 }
@@ -130,15 +167,13 @@ void APressureValve::EvaluateRoundResult()
 	if (SuccessCount >= RequiredSuccesses)
 	{
 		bMinigameActive = false;
-		ABaseCharacter* Player = MinigamePlayer;
-		MinigamePlayer = nullptr;
+		ABaseCharacter* Player = ReleaseMinigamePlayer();
 		if (Player) Player->Client_EndPressureMinigame(true);
 	}
 	else if (MissCount >= MaxMisses)
 	{
 		bMinigameActive = false;
-		ABaseCharacter* Player = MinigamePlayer;
-		MinigamePlayer = nullptr;
+		ABaseCharacter* Player = ReleaseMinigamePlayer();
 		if (Player) Player->Client_EndPressureMinigame(false);
 
 		if (UPressureComponent* Pressure = GetPressureComponent())
@@ -163,8 +198,7 @@ void APressureValve::ForceStop()
 	GetWorldTimerManager().ClearTimer(RoundTimeoutHandle);
 	bMinigameActive = false;
 
-	ABaseCharacter* Player = MinigamePlayer;
-	MinigamePlayer = nullptr;
+	ABaseCharacter* Player = ReleaseMinigamePlayer();
 	if (Player) Player->Client_EndPressureMinigame(false);
 }
 
