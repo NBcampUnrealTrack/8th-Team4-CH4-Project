@@ -5,12 +5,15 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/WidgetComponent.h"
+#include "Components/PointLightComponent.h"
+#include "NiagaraComponent.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 
 ACoalFeeder::ACoalFeeder()
 {
+	// 전부 이벤트 구동(화로 델리게이트) — 틱 불필요. 불빛 일렁임은 라이트 펑션(GPU) 담당.
 	PrimaryActorTick.bCanEverTick = false;
 	bReplicates = true;
 
@@ -34,6 +37,23 @@ ACoalFeeder::ACoalFeeder()
 	FuelWidget->SetDrawSize(FVector2D(200.f, 60.f));
 	FuelWidget->SetRelativeLocation(FVector(0.f, 0.f, 100.f));
 	FuelWidget->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// 화로 불 이펙트. 나이아가라 에셋(NS_Fire)과 위치는 BP 디테일에서 지정.
+	// 자동 재생 끄고, 화로 상태(UpdateFireFX)가 Activate/Deactivate를 제어한다.
+	FireEffect = CreateDefaultSubobject<UNiagaraComponent>(TEXT("FireEffect"));
+	FireEffect->SetupAttachment(RootComponent);
+	FireEffect->SetAutoActivate(false);
+
+	// 화로 불빛 — 따뜻한 주황색. 그림자는 성능상 끔(기차 내부 다광원 대비).
+	FireLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("FireLight"));
+	FireLight->SetupAttachment(FireEffect);
+	FireLight->SetLightColor(FColor(255, 147, 41));
+	FireLight->SetIntensity(0.f);
+	FireLight->SetAttenuationRadius(800.f);
+	FireLight->SetCastShadows(false);
+	FireLight->SetVisibility(false);
+	// 일렁임은 BP에서 FireLight → Light Function Material에 MI_FireFlicker를
+	// 지정하면 GPU에서 처리된다 (게임 스레드 비용 0, 틱 불필요).
 }
 
 void ACoalFeeder::BeginPlay()
@@ -71,10 +91,64 @@ bool ACoalFeeder::TryBindFurnace()
 
 	BoundFurnace = Furnace;
 	Furnace->OnFuelLevelChanged.AddDynamic(this, &ACoalFeeder::HandleFuelLevelChanged);
+	Furnace->OnFurnaceActivated.AddDynamic(this, &ACoalFeeder::HandleFurnaceActivated);
+	Furnace->OnFurnaceDeactivated.AddDynamic(this, &ACoalFeeder::HandleFurnaceDeactivated);
 
 	// 현재 값으로 즉시 한 번 표시(델리게이트는 다음 변화 때까지 안 오므로)
 	RefreshFuelWidget();
+	UpdateFireFX();
 	return true;
+}
+
+void ACoalFeeder::HandleFurnaceActivated()
+{
+	UpdateFireFX();
+}
+
+void ACoalFeeder::HandleFurnaceDeactivated()
+{
+	UpdateFireFX();
+}
+
+void ACoalFeeder::UpdateFireFX()
+{
+	// 데디케이티드 서버는 시각 연출 생략
+	if (GetNetMode() == NM_DedicatedServer) return;
+
+	UFurnanceComponent* Furnace = BoundFurnace ? BoundFurnace : GetFurnace();
+	const bool bBurning = Furnace && Furnace->bIsBurning;
+	const float Percent = (Furnace && Furnace->MaxFuel > 0.f)
+		? FMath::Clamp(Furnace->CurrentFuel / Furnace->MaxFuel, 0.f, 1.f)
+		: 0.f;
+
+	if (FireEffect)
+	{
+		// Deactivate는 스폰만 멈추고 남은 파티클은 자연 소멸 → 불이 뚝 끊기지 않고 사그라든다
+		if (bBurning && !FireEffect->IsActive())
+		{
+			FireEffect->Activate();
+		}
+		else if (!bBurning && FireEffect->IsActive())
+		{
+			FireEffect->Deactivate();
+		}
+
+		// 연료량에 따라 불 크기 변화
+		const float Scale = FMath::Lerp(FireScaleRange.X, FireScaleRange.Y, Percent);
+		FireEffect->SetRelativeScale3D(FVector(Scale));
+		// NS_Fire에 User.FuelPercent 파라미터를 추가하면 자동 연동된다 (없으면 무해하게 무시)
+		FireEffect->SetFloatParameter(TEXT("FuelPercent"), Percent);
+	}
+
+	if (FireLight)
+	{
+		FireLight->SetVisibility(bBurning);
+		// 연료가 줄수록 어두워진다 (연료 변화 이벤트마다 갱신 — 0.2초 스로틀).
+		// 프레임 단위 일렁임은 라이트 펑션 머테리얼이 GPU에서 처리.
+		FireLight->SetIntensity(bBurning
+			? FireLightIntensity * FMath::Lerp(0.35f, 1.f, Percent)
+			: 0.f);
+	}
 }
 
 void ACoalFeeder::RetryBindFurnace()
@@ -89,6 +163,8 @@ void ACoalFeeder::HandleFuelLevelChanged(float /*FuelPercent*/)
 {
 	// 화로에서 절대값을 직접 읽어 위젯 이벤트로 넘긴다.
 	RefreshFuelWidget();
+	// 연료량 변화에 따라 불 크기도 갱신 (0.2초 간격 스로틀된 이벤트라 부담 없음)
+	UpdateFireFX();
 }
 
 void ACoalFeeder::RefreshFuelWidget()

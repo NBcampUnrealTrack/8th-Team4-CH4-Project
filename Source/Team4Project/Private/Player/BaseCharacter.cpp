@@ -110,6 +110,12 @@ ABaseCharacter::ABaseCharacter()
 		CMC->bEnablePhysicsInteraction = false;
 		// RVO 회피(서로 미끄러지듯 비켜가는 밀림)도 끈다.
 		CMC->bUseRVOAvoidance = false;
+
+		// 문/기차 같은 키네마틱 지오메트리에 캡슐이 파묻혔을 때 한 프레임에
+		// 밀어내는 최대 거리. 기본값 500cm는 얇은 기차 벽을 그대로 관통해
+		// 차량 밖으로 사출되는 원인이 되므로 벽 두께보다 작게 제한한다.
+		CMC->MaxDepenetrationWithGeometry = 30.f;
+		CMC->MaxDepenetrationWithGeometryAsProxy = 30.f;
 	}
 }
 
