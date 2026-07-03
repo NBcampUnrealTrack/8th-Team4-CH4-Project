@@ -37,6 +37,27 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterDied,
 	ABaseCharacter*, DeadCharacter,
 	AActor*, Killer);
 
+// 선택 가능한 스킨 하나 (동물 스켈레탈 메시 + 전용 ABP)
+USTRUCT(BlueprintType)
+struct FCharacterSkinData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	FText DisplayName;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	TObjectPtr<USkeletalMesh> Mesh = nullptr;
+
+	// 이 스킨 스켈레톤 전용 애님 블루프린트 (ABP_Dog 등)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	TSubclassOf<UAnimInstance> AnimClass = nullptr;
+
+	// 동물별 모델 크기 차이 보정용 메시 스케일
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	FVector MeshScale = FVector(1.f, 1.f, 1.f);
+};
+
 // 순찰자 발자국 기록 (기록 시각 + 위치)
 USTRUCT()
 struct FFootprintRecord
@@ -119,6 +140,17 @@ public:
 	// 이 캐릭터 위치에 나이아가라 이펙트를 재생(전 클라). 마피아 감별 표식 등에 사용.
 	UFUNCTION(NetMulticast, Unreliable)
 	void Multicast_PlayNiagaraAtSelf(UNiagaraSystem* System);
+
+	// ============================================================
+	// 스킨
+	// ============================================================
+
+	// 메인 메뉴에서 고른 스킨을 서버에 알림 (소유 클라 → 서버). 서버가 SkinIndex 를 복제해 전 클라에 반영.
+	UFUNCTION(Server, Reliable)
+	void Server_SetSkin(int32 InSkinIndex);
+
+	UFUNCTION(BlueprintPure, Category = "Skin")
+	int32 GetSkinIndex() const { return SkinIndex; }
 
 	// ============================================================
 	// 무기
@@ -289,6 +321,28 @@ protected:
 
 	void InitializeAbilityActorInfo();
 	void ServerInitGAS();
+
+	// ============================================================
+	// 스킨 (동물 5종)
+	// ============================================================
+
+	// 선택 가능한 스킨 목록. BP 에서 지정 — 인덱스가 메인 메뉴 버튼 순서(0:Dog 1:Frog 2:Panda 3:Rabbit 4:Raccoon)와 일치해야 한다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	TArray<FCharacterSkinData> SkinOptions;
+
+	// 현재 적용된 스킨 (서버에서 설정, 전 클라에 복제. INDEX_NONE 이면 BP 기본 메시 유지)
+	UPROPERTY(ReplicatedUsing = OnRep_SkinIndex)
+	int32 SkinIndex = INDEX_NONE;
+
+	UFUNCTION()
+	void OnRep_SkinIndex();
+
+	// SkinIndex 에 해당하는 메시/ABP/스케일을 실제 메시 컴포넌트에 반영.
+	void ApplySkin();
+
+	// 소유 클라: GameInstance 에 저장된 선택 스킨을 서버로 1회 전송.
+	void SendSkinSelectionToServer();
+	bool bSkinSelectionSent = false;
 
 	// ============================================================
 	// 이동 속도 (무게 / 직업)

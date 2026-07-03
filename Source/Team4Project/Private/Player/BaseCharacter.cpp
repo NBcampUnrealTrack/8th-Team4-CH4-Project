@@ -24,6 +24,8 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "TimerManager.h"
 #include "Game/BaseDataSubsystem.h"
+#include "Game/PlayerGameInstance.h"
+#include "Engine/SkeletalMesh.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "InteractiveProp/GODTrain.h"
@@ -59,9 +61,13 @@ ABaseCharacter::ABaseCharacter()
 	WidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("WidgetComponent"));
 	WidgetComponent->SetupAttachment(RootComponent);
 
-	// 순찰자 랜턴 — 기본 꺼진 상태. BP에서 hand_l 소켓에 부착 확인.
+	// 순찰자 랜턴 — 기본 꺼진 상태.
+	// 동물 스킨 5종 스켈레톤에는 hand_l 소켓이 없어 메시 원점(발밑, 옆방향)에 붙어버리므로
+	// 캡슐(루트)에 부착해 스켈레톤과 무관하게 항상 캐릭터 정면(+X)·가슴 높이를 비춘다.
 	LanternLight = CreateDefaultSubobject<USpotLightComponent>(TEXT("LanternLight"));
-	LanternLight->SetupAttachment(GetMesh(), TEXT("hand_l"));
+	LanternLight->SetupAttachment(RootComponent);
+	LanternLight->SetRelativeLocation(FVector(40.f, 0.f, 50.f));
+	LanternLight->SetRelativeRotation(FRotator::ZeroRotator);
 	LanternLight->SetVisibility(false);
 	LanternLight->Intensity     = 3000.f;
 	LanternLight->OuterConeAngle = 35.f;
@@ -135,6 +141,7 @@ void ABaseCharacter::BeginPlay()
 			}
 		}
 
+		SendSkinSelectionToServer();
 	}
 }
 
@@ -159,8 +166,58 @@ void ABaseCharacter::PossessedBy(AController* NewController)
 void ABaseCharacter::OnRep_Controller()
 {
 	Super::OnRep_Controller();
-	
+
 	InitializeAbilityActorInfo();
+
+	// 클라에서 BeginPlay 시점엔 컨트롤러가 아직 복제 전일 수 있어 여기서도 시도.
+	if (IsLocallyControlled())
+	{
+		SendSkinSelectionToServer();
+	}
+}
+
+// ============================================================
+// 스킨 (동물 5종)
+// ============================================================
+
+void ABaseCharacter::SendSkinSelectionToServer()
+{
+	if (bSkinSelectionSent) return;
+
+	if (const UPlayerGameInstance* GI = GetGameInstance<UPlayerGameInstance>())
+	{
+		bSkinSelectionSent = true;
+		Server_SetSkin(GI->SelectedSkinIndex);
+	}
+}
+
+void ABaseCharacter::Server_SetSkin_Implementation(int32 InSkinIndex)
+{
+	if (!SkinOptions.IsValidIndex(InSkinIndex)) return;
+
+	SkinIndex = InSkinIndex;
+	ApplySkin(); // 리슨 서버(호스트) 화면 반영 — 클라는 OnRep 에서 반영
+}
+
+void ABaseCharacter::OnRep_SkinIndex()
+{
+	ApplySkin();
+}
+
+void ABaseCharacter::ApplySkin()
+{
+	if (!SkinOptions.IsValidIndex(SkinIndex)) return;
+
+	const FCharacterSkinData& Skin = SkinOptions[SkinIndex];
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (!MeshComp || !Skin.Mesh) return;
+
+	MeshComp->SetSkeletalMesh(Skin.Mesh);
+	MeshComp->SetRelativeScale3D(Skin.MeshScale);
+	if (Skin.AnimClass)
+	{
+		MeshComp->SetAnimInstanceClass(Skin.AnimClass);
+	}
 }
 
 void ABaseCharacter::InitializeAbilityActorInfo()
@@ -370,6 +427,7 @@ void ABaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(ABaseCharacter, CurrentWeapon);
 	DOREPLIFETIME(ABaseCharacter, CurrentHeldItem);
 	DOREPLIFETIME(ABaseCharacter, bMeshHidden);
+	DOREPLIFETIME(ABaseCharacter, SkinIndex);
 	// 직업 태그는 소유 클라에만 복제(다른 플레이어에게 역할 노출 방지).
 	DOREPLIFETIME_CONDITION(ABaseCharacter, CharacterTag, COND_OwnerOnly);
 	
@@ -379,7 +437,8 @@ void ABaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(ABaseCharacter, bIsInVent);
 	DOREPLIFETIME(ABaseCharacter, bIsInvisible);
 	DOREPLIFETIME(ABaseCharacter, bIsFakeDead);
-	DOREPLIFETIME(ABaseCharacter, bLanternOn);
+	// 랜턴은 본인 화면에만 보이므로 소유 클라에만 복제 (다른 클라가 값을 읽어 역할 유추하는 것도 차단).
+	DOREPLIFETIME_CONDITION(ABaseCharacter, bLanternOn, COND_OwnerOnly);
 }
 
 // ============================================================
@@ -453,6 +512,10 @@ void ABaseCharacter::ApplyMeshVisibility()
 		{
 			WidgetComponent->SetVisibility(false, true);
 		}
+		if (LanternLight)
+		{
+			LanternLight->SetVisibility(false);
+		}
 		return;
 	}
 
@@ -471,6 +534,13 @@ void ABaseCharacter::ApplyMeshVisibility()
 	if (WidgetComponent)
 	{
 		WidgetComponent->SetVisibility(!bMeshHidden, true);
+	}
+	// 위 SetVisibility(..., true) 전파가 자식 컴포넌트를 전부 켜버리므로
+	// 랜턴은 토글 상태(bLanternOn)로 마지막에 복원한다.
+	// 빛으로 순찰자 역할이 유추되면 안 되므로 본인 화면에서만 보인다.
+	if (LanternLight)
+	{
+		LanternLight->SetVisibility(bLanternOn && !bMeshHidden && IsLocallyControlled());
 	}
 }
 
@@ -542,6 +612,13 @@ void ABaseCharacter::Die(AActor* Killer)
 	if (!HasAuthority() || bIsDead) return;
 
 	bIsDead = true;
+
+	// 랜턴이 켜진 채 죽으면 래그돌은 날아가고 캡슐 위치에 불빛만 남으므로 꺼준다.
+	if (bLanternOn)
+	{
+		bLanternOn = false;
+		OnRep_LanternOn();
+	}
 
 	// HandlePlayerDeath를 거치지 않는 직접 호출에서도 두 사망 상태가 일치하도록 동기화.
 	if (AGODPlayerState* PS = GetPlayerState<AGODPlayerState>())
@@ -952,13 +1029,18 @@ bool ABaseCharacter::CanInstantFixGear() const
 void ABaseCharacter::ToggleLantern()
 {
 	if (!HasAuthority()) return;
+
+	// 순찰자가 아니면 켜지지 않게 (GA 태그 조건 외 이중 방어). 끄는 것은 역할과 무관하게 허용.
+	if (!bLanternOn && CharacterTag != Character::Crew::Watchman.GetTag()) return;
+
 	bLanternOn = !bLanternOn;
 	OnRep_LanternOn();
 }
 
 void ABaseCharacter::OnRep_LanternOn()
 {
-	if (LanternLight) LanternLight->SetVisibility(bLanternOn);
+	// 빛으로 순찰자 역할이 유추되면 안 되므로 본인 화면에서만 보인다.
+	if (LanternLight) LanternLight->SetVisibility(bLanternOn && !bMeshHidden && IsLocallyControlled());
 }
 
 void ABaseCharacter::SetTrackedPlayers(ABaseCharacter* P1, ABaseCharacter* P2,
