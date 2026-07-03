@@ -158,9 +158,16 @@ void ABaseCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void ABaseCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
-	
+
 	InitializeAbilityActorInfo();
 	ServerInitGAS();
+
+	// 리슨 서버(호스트) 본인 캐릭터: BeginPlay 시점엔 아직 빙의 전이라 IsLocallyControlled 가 false 고,
+	// OnRep_Controller 는 서버에서 호출되지 않으므로 여기서 스킨을 적용한다.
+	if (IsLocallyControlled())
+	{
+		SendSkinSelectionToServer();
+	}
 }
 
 void ABaseCharacter::OnRep_Controller()
