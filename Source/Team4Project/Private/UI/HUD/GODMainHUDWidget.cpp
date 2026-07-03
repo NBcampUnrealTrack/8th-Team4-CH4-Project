@@ -11,6 +11,7 @@
 #include "Game/GODGameState.h"
 #include "Player/BaseCharacter.h"
 #include "Player/Component/BaseAttributeSet.h"
+#include "Component/InteractComponent.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 초기화
@@ -27,6 +28,9 @@ void UGODMainHUDWidget::NativeConstruct()
 	// 경고 문구 초기 숨김
 	if (TB_PressureWarning) TB_PressureWarning->SetVisibility(ESlateVisibility::Hidden);
 	if (TB_FuelWarning)     TB_FuelWarning->SetVisibility(ESlateVisibility::Hidden);
+
+	// 인터랙트 프롬프트 초기 숨김 (대상 생기면 OnInteractTargetChanged가 켠다)
+	if (TB_InteractPrompt)  TB_InteractPrompt->SetVisibility(ESlateVisibility::Collapsed);
 
 	// 역할 아이콘 호버 버튼 바인딩
 	if (Btn_RoleIcon)
@@ -54,6 +58,12 @@ void UGODMainHUDWidget::NativeDestruct()
 	{
 		ASC->GetGameplayAttributeValueChangeDelegate(
 			UBaseAttributeSet::GetCurrentAmmoAttribute()).RemoveAll(this);
+	}
+
+	// 인터랙트 델리게이트 언바인딩
+	if (UInteractComponent* IC = CachedInteractComp.Get())
+	{
+		IC->OnInteractTargetChanged.RemoveAll(this);
 	}
 
 	Super::NativeDestruct();
@@ -120,6 +130,44 @@ void UGODMainHUDWidget::InitializeForPawn(APawn* NewPawn)
 	{
 		SetupRoleHUD(CharTag);
 	}
+
+	// 인터랙트 프롬프트 연결 (재빙의 시 이전 컴포넌트는 언바인딩)
+	if (UInteractComponent* IC = Char->InteractComponent)
+	{
+		if (CachedInteractComp.Get() != IC)
+		{
+			if (UInteractComponent* OldIC = CachedInteractComp.Get())
+			{
+				OldIC->OnInteractTargetChanged.RemoveAll(this);
+			}
+			CachedInteractComp = IC;
+			IC->OnInteractTargetChanged.AddDynamic(this, &UGODMainHUDWidget::OnInteractTargetChanged);
+		}
+		// 새 폰 기준으로 초기화 (대상 없음 상태에서 시작)
+		OnInteractTargetChanged(nullptr, FText::GetEmpty());
+	}
+}
+
+void UGODMainHUDWidget::OnInteractTargetChanged(AActor* NewTarget, FText Prompt)
+{
+	CurrentInteractTarget = NewTarget;
+
+	if (TB_InteractPrompt)
+	{
+		if (NewTarget && !Prompt.IsEmpty())
+		{
+			TB_InteractPrompt->SetText(
+				FText::Format(NSLOCTEXT("HUD", "InteractPrompt", "[F] {0}"), Prompt));
+			TB_InteractPrompt->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			TB_InteractPrompt->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+
+	// 월드 마커 등 추가 연출은 WBP에서 이 이벤트로 구현
+	BP_OnInteractTargetChanged(NewTarget, Prompt);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

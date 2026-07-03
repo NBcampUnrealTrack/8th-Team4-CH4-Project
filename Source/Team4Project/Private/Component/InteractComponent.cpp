@@ -4,6 +4,7 @@
 #include "GameFramework/Character.h"
 #include "Player/BaseCharacter.h"
 #include "InteractiveProp/ItemBase.h"
+#include "TimerManager.h"
 
 UInteractComponent::UInteractComponent()
 {
@@ -35,6 +36,47 @@ void UInteractComponent::BeginPlay()
 
 	InteractSphere->OnComponentBeginOverlap.AddDynamic(this, &UInteractComponent::OnOverlapBegin);
 	InteractSphere->OnComponentEndOverlap.AddDynamic(this, &UInteractComponent::OnOverlapEnd);
+
+	// 대상 변화 감지 타이머. 최근접 판정은 거리 기반이라 순수 이벤트로는 못 잡고,
+	// 낮은 주기 폴링 후 "바뀌었을 때만" 브로드캐스트한다 (UI 쪽 틱 바인딩 제거 목적).
+	if (TargetCheckInterval > 0.f && GetWorld())
+	{
+		GetWorld()->GetTimerManager().SetTimer(
+			TargetCheckTimer, this, &UInteractComponent::CheckTargetChanged,
+			TargetCheckInterval, /*bLoop=*/true);
+	}
+}
+
+void UInteractComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(TargetCheckTimer);
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
+void UInteractComponent::CheckTargetChanged()
+{
+	// 프롬프트 UI는 로컬 플레이어에게만 의미 있음 (서버/타 클라 사본은 스킵)
+	APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	if (!OwnerPawn || !OwnerPawn->IsLocallyControlled())
+	{
+		return;
+	}
+
+	AActor* Target = GetClosestInteractable();
+	const FText Prompt = Target
+		? IInteractable::Execute_GetInteractPrompt(Target)
+		: FText::GetEmpty();
+
+	// 대상이 바뀌었거나, 같은 대상이라도 문구가 바뀐 경우(문 잠김↔열림 등)만 알림
+	if (Target != LastTarget.Get() || !Prompt.EqualTo(LastPrompt))
+	{
+		LastTarget = Target;
+		LastPrompt = Prompt;
+		OnInteractTargetChanged.Broadcast(Target, Prompt);
+	}
 }
 
 void UInteractComponent::TryInteract()
