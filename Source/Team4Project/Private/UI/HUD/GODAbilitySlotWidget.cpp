@@ -31,6 +31,7 @@ void UGODAbilitySlotWidget::NativeConstruct()
 	{
 		Btn_AbilitySlot->OnHovered.AddDynamic(this, &UGODAbilitySlotWidget::OnSlotHovered);
 		Btn_AbilitySlot->OnUnhovered.AddDynamic(this, &UGODAbilitySlotWidget::OnSlotUnhovered);
+		Btn_AbilitySlot->OnClicked.AddDynamic(this, &UGODAbilitySlotWidget::OnSlotClicked);
 	}
 
 	// SlotConfig 가 에디터 기본값으로 채워져 있으면 즉시 반영
@@ -115,6 +116,28 @@ void UGODAbilitySlotWidget::RefreshCooldownUI()
 		TB_CooldownTime->SetText(FText::FromString(FString::Printf(TEXT("%.1fs"), Remaining)));
 		TB_CooldownTime->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
+}
+
+void UGODAbilitySlotWidget::OnSlotClicked()
+{
+	TryActivateSlotAbility();
+}
+
+bool UGODAbilitySlotWidget::TryActivateSlotAbility()
+{
+	UAbilitySystemComponent* ASC = WeakASC.Get();
+	if (!ASC || !SlotConfig.AbilityClass) return false;
+
+	// 부여된 스펙이 SlotConfig.AbilityClass 자체이거나 그 BP 서브클래스면 발동.
+	// (ServerOnly 어빌리티도 소유 클라에서 TryActivateAbility 를 호출하면 서버로 요청이 간다)
+	for (const FGameplayAbilitySpec& Spec : ASC->GetActivatableAbilities())
+	{
+		if (Spec.Ability && Spec.Ability->GetClass()->IsChildOf(SlotConfig.AbilityClass))
+		{
+			return ASC->TryActivateAbility(Spec.Handle);
+		}
+	}
+	return false;
 }
 
 void UGODAbilitySlotWidget::OnSlotHovered()

@@ -262,8 +262,24 @@ void ABaseCharacter::ServerInitGAS()
 {
 	if (!HasAuthority() || !AbilitySystemComponent || bGASInitialized) return;
 	bGASInitialized = true;
-	
+
 	ApplyCharacterDataRow(CharacterTag);
+	RefreshRoleLooseTag();
+}
+
+void ABaseCharacter::RefreshRoleLooseTag()
+{
+	if (!AbilitySystemComponent || AppliedRoleLooseTag == CharacterTag) return;
+
+	if (AppliedRoleLooseTag.IsValid())
+	{
+		AbilitySystemComponent->RemoveLooseGameplayTag(AppliedRoleLooseTag);
+	}
+	if (CharacterTag.IsValid())
+	{
+		AbilitySystemComponent->AddLooseGameplayTag(CharacterTag);
+	}
+	AppliedRoleLooseTag = CharacterTag;
 }
 
 void ABaseCharacter::ApplyCharacterDataRow(const FGameplayTag& RowTag)
@@ -383,6 +399,9 @@ void ABaseCharacter::SetCharacterTag(const FGameplayTag& NewTag)
 	// 새 역할에 맞는 패시브 타이머 시작.
 	if (HasAuthority()) ActivateRoleTimers();
 
+	// 역할 능력의 ActivationRequiredTags 검사용 루즈 태그 동기화 (서버 측).
+	RefreshRoleLooseTag();
+
 	// 리슨 서버(호스트) 본인 HUD 갱신용 — 원격 클라는 OnRep_CharacterTag 에서 발화.
 	OnCharacterTagChanged.Broadcast(CharacterTag);
 }
@@ -391,6 +410,11 @@ void ABaseCharacter::OnRep_CharacterTag()
 {
 	// 짐꾼 무게 면제 등 태그 의존 로직을 클라에서도 즉시 반영.
 	RecalculateMoveSpeed();
+
+	// 소유 클라 측 루즈 태그 동기화 — 클라에서 TryActivateAbility 의 사전 검사
+	// (ActivationRequiredTags)가 통과해야 서버로 발동 요청이 간다.
+	RefreshRoleLooseTag();
+
 	OnCharacterTagChanged.Broadcast(CharacterTag);
 }
 
@@ -1149,7 +1173,16 @@ void ABaseCharacter::ApplyFakeDeathPhysics(bool bActivate)
 			GetMesh()->SetSimulatePhysics(true);
 			GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
 		}
-		if (APlayerController* PC = Cast<APlayerController>(GetController())) DisableInput(PC);
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			DisableInput(PC);
+			// 가짜 시체 중에도 해제 버튼(HUD)을 클릭할 수 있게 커서를 켠다.
+			// (DisableInput 은 UMG 클릭을 막지 않고, Alt 키 입력만 막는다)
+			if (ABasePlayerController* BPC = Cast<ABasePlayerController>(PC))
+			{
+				BPC->SetHUDCursorMode(true);
+			}
+		}
 	}
 	else
 	{
@@ -1162,7 +1195,14 @@ void ABaseCharacter::ApplyFakeDeathPhysics(bool bActivate)
 		}
 		if (GetCapsuleComponent()) GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 		if (GetCharacterMovement()) GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-		if (APlayerController* PC = Cast<APlayerController>(GetController())) EnableInput(PC);
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			EnableInput(PC);
+			if (ABasePlayerController* BPC = Cast<ABasePlayerController>(PC))
+			{
+				BPC->SetHUDCursorMode(false);
+			}
+		}
 	}
 }
 

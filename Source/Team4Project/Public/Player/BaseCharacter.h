@@ -339,6 +339,12 @@ protected:
 	UFUNCTION()
 	void OnRep_CharacterTag();
 
+	// CharacterTag 를 ASC 의 루즈 태그로 동기화. 역할 능력들의 ActivationRequiredTags
+	// (Character.Special.Outlaw 등)는 ASC "보유 태그"를 검사하므로 이게 없으면 발동이 항상 거부된다.
+	// 서버(SetCharacterTag)와 소유 클라(OnRep)에서만 넣는다 — 타 클라에 넣으면 역할이 노출된다.
+	void RefreshRoleLooseTag();
+	FGameplayTag AppliedRoleLooseTag;
+
 	void InitializeAbilityActorInfo();
 	void ServerInitGAS();
 
