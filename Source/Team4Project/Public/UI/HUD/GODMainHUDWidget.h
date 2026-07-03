@@ -13,6 +13,7 @@ class UTextBlock;
 class UButton;
 class UWidget;
 class UAbilitySystemComponent;
+class UInteractComponent;
 class ABaseCharacter;
 class AGODGameState;
 class AGODPlayerState;
@@ -166,6 +167,19 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> TB_AmmoCount;
 
+	// 중앙 하단 — 인터랙트 프롬프트 ("[F] 열기" 등).
+	// WBP에 이 이름의 TextBlock을 배치하면 자동 연결된다 (Optional이라 없어도 컴파일됨).
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> TB_InteractPrompt;
+
+	// 현재 인터랙트 대상 (없으면 None). WBP에서 월드 마커 위치 투영 등에 사용.
+	UPROPERTY(BlueprintReadOnly, Category = "HUD|Interact")
+	TObjectPtr<AActor> CurrentInteractTarget;
+
+	// 대상/프롬프트 변경 시 WBP 확장 포인트 (마커 표시/애니메이션 등을 BP에서 구현)
+	UFUNCTION(BlueprintImplementableEvent, Category = "HUD|Interact")
+	void BP_OnInteractTargetChanged(AActor* NewTarget, const FText& Prompt);
+
 private:
 	// ─── 런타임 상태 ─────────────────────────────
 
@@ -177,6 +191,9 @@ private:
 
 	UPROPERTY()
 	TWeakObjectPtr<UAbilitySystemComponent> CachedASC;
+
+	UPROPERTY()
+	TWeakObjectPtr<UInteractComponent> CachedInteractComp;
 
 	float CurrentPressure = 0.f;
 	float CurrentFuel = 0.f;
@@ -210,6 +227,10 @@ private:
 
 	UFUNCTION()
 	void OnFuelLevelChanged(float NewFuel);
+
+	// InteractComponent::OnInteractTargetChanged 콜백 — 프롬프트 표시/숨김
+	UFUNCTION()
+	void OnInteractTargetChanged(AActor* NewTarget, FText Prompt);
 
 	// ─── UI 갱신 ────────────────────────────────
 
