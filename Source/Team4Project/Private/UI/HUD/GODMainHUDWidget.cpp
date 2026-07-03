@@ -202,6 +202,21 @@ void UGODMainHUDWidget::UpdateTrainProgress()
 		TB_TrainProgressLabel->SetText(
 			FText::FromString(FString::Printf(TEXT("도착지까지 %.0f%%"), (1.f - Progress) * 100.f)));
 	}
+
+	if (Train_img)
+	{
+		// 오버레이(선로)의 실제 가로 픽셀 길이 (Mun님의 UI 크기에 맞게 조절 가능)
+		float TrackTotalLength = 1000.f;
+
+		// 왼쪽(0%)에서 오른쪽(100%)으로 정방향 전진하기 위한 진짜 진행율 계산
+		float RealMovePercent = (TotalDistance > 0.f) ? FMath::Clamp(CurrentDistance / TotalDistance, 0.f, 1.f) : 0.f;
+
+		// 최종 X 좌표 계산
+		float NewXPosition = RealMovePercent * TrackTotalLength;
+
+		// 기차 위치 이동
+		Train_img->SetRenderTranslation(FVector2D(NewXPosition, 0.f));
+	}
 }
 
 void UGODMainHUDWidget::UpdatePressureDisplay()

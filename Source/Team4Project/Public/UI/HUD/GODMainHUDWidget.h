@@ -58,23 +58,6 @@ struct FRoleHUDSetup
 
 /**
  * 인게임 메인 HUD 위젯.
- *
- * [레이아웃 — WBP_GODMainHUD 에서 구성]
- *   상단 중앙  : 열차 진행도 (PB_TrainProgress, TB_TrainProgressLabel)
- *   우 상단   : 압력 게이지 (PB_Pressure, TB_PressureValue)
- *               연료 게이지 (PB_Fuel, TB_FuelValue)
- *               남은 시간  (TB_RemainingTime)
- *   중앙      : 경고 문구 (TB_PressureWarning, TB_FuelWarning)
- *               조준선    (Img_Crosshair)
- *   우 하단   : 역할 아이콘 + 툴팁 (Img_RoleIcon, Btn_RoleIcon, Panel_RoleTooltip …)
- *               능력 슬롯 x2  (Slot_Ability1, Slot_Ability2)
- *               탄약 표시    (Panel_AmmoDisplay, TB_AmmoCount)
- *
- * [에디터 작업]
- * 1. WBP_GODMainHUD 를 생성하고 이 C++ 클래스를 부모로 지정.
- * 2. 아래 이름으로 위젯을 각 위치에 배치.
- * 3. 클래스 기본값 → RoleSetupMap 에 역할 태그별 아이콘/설명/능력 슬롯을 채움.
- * 4. TotalDistance, FuelWarningThreshold, PressureWarningLevel 을 조정.
  */
 UCLASS()
 class TEAM4PROJECT_API UGODMainHUDWidget : public UUserWidget
@@ -121,6 +104,9 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> TB_TrainProgressLabel;
 
+	UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "HUD|Train")
+	TObjectPtr<UImage> Train_img;
+
 	// 우 상단 — 압력
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UProgressBar> PB_Pressure;
@@ -150,22 +136,20 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> Img_Crosshair;
 
-	// 우 하단 — 역할 아이콘
+	//우 하단 — 역할 아이콘 및 툴팁
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> Img_RoleIcon;
 
-	/** 역할 아이콘 위에 올려놓는 투명 호버 버튼 */
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UButton> Btn_RoleIcon;
 
-	/** 역할 이름/설명 툴팁 패널 (기본 Collapsed) */
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "HUD|Role")
 	TObjectPtr<UWidget> Panel_RoleTooltip;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "HUD|Role")
 	TObjectPtr<UTextBlock> TB_RoleName;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "HUD|Role")
 	TObjectPtr<UTextBlock> TB_RoleDescription;
 
 	// 우 하단 — 능력 슬롯 (WBP_AbilitySlot 상속 위젯을 배치)
@@ -194,15 +178,15 @@ private:
 	UPROPERTY()
 	TWeakObjectPtr<UAbilitySystemComponent> CachedASC;
 
-	float CurrentPressure  = 0.f;
-	float CurrentFuel      = 0.f;
-	float CurrentDistance  = 0.f;
-	int32 CurrentTime      = 0;
+	float CurrentPressure = 0.f;
+	float CurrentFuel = 0.f;
+	float CurrentDistance = 0.f;
+	int32 CurrentTime = 0;
 
 	bool bWarningPressureActive = false;
-	bool bWarningFuelActive     = false;
-	bool bWarningVisible        = true;
-	float WarningBlinkTimer     = 0.f;
+	bool bWarningFuelActive = false;
+	bool bWarningVisible = true;
+	float WarningBlinkTimer = 0.f;
 
 	bool bGunEquipped = false;
 
