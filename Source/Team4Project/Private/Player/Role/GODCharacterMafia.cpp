@@ -3,7 +3,8 @@
 #include "Player/Role/GODCharacterMafia.h"
 #include "Game/BaseGameplayTags.h"
 
-AGODCharacterMafia::AGODCharacterMafia()
+AGODCharacterMafia::AGODCharacterMafia(const FObjectInitializer& ObjectInitializer)
+	:Super(ObjectInitializer)
 {
 	CharacterTag = Character::Special::Mafia;
 }

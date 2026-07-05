@@ -3,7 +3,8 @@
 #include "Player/Role/GODCharacterStoker.h"
 #include "Game/BaseGameplayTags.h"
 
-AGODCharacterStoker::AGODCharacterStoker()
+AGODCharacterStoker::AGODCharacterStoker(const FObjectInitializer& ObjectInitializer)
+	:Super(ObjectInitializer)
 {
 	CharacterTag = Character::Crew::Stoker;
 }

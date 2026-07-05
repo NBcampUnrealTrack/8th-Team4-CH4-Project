@@ -13,5 +13,5 @@ class TEAM4PROJECT_API AGODCharacterMafia : public ABaseCharacter
 {
 	GENERATED_BODY()
 public:
-	AGODCharacterMafia();
+	AGODCharacterMafia(const FObjectInitializer& ObjectInitializer);
 };

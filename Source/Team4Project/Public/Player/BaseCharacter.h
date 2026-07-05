@@ -35,6 +35,8 @@ class UInputMappingContext;
 class UInputAction;
 struct FInputActionValue;
 
+class UCustomMovementComponent;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterDied,
 	ABaseCharacter*, DeadCharacter,
 	AActor*, Killer);
@@ -83,7 +85,7 @@ class TEAM4PROJECT_API ABaseCharacter : public ACharacter, public IAbilitySystem
 	GENERATED_BODY()
 
 public:
-	ABaseCharacter();
+	ABaseCharacter(const FObjectInitializer& ObjectInitializer);
 
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -572,12 +574,18 @@ private:
 	bool RescueToStart();
 
 #pragma region Input
+
 protected:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 	void Move(const FInputActionValue& Value);
 
+	void HandleGroundMovementInput(const FInputActionValue& Value);
+	void HandleClimbMovementInput(const FInputActionValue& Value);
+
 	void Look(const FInputActionValue& Value);
+
+	void OnClimbActionStarted(const FInputActionValue& Value);
 
 	// 미니게임 중에는 점프 억제 (스페이스바가 밸브 정지와 겹치므로)
 	void HandleJumpInput();
@@ -604,5 +612,14 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* LookAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* ClimbAction;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
+	UCustomMovementComponent* CustomMovementComponent;
+
+public:
+	FORCEINLINE UCustomMovementComponent* GetCustomMovementComponent() const { return CustomMovementComponent; }
 #pragma endregion
 };

@@ -3,7 +3,8 @@
 #include "Player/Role/GODCharacterSheriff.h"
 #include "Game/BaseGameplayTags.h"
 
-AGODCharacterSheriff::AGODCharacterSheriff()
+AGODCharacterSheriff::AGODCharacterSheriff(const FObjectInitializer& ObjectInitializer)
+	:Super(ObjectInitializer)
 {
 	CharacterTag = Character::Special::Sheriff;
 }
