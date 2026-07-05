@@ -13,5 +13,5 @@ class TEAM4PROJECT_API AGODCharacterSheriff : public ABaseCharacter
 {
 	GENERATED_BODY()
 public:
-	AGODCharacterSheriff();
+	AGODCharacterSheriff(const FObjectInitializer& ObjectInitializer);
 };

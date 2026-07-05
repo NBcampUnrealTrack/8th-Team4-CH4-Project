@@ -13,5 +13,5 @@ class TEAM4PROJECT_API AGODCharacterWatchman : public ABaseCharacter
 {
 	GENERATED_BODY()
 public:
-	AGODCharacterWatchman();
+	AGODCharacterWatchman(const FObjectInitializer& ObjectInitializer);
 };

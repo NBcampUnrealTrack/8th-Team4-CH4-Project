@@ -13,5 +13,5 @@ class TEAM4PROJECT_API AGODCharacterPorter : public ABaseCharacter
 {
 	GENERATED_BODY()
 public:
-	AGODCharacterPorter();
+	AGODCharacterPorter(const FObjectInitializer& ObjectInitializer);
 };

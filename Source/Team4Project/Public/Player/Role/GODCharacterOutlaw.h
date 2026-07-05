@@ -13,5 +13,5 @@ class TEAM4PROJECT_API AGODCharacterOutlaw : public ABaseCharacter
 {
 	GENERATED_BODY()
 public:
-	AGODCharacterOutlaw();
+	AGODCharacterOutlaw(const FObjectInitializer& ObjectInitializer);
 };

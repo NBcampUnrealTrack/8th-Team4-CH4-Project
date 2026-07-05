@@ -3,7 +3,8 @@
 #include "Player/Role/GODCharacterWatchman.h"
 #include "Game/BaseGameplayTags.h"
 
-AGODCharacterWatchman::AGODCharacterWatchman()
+AGODCharacterWatchman::AGODCharacterWatchman(const FObjectInitializer& ObjectInitializer)
+	:Super(ObjectInitializer)
 {
 	CharacterTag = Character::Crew::Watchman;
 }

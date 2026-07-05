@@ -13,5 +13,5 @@ class TEAM4PROJECT_API AGODCharacterStoker : public ABaseCharacter
 {
 	GENERATED_BODY()
 public:
-	AGODCharacterStoker();
+	AGODCharacterStoker(const FObjectInitializer& ObjectInitializer);
 };

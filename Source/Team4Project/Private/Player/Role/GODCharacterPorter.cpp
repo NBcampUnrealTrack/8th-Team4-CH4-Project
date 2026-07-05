@@ -3,7 +3,8 @@
 #include "Player/Role/GODCharacterPorter.h"
 #include "Game/BaseGameplayTags.h"
 
-AGODCharacterPorter::AGODCharacterPorter()
+AGODCharacterPorter::AGODCharacterPorter(const FObjectInitializer& ObjectInitializer)
+	:Super(ObjectInitializer)
 {
 	CharacterTag = Character::Crew::Porter;
 }

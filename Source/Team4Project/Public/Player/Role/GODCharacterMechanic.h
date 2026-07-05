@@ -13,5 +13,5 @@ class TEAM4PROJECT_API AGODCharacterMechanic : public ABaseCharacter
 {
 	GENERATED_BODY()
 public:
-	AGODCharacterMechanic();
+	AGODCharacterMechanic(const FObjectInitializer& ObjectInitializer);
 };

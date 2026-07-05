@@ -3,7 +3,8 @@
 #include "Player/Role/GODCharacterMechanic.h"
 #include "Game/BaseGameplayTags.h"
 
-AGODCharacterMechanic::AGODCharacterMechanic()
+AGODCharacterMechanic::AGODCharacterMechanic(const FObjectInitializer& ObjectInitializer)
+	:Super(ObjectInitializer)
 {
 	CharacterTag = Character::Crew::Mechanic;
 }
