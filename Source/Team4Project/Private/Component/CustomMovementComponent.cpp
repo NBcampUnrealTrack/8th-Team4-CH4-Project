@@ -25,14 +25,16 @@ void UCustomMovementComponent::OnMovementModeChanged(EMovementMode PreviousMovem
 {
 	if (IsClimbing())
 	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("IsClimbing!!"));
 		bOrientRotationToMovement = false;
-		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(48.f);
+		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(26.f);
 	}
 
 	if (PreviousMovementMode == MOVE_Custom && PreviousCustomMode == ECustomMovementMode::MOVE_Climb)
 	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Climbing ended!!"));
 		bOrientRotationToMovement = true;
-		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(96.f);
+		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(48.f);
 
 		const FRotator DirtyRotation = UpdatedComponent->GetComponentRotation();
 		const FRotator CleanStandRotation = FRotator(0.f, DirtyRotation.Yaw, 0.f);
@@ -217,10 +219,11 @@ bool UCustomMovementComponent::CanClimbDownLedge()
 	const FVector LedgeTraceStart = WalkableSurfaceHit.TraceStart + ComponentForward * ClimbDownLedgeTraceOffset;
 	const FVector LedgeTraceEnd = LedgeTraceStart + DownVector * 200.f;
 
-	FHitResult LedgeTraceHit = DoLineTraceSingleByObject(LedgeTraceStart, LedgeTraceEnd);
+	FHitResult LedgeTraceHit = DoLineTraceSingleByObject(LedgeTraceStart, LedgeTraceEnd,true);
 
 	if (WalkableSurfaceHit.bBlockingHit && !LedgeTraceHit.bBlockingHit)
 	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("can climb ledge"));
 		return true;
 	}
 
@@ -246,6 +249,7 @@ void UCustomMovementComponent::PhysClimb(float deltaTime, int32 Iterations)
 	//Process all the climbable surfases info
 	TraceClimbableSurfaces();
 	ProcessClimbableSurfaceInfo();
+
 
 	//check if we should stop climbing
 	if (CheckShouldStopClimbing() || CheckHasReachedFloor())
@@ -320,14 +324,16 @@ bool UCustomMovementComponent::CheckShouldStopClimbing()
 {
 	if (ClimbableSurfacesTracedResults.IsEmpty())
 	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("no surface Climbing ended!!"));
 		return true;
 	}
 
 	const float DotResult = FVector::DotProduct(CurrentClimbableSurfaceNormal, FVector::UpVector);
 	const float DegreeDiff = FMath::RadiansToDegrees(FMath::Acos(DotResult));
 
-	if (DegreeDiff <= 60.f)
+	if (DegreeDiff <= 40.f)
 	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("degree 60!! climb end!!"));
 		return true;
 	}
 
@@ -338,7 +344,7 @@ bool UCustomMovementComponent::CheckShouldStopClimbing()
 bool UCustomMovementComponent::CheckHasReachedFloor()
 {
 	const FVector DownVector = -UpdatedComponent->GetUpVector();
-	const FVector StartOffset = DownVector * 50.f;
+	const FVector StartOffset = DownVector * 20.f;
 
 	const FVector Start = UpdatedComponent->GetComponentLocation() + StartOffset;
 	const FVector End = Start + DownVector;
@@ -356,6 +362,8 @@ bool UCustomMovementComponent::CheckHasReachedFloor()
 			GetUnrotatedClimbVelocity().Z < -10.f;
 		if (bFloorReached)
 		{
+			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Floor reached!!"));
+
 			return true;
 		}
 	}
@@ -365,7 +373,7 @@ bool UCustomMovementComponent::CheckHasReachedFloor()
 
 bool UCustomMovementComponent::CheckHasReachedLedge()
 {
-	FHitResult LedgetHitResult = TraceFromEyeHeight(100.f, 10.f);
+	FHitResult LedgetHitResult = TraceFromEyeHeight(100.f, -20.f);
 
 	if (!LedgetHitResult.bBlockingHit)
 	{
