@@ -4,6 +4,8 @@
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemBlueprintLibrary.h"
+#include "Sound/GameSoundStatics.h"
+#include "Sound/GameSoundTypes.h"
 
 ADoorBase::ADoorBase()
 {
@@ -43,6 +45,8 @@ void ADoorBase::BeginPlay()
 		DoorMesh->SetRelativeRotation(OpenRotation);
 		TargetRotation = OpenRotation;
 	}
+
+	bLastOpenStateForSound = bIsOpen;
 }
 
 void ADoorBase::Tick(float DeltaTime)
@@ -99,6 +103,18 @@ void ADoorBase::OnRep_IsOpen()
 
 	TargetRotation = bIsOpen ? OpenRotation : ClosedRotation;
 	bIsAnimating = true;
+
+	// 개폐 사운드 — 서버(ToggleDoor 의 수동 호출)와 클라(복제) 양쪽에서 재생.
+	// 접속 직후 초기 복제로 상태만 맞춰질 때(GameTime 0 부근)는 소리를 내지 않는다.
+	if (bIsOpen != bLastOpenStateForSound)
+	{
+		bLastOpenStateForSound = bIsOpen;
+		if (GetGameTimeSinceCreation() > 1.f)
+		{
+			UGameSoundStatics::PlaySoundAtLocationFromTable(this, SoundTable,
+				bIsOpen ? SoundRows::DoorOpen : SoundRows::DoorClose, GetActorLocation());
+		}
+	}
 }
 
 void ADoorBase::OnRep_IsLocked()

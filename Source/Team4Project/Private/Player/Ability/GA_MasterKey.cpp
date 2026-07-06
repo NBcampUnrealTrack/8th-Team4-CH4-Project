@@ -3,6 +3,7 @@
 #include "Player/Ability/GA_MasterKey.h"
 #include "Player/BaseCharacter.h"
 #include "Game/BaseGameplayTags.h"
+#include "Sound/GameSoundTypes.h"
 
 UGA_MasterKey::UGA_MasterKey()
 {
@@ -37,5 +38,6 @@ void UGA_MasterKey::ActivateAbility(
 	}
 
 	Mafia->UseMasterKey(DoorActor);
+	Mafia->Client_PlayCharacterSound(SoundRows::AbilityMasterKey);
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }

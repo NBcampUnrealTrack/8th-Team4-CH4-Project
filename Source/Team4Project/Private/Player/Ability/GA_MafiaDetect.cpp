@@ -4,6 +4,7 @@
 #include "Player/Ability/GA_MafiaDetect.h"
 #include "Player/BaseCharacter.h"
 #include "Player/Weapon/BaseWeapon.h"
+#include "Sound/GameSoundTypes.h"
 #include "DrawDebugHelpers.h"
 
 UGA_MafiaDetect::UGA_MafiaDetect()
@@ -32,6 +33,9 @@ void UGA_MafiaDetect::ActivateAbility(
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
+
+	// 감별 사용음 — 본인만 (감별 시도가 타인에게 들리면 보안관 위치/행동이 노출됨).
+	Character->Client_PlayCharacterSound(SoundRows::AbilityDetect);
 
 	if (Character->HasAuthority())
 	{

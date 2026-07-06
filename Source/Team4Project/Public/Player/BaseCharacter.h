@@ -36,6 +36,7 @@ class UInputAction;
 struct FInputActionValue;
 
 class UCustomMovementComponent;
+class UDataTable;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterDied,
 	ABaseCharacter*, DeadCharacter,
@@ -152,6 +153,33 @@ public:
 	// 이 캐릭터 위치에 나이아가라 이펙트를 재생(전 클라). 마피아 감별 표식 등에 사용.
 	UFUNCTION(NetMulticast, Unreliable)
 	void Multicast_PlayNiagaraAtSelf(UNiagaraSystem* System);
+
+	// ============================================================
+	// 사운드 — 캐릭터 사운드 DT (발소리/총/문/능력. 행 이름은 SoundRows 참조)
+	// ============================================================
+
+	// 캐릭터 사운드 DT. BP 디폴트에서 이것 하나만 지정하면 모든 캐릭터 사운드를 행 이름으로 조회한다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Sound")
+	TObjectPtr<UDataTable> CharacterSoundTable;
+
+	UFUNCTION(BlueprintPure, Category = "Sound")
+	UDataTable* GetCharacterSoundTable() const { return CharacterSoundTable; }
+
+	// 이 캐릭터 위치에서 DT 사운드 재생 — 호출한 머신에서만 들림 (애님 노티파이 발소리 등 로컬 연출용).
+	UFUNCTION(BlueprintCallable, Category = "Sound")
+	void PlayCharacterSoundLocal(FName RowName);
+
+	// 전 클라에서 이 캐릭터 위치에 DT 사운드 재생 (서버에서 호출 — 아이템 줍기/버리기, 죽은 척 등).
+	UFUNCTION(NetMulticast, Unreliable, BlueprintCallable, Category = "Sound")
+	void Multicast_PlayCharacterSound(FName RowName);
+
+	// 소유 클라에서만 재생 (서버에서 호출 — 능력 사용음. 타인에게 들리면 역할이 노출되므로 본인 전용).
+	UFUNCTION(Client, Unreliable)
+	void Client_PlayCharacterSound(FName RowName);
+
+	// 점프/착지 사운드 훅.
+	virtual void OnJumped_Implementation() override;
+	virtual void Landed(const FHitResult& Hit) override;
 
 	// ============================================================
 	// 스킨

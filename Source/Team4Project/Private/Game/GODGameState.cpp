@@ -1,5 +1,11 @@
 ﻿#include "Game/GODGameState.h"
 #include "Net/UnrealNetwork.h"
+#include "Player/GODPlayerState.h"
+#include "Sound/GameSoundStatics.h"
+#include "Sound/GameSoundTypes.h"
+#include "GameFramework/PlayerController.h"
+#include "TimerManager.h"
+#include "Engine/World.h"
 
 AGODGameState::AGODGameState()
 {
@@ -8,6 +14,98 @@ AGODGameState::AGODGameState()
 	DistanceToDestination = 10000.0f;
 	bGunsUnlocked = false;
 	LobbyCountdown = 0;
+}
+
+void AGODGameState::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// 데디케이티드 서버는 들을 사람이 없으므로 감시 타이머 불필요.
+	if (IsNetMode(NM_DedicatedServer))
+	{
+		return;
+	}
+
+	LastSoundPhase = CurrentPhase;
+	GetWorldTimerManager().SetTimer(SoundMonitorTimer, this, &AGODGameState::SoundMonitorTick, 0.25f, true);
+}
+
+void AGODGameState::SoundMonitorTick()
+{
+	// 페이즈 전환 사운드 (출발 / 승리 / 패배)
+	if (CurrentPhase != LastSoundPhase)
+	{
+		PlayPhaseSound(CurrentPhase);
+		LastSoundPhase = CurrentPhase;
+	}
+
+	// 경고음은 게임 진행 중에만
+	if (CurrentPhase != EGamePhase::Playing)
+	{
+		return;
+	}
+
+	const double Now = GetWorld()->GetTimeSeconds();
+
+	if (PressureLevel >= PressureWarningThreshold &&
+		Now - LastPressureWarningTime >= WarningRepeatInterval)
+	{
+		LastPressureWarningTime = Now;
+		UGameSoundStatics::PlaySound2DFromTable(this, GameSoundTable, SoundRows::WarningPressure);
+	}
+
+	if (FuelLevel > FuelLowThreshold)
+	{
+		bFuelInitialized = true;
+	}
+	else if (bFuelInitialized && Now - LastFuelWarningTime >= WarningRepeatInterval)
+	{
+		LastFuelWarningTime = Now;
+		UGameSoundStatics::PlaySound2DFromTable(this, GameSoundTable, SoundRows::WarningFuelLow);
+	}
+}
+
+void AGODGameState::PlayPhaseSound(EGamePhase NewPhase)
+{
+	switch (NewPhase)
+	{
+	case EGamePhase::Playing:
+		UGameSoundStatics::PlaySound2DFromTable(this, GameSoundTable, SoundRows::GameStart);
+		break;
+
+	case EGamePhase::CitizensWon:
+	case EGamePhase::OutlawWon:
+	case EGamePhase::MafiaWon:
+		UGameSoundStatics::PlaySound2DFromTable(this, GameSoundTable,
+			IsLocalPlayerWinner(NewPhase) ? SoundRows::GameVictory : SoundRows::GameDefeat);
+		break;
+
+	default:
+		break;
+	}
+}
+
+bool AGODGameState::IsLocalPlayerWinner(EGamePhase WinPhase) const
+{
+	const UGameInstance* GI = GetGameInstance();
+	const APlayerController* PC = GI ? GI->GetFirstLocalPlayerController() : nullptr;
+	const AGODPlayerState* PS = PC ? PC->GetPlayerState<AGODPlayerState>() : nullptr;
+	if (!PS)
+	{
+		return false;
+	}
+
+	switch (WinPhase)
+	{
+	case EGamePhase::CitizensWon:
+		return PS->MainRole == EMainRole::Citizen || PS->MainRole == EMainRole::Sheriff;
+	case EGamePhase::MafiaWon:
+		return PS->MainRole == EMainRole::Mafia;
+	case EGamePhase::OutlawWon:
+		return PS->MainRole == EMainRole::Outlaw;
+	default:
+		return false;
+	}
 }
 
 void AGODGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

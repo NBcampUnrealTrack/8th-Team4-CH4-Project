@@ -8,6 +8,8 @@ class UStaticMeshComponent;
 class UFurnanceComponent;
 class UPressureComponent;
 class AGODTrainTrack;
+class UAudioComponent;
+class UDataTable;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTrainArrived);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTrainDerailed);
@@ -187,9 +189,23 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TArray<TObjectPtr<USceneComponent>> CarPivots;
 
+	// 열차 위치에서 게임 사운드 DT 행 재생 (전 클라 — 폭발 등 서버 이벤트용)
+	UFUNCTION(NetMulticast, Unreliable)
+	void Multicast_PlayTrainSound(FName RowName);
+
 private:
 	UFUNCTION() void OnRep_bIsDerailed();
 	UFUNCTION() void OnRep_bIsRunning();
+
+	// 게임 사운드 DT — GameState BP 에 지정된 것을 읽어온다 (열차에 별도 지정 불필요).
+	const UDataTable* GetGameSoundTable() const;
+
+	// 주행/탈선 상태를 운행 루프음에 반영 (각 머신 로컬).
+	void UpdateRunningAudio();
+
+	// 운행 루프음 (Train.Running 행, TrainMesh 부착)
+	UPROPERTY(Transient)
+	TObjectPtr<UAudioComponent> RunningAudio;
 
 	// 현재 화로 연료 비율로부터 목표 속도를 계산
 	float ComputeTargetSpeed() const;

@@ -3,6 +3,7 @@
 #include "Player/Ability/GA_StartFakeDeath.h"
 #include "Player/BaseCharacter.h"
 #include "Game/BaseGameplayTags.h"
+#include "Sound/GameSoundTypes.h"
 
 UGA_StartFakeDeath::UGA_StartFakeDeath()
 {
@@ -35,5 +36,8 @@ void UGA_StartFakeDeath::ActivateAbility(
 	}
 
 	Outlaw->StartFakeDeath();
+	// 죽은 척은 유일하게 전 클라 재생 — 진짜 사망(Multicast_HandleDeath)과 같은 행(Character.Die)을
+	// 재생해 소리로 구분되지 않게 한다.
+	Outlaw->Multicast_PlayCharacterSound(SoundRows::CharacterDie);
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }

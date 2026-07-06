@@ -5,6 +5,9 @@
 #include "Components/BoxComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
+#include "Components/AudioComponent.h"
+#include "Sound/GameSoundStatics.h"
+#include "Sound/GameSoundTypes.h"
 
 // Sets default values
 ASinkBase::ASinkBase()
@@ -127,10 +130,34 @@ void ASinkBase::SetInUse(bool bNewInUse)
 
 	// OnRep 은 서버(리슨 호스트)에서 호출되지 않으므로 연출 훅을 직접 호출
 	OnWashingStateChanged(bIsInUse);
+	UpdateWashingAudio();
 }
 
 void ASinkBase::OnRep_IsInUse()
 {
 	OnWashingStateChanged(bIsInUse);
+	UpdateWashingAudio();
+}
+
+void ASinkBase::UpdateWashingAudio()
+{
+	if (GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+
+	if (bIsInUse)
+	{
+		if (!WashingAudio)
+		{
+			WashingAudio = UGameSoundStatics::SpawnSoundAttachedFromTable(
+				SoundTable, SoundRows::SinkWashing, BasinMesh ? BasinMesh.Get() : GetRootComponent());
+		}
+	}
+	else if (WashingAudio)
+	{
+		WashingAudio->Stop();
+		WashingAudio = nullptr;
+	}
 }
 

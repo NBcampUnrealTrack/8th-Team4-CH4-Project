@@ -5,6 +5,7 @@
 #include "Component/InteractComponent.h"
 #include "InteractiveProp/PressureValve.h"
 #include "Game/BaseGameplayTags.h"
+#include "Sound/GameSoundTypes.h"
 
 UGA_ForceClosePressureValve::UGA_ForceClosePressureValve()
 {
@@ -42,5 +43,6 @@ void UGA_ForceClosePressureValve::ActivateAbility(
 	}
 
 	Stoker->ForceClosePressureValve(ValveActor);
+	Stoker->Client_PlayCharacterSound(SoundRows::AbilityForceValve);
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }

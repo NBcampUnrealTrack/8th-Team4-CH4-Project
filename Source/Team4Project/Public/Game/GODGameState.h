@@ -24,6 +24,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPressureLevelChanged, float, NewP
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrainFuelLevelChanged, float, NewFuel);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGunsUnlocked);
 
+class UDataTable;
+
 UCLASS()
 class TEAM4PROJECT_API AGODGameState : public AGameStateBase
 {
@@ -32,6 +34,7 @@ class TEAM4PROJECT_API AGODGameState : public AGameStateBase
 public:
 	AGODGameState();
 
+	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UPROPERTY(ReplicatedUsing = OnRep_GamePhase, BlueprintReadOnly, Category = "Game State")
@@ -120,4 +123,44 @@ public:
 
 	UFUNCTION()
 	void OnRep_ChatHistory();
+
+	// ============================================================
+	// 게임 전체 사운드 — 게임 사운드 DT (경고/출발/승패. 행 이름은 SoundRows 참조)
+	// ============================================================
+
+	/** 게임 전체 사운드 DT. GameState BP 디폴트에서 이것 하나만 지정. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Sound")
+	TObjectPtr<UDataTable> GameSoundTable;
+
+	/** 압력 경고음이 울리기 시작하는 압력값 (0~100) */
+	UPROPERTY(EditDefaultsOnly, Category = "Sound")
+	float PressureWarningThreshold = 80.f;
+
+	/** 연료 부족음이 울리기 시작하는 연료 비율 (0~1) */
+	UPROPERTY(EditDefaultsOnly, Category = "Sound")
+	float FuelLowThreshold = 0.2f;
+
+	/** 경고음 반복 간격 (초) */
+	UPROPERTY(EditDefaultsOnly, Category = "Sound")
+	float WarningRepeatInterval = 5.f;
+
+protected:
+	/**
+	 * 0.25초 주기로 페이즈/압력/연료를 감시해 각 머신 로컬에서 사운드 재생.
+	 * OnRep 대신 폴링인 이유: 리슨 서버(호스트)는 OnRep 이 호출되지 않고,
+	 * 압력/연료는 매 틱 갱신이라 OnRep 기반 트리거는 스팸이 되기 때문.
+	 */
+	void SoundMonitorTick();
+	void PlayPhaseSound(EGamePhase NewPhase);
+
+	/** 로컬 플레이어의 MainRole 기준 승리 여부 (승리/패배 사운드 분기). */
+	bool IsLocalPlayerWinner(EGamePhase WinPhase) const;
+
+	FTimerHandle SoundMonitorTimer;
+	EGamePhase LastSoundPhase = EGamePhase::WaitingForPlayers;
+	double LastPressureWarningTime = -1e9;
+	double LastFuelWarningTime = -1e9;
+
+	// 연료가 한 번이라도 임계값 위로 올라온 뒤에만 부족 경고 (시작 직후 0 초기값 오경보 방지).
+	bool bFuelInitialized = false;
 };

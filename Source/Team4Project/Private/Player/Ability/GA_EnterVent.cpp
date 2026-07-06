@@ -3,6 +3,7 @@
 #include "Player/Ability/GA_EnterVent.h"
 #include "Player/BaseCharacter.h"
 #include "Game/BaseGameplayTags.h"
+#include "Sound/GameSoundTypes.h"
 
 UGA_EnterVent::UGA_EnterVent()
 {
@@ -30,6 +31,7 @@ void UGA_EnterVent::ActivateAbility(
 	{
 		// 퇴장: 쿨타임 소비 없이 즉시 나감
 		Mafia->ExitVent();
+		Mafia->Client_PlayCharacterSound(SoundRows::AbilityVent);
 	}
 	else
 	{
@@ -44,6 +46,7 @@ void UGA_EnterVent::ActivateAbility(
 			? const_cast<AActor*>(Cast<AActor>(TriggerEventData->OptionalObject.Get())) : nullptr;
 
 		Mafia->EnterVent(VentActor);
+		Mafia->Client_PlayCharacterSound(SoundRows::AbilityVent);
 	}
 
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);

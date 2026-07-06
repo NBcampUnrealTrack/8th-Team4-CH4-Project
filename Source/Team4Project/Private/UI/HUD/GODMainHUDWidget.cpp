@@ -13,6 +13,9 @@
 #include "Player/Component/BaseAttributeSet.h"
 #include "Component/InteractComponent.h"
 #include "TimerManager.h"
+#include "Components/AudioComponent.h"
+#include "Sound/GameSoundStatics.h"
+#include "Sound/GameSoundTypes.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 초기화
@@ -44,10 +47,22 @@ void UGODMainHUDWidget::NativeConstruct()
 	}
 
 	TryBindGameState();
+
+	// 인게임 BGM 시작 (루프는 사운드 애셋에서 설정)
+	if (!BGMAudio)
+	{
+		BGMAudio = UGameSoundStatics::SpawnSound2DFromTable(this, UISoundTable, SoundRows::BGMInGame);
+	}
 }
 
 void UGODMainHUDWidget::NativeDestruct()
 {
+	if (BGMAudio)
+	{
+		BGMAudio->Stop();
+		BGMAudio = nullptr;
+	}
+
 	// GameState 델리게이트 언바인딩
 	if (AGODGameState* GS = CachedGameState.Get())
 	{
@@ -180,6 +195,12 @@ void UGODMainHUDWidget::OnCharacterTagChanged(const FGameplayTag& NewTag)
 
 void UGODMainHUDWidget::OnGunsUnlocked()
 {
+	// 알림음 (게임 사운드 DT 의 Game.GunsUnlocked 행 — GameState 에서 읽음)
+	if (const AGODGameState* GS = CachedGameState.Get())
+	{
+		UGameSoundStatics::PlaySound2DFromTable(this, GS->GameSoundTable, SoundRows::GameGunsUnlocked);
+	}
+
 	// "총기 제한 해제" 알림 — 일정 시간 표시 후 자동 숨김. BP 연출 확장 포인트도 호출.
 	if (TB_GunsUnlockedNotice)
 	{

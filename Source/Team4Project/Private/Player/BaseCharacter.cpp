@@ -49,6 +49,8 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "Component/CustomMovementComponent.h"
+#include "Sound/GameSoundStatics.h"
+#include "Sound/GameSoundTypes.h"
 ABaseCharacter::ABaseCharacter(const FObjectInitializer& ObjectInitializer)
 	:Super(ObjectInitializer.SetDefaultSubobjectClass<UCustomMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
@@ -627,6 +629,49 @@ void ABaseCharacter::Multicast_PlayNiagaraAtSelf_Implementation(UNiagaraSystem* 
 }
 
 // ============================================================
+// 사운드 — 캐릭터 사운드 DT
+// ============================================================
+
+void ABaseCharacter::PlayCharacterSoundLocal(FName RowName)
+{
+	UGameSoundStatics::PlaySoundAtLocationFromTable(this, CharacterSoundTable, RowName, GetActorLocation());
+}
+
+void ABaseCharacter::Multicast_PlayCharacterSound_Implementation(FName RowName)
+{
+	if (GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	PlayCharacterSoundLocal(RowName);
+}
+
+void ABaseCharacter::Client_PlayCharacterSound_Implementation(FName RowName)
+{
+	PlayCharacterSoundLocal(RowName);
+}
+
+void ABaseCharacter::OnJumped_Implementation()
+{
+	Super::OnJumped_Implementation();
+
+	if (GetNetMode() != NM_DedicatedServer)
+	{
+		PlayCharacterSoundLocal(SoundRows::FootstepJump);
+	}
+}
+
+void ABaseCharacter::Landed(const FHitResult& Hit)
+{
+	Super::Landed(Hit);
+
+	if (GetNetMode() != NM_DedicatedServer)
+	{
+		PlayCharacterSoundLocal(SoundRows::FootstepLand);
+	}
+}
+
+// ============================================================
 // 장착 슬롯 (총/물리 아이템 공용, 한 번에 하나만)
 // ============================================================
 
@@ -670,6 +715,10 @@ void ABaseCharacter::Server_DropHeldItem_Implementation()
 	if (IsValid(CurrentHeldItem))
 	{
 		CurrentHeldItem->Server_Drop(); // 서버 로컬 호출 → 즉시 실행
+
+		// 버리기 사운드는 플레이어가 직접 버리는 이 경로에서만 낸다
+		// (화로 투입/기어 조립 내부의 Server_Drop 에서는 각자의 사운드가 따로 있다).
+		Multicast_PlayCharacterSound(SoundRows::ItemDrop);
 	}
 }
 
@@ -747,6 +796,12 @@ void ABaseCharacter::Die(AActor* Killer)
 
 void ABaseCharacter::Multicast_HandleDeath_Implementation()
 {
+	// 사망음 (전 클라, 이 위치). 무법자 죽은 척도 같은 행을 재생해 구분되지 않게 한다.
+	if (GetNetMode() != NM_DedicatedServer)
+	{
+		PlayCharacterSoundLocal(SoundRows::CharacterDie);
+	}
+
 	// 사망 시점에 밟고 있던 발판(열차 등)과 공중 여부를 먼저 기억한다. (움직임 비활성화 전에 조회)
 	UPrimitiveComponent* DeathBase = nullptr;
 	bool bDiedInAir = false;
@@ -1491,6 +1546,10 @@ void ABaseCharacter::OnClimbActionStarted(const FInputActionValue& Value)
 	if (!CustomMovementComponent->IsClimbing())
 	{
 		CustomMovementComponent->ToggleClimbing(true);
+		if (CustomMovementComponent->IsClimbing())
+		{
+			PlayCharacterSoundLocal(SoundRows::FootstepClimb);
+		}
 	}
 	else
 	{
@@ -1553,6 +1612,9 @@ void ABaseCharacter::Client_StartGearQTE_Implementation(AGearSlot* Slot)
 	ActiveGearQTESlot = Slot;
 	bInputLockedByMinigame = true;
 
+	// 미니게임음은 본인만 듣는 UI 성 사운드라 2D 로컬 재생.
+	UGameSoundStatics::PlaySound2DFromTable(this, CharacterSoundTable, SoundRows::QTEStart);
+
 	if (ABasePlayerController* PC = Cast<ABasePlayerController>(GetController()))
 	{
 		if (AGODHUD* HUD = Cast<AGODHUD>(PC->GetHUD()))
@@ -1566,6 +1628,9 @@ void ABaseCharacter::Client_EndGearQTE_Implementation(bool bSuccess)
 {
 	ActiveGearQTESlot = nullptr;
 	bInputLockedByMinigame = false;
+
+	UGameSoundStatics::PlaySound2DFromTable(this, CharacterSoundTable,
+		bSuccess ? SoundRows::QTESuccess : SoundRows::QTEFail);
 
 	if (ABasePlayerController* PC = Cast<ABasePlayerController>(GetController()))
 	{
@@ -1581,6 +1646,8 @@ void ABaseCharacter::Client_StartPressureMinigame_Implementation(APressureValve*
 	ActivePressureValve = Valve;
 	bInputLockedByMinigame = true;
 
+	UGameSoundStatics::PlaySound2DFromTable(this, CharacterSoundTable, SoundRows::ValveStart);
+
 	if (ABasePlayerController* PC = Cast<ABasePlayerController>(GetController()))
 	{
 		if (AGODHUD* HUD = Cast<AGODHUD>(PC->GetHUD()))
@@ -1594,6 +1661,9 @@ void ABaseCharacter::Client_EndPressureMinigame_Implementation(bool bSuccess)
 {
 	ActivePressureValve = nullptr;
 	bInputLockedByMinigame = false;
+
+	UGameSoundStatics::PlaySound2DFromTable(this, CharacterSoundTable,
+		bSuccess ? SoundRows::ValveSuccess : SoundRows::ValveFail);
 
 	if (ABasePlayerController* PC = Cast<ABasePlayerController>(GetController()))
 	{

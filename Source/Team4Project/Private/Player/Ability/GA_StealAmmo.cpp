@@ -3,6 +3,7 @@
 #include "Player/Ability/GA_StealAmmo.h"
 #include "Player/BaseCharacter.h"
 #include "Game/BaseGameplayTags.h"
+#include "Sound/GameSoundTypes.h"
 
 UGA_StealAmmo::UGA_StealAmmo()
 {
@@ -36,5 +37,6 @@ void UGA_StealAmmo::ActivateAbility(
 	}
 
 	Outlaw->StealAmmo(DeadCharacter);
+	Outlaw->Client_PlayCharacterSound(SoundRows::AbilityStealAmmo);
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }

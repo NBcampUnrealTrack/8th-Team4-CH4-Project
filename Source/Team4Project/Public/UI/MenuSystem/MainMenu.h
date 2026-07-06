@@ -44,6 +44,10 @@ public:
 protected:
 	virtual bool Initialize() override;
 
+	// 메인 메뉴 BGM 시작/정지 (UISoundTable 의 BGM.MainMenu 행)
+	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
+
 	// ESC 로 스킨 메뉴 → 메인 메뉴 복귀
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 

@@ -2,10 +2,55 @@
 
 
 #include "UI/MenuSystem/MenuWidget.h"
+#include "Sound/GameSoundStatics.h"
+#include "Sound/GameSoundTypes.h"
+#include "Components/AudioComponent.h"
+#include "Components/Button.h"
 
 void UMenuWidget::SetMenuInterface(IMenuInterface* _MenuInterface)
 {
 	this->MenuInterface = _MenuInterface;
+}
+
+void UMenuWidget::PlayUISound(FName RowName)
+{
+	UGameSoundStatics::PlaySound2DFromTable(this, UISoundTable, RowName);
+}
+
+UAudioComponent* UMenuWidget::PlayUIMusic(FName RowName)
+{
+	StopUIMusic();
+	ActiveMusic = UGameSoundStatics::SpawnSound2DFromTable(this, UISoundTable, RowName);
+	return ActiveMusic;
+}
+
+void UMenuWidget::StopUIMusic()
+{
+	if (ActiveMusic)
+	{
+		ActiveMusic->Stop();
+		ActiveMusic = nullptr;
+	}
+}
+
+void UMenuWidget::PlayClickSound()
+{
+	PlayUISound(SoundRows::UIClick);
+}
+
+void UMenuWidget::PlayHoverSound()
+{
+	PlayUISound(SoundRows::UIHover);
+}
+
+void UMenuWidget::BindButtonSounds(UButton* Button)
+{
+	if (!Button)
+	{
+		return;
+	}
+	Button->OnClicked.AddDynamic(this, &UMenuWidget::PlayClickSound);
+	Button->OnHovered.AddDynamic(this, &UMenuWidget::PlayHoverSound);
 }
 
 void UMenuWidget::Setup()

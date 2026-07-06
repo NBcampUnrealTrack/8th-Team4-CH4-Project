@@ -10,6 +10,10 @@
 #include "NiagaraFunctionLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
+#include "Components/AudioComponent.h"
+#include "Game/GODGameState.h"
+#include "Sound/GameSoundStatics.h"
+#include "Sound/GameSoundTypes.h"
 
 ACoalFeeder::ACoalFeeder()
 {
@@ -148,6 +152,22 @@ void ACoalFeeder::UpdateFireFX()
 		FireLight->SetIntensity(bBurning
 			? FireLightIntensity * FMath::Lerp(0.35f, 1.f, Percent)
 			: 0.f);
+	}
+
+	// 연소 루프음 — 불 이펙트와 동일하게 켜고 끈다 (게임 사운드 DT 는 GameState 에서).
+	if (bBurning && !BurningAudio)
+	{
+		if (const AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr)
+		{
+			BurningAudio = UGameSoundStatics::SpawnSoundAttachedFromTable(
+				GS->GameSoundTable, SoundRows::FurnaceBurning,
+				FireEffect ? static_cast<USceneComponent*>(FireEffect) : GetRootComponent());
+		}
+	}
+	else if (!bBurning && BurningAudio)
+	{
+		BurningAudio->FadeOut(1.f, 0.f); // 불이 사그라들듯 소리도 페이드아웃
+		BurningAudio = nullptr;
 	}
 }
 

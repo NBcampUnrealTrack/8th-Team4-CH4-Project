@@ -3,6 +3,7 @@
 #include "Player/Ability/GA_ToggleLantern.h"
 #include "Player/BaseCharacter.h"
 #include "Game/BaseGameplayTags.h"
+#include "Sound/GameSoundTypes.h"
 
 UGA_ToggleLantern::UGA_ToggleLantern()
 {
@@ -33,5 +34,7 @@ void UGA_ToggleLantern::ActivateAbility(
 	}
 
 	Watchman->ToggleLantern();
+	// 랜턴 빛이 본인에게만 보이듯, 토글음도 본인만 듣는다 (소리로 순찰자 노출 방지).
+	Watchman->Client_PlayCharacterSound(SoundRows::AbilityLantern);
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }

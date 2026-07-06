@@ -4,6 +4,7 @@
 #include "Player/Ability/GA_Invisible.h"
 #include "Player/BaseCharacter.h"
 #include "Game/BaseGameplayTags.h"
+#include "Sound/GameSoundTypes.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
 
@@ -38,6 +39,9 @@ void UGA_Invisible::ActivateAbility(
 	}
 
 	Character->SetInvisibleForDuration(InvisibleDuration);
+
+	// 발동음이 타인에게 들리면 투명화 위치가 노출되므로 본인만 듣는다.
+	Character->Client_PlayCharacterSound(SoundRows::AbilityInvisible);
 
 	// 지속시간 동안 어빌리티를 활성 유지(이 동안 Ability.Invisible 보유 → 공격 차단), 만료 시 종료.
 	UWorld* World = GetWorld();

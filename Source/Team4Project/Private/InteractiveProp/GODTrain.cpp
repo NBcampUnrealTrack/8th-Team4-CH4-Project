@@ -7,7 +7,10 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SplineComponent.h"
 #include "Components/SceneComponent.h"
+#include "Components/AudioComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Sound/GameSoundStatics.h"
+#include "Sound/GameSoundTypes.h"
 
 // 기차 칸(피벗) 개수. BP에서 각 피벗(Car_0~) 밑에 메시를 붙인다.
 static constexpr int32 GTrainNumCars = 6;
@@ -316,6 +319,44 @@ void AGODTrain::OnRep_bIsRunning()
 	{
 		OnTrainStarted.Broadcast();
 	}
+
+	UpdateRunningAudio();
+}
+
+const UDataTable* AGODTrain::GetGameSoundTable() const
+{
+	const AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr;
+	return GS ? GS->GameSoundTable.Get() : nullptr;
+}
+
+void AGODTrain::UpdateRunningAudio()
+{
+	if (GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+
+	const bool bShouldPlay = bIsRunning && !bIsDerailed;
+
+	if (bShouldPlay && !RunningAudio)
+	{
+		RunningAudio = UGameSoundStatics::SpawnSoundAttachedFromTable(
+			GetGameSoundTable(), SoundRows::TrainRunning, TrainMesh);
+	}
+	else if (!bShouldPlay && RunningAudio)
+	{
+		RunningAudio->FadeOut(1.f, 0.f);
+		RunningAudio = nullptr;
+	}
+}
+
+void AGODTrain::Multicast_PlayTrainSound_Implementation(FName RowName)
+{
+	if (GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	UGameSoundStatics::PlaySoundAtLocationFromTable(this, GetGameSoundTable(), RowName, GetActorLocation());
 }
 
 void AGODTrain::ApplyTrackSwitchImpulse(float ImpulseStrength, float ImpulseRadius)
@@ -389,6 +430,9 @@ void AGODTrain::OnPressureExploded()
 	// 폭발 시 즉시 속도 패널티
 	TrainSpeed = FMath::Max(0.f, TrainSpeed - ExplosionSpeedPenalty);
 	// 이펙트/데미지는 BP에서 OnPressureExplode 델리게이트에 바인딩
+
+	// 폭발음 (서버에서만 바인딩되는 델리게이트라 멀티캐스트로 전 클라 재생)
+	Multicast_PlayTrainSound(SoundRows::TrainExplosion);
 }
 
 void AGODTrain::OnPressureWarningStarted()
@@ -429,5 +473,14 @@ void AGODTrain::OnRep_bIsDerailed()
 	if (bIsDerailed)
 	{
 		OnTrainDerailed.Broadcast();
+
+		// 탈선음 — OnRep 은 서버(수동 호출)와 클라(복제) 모두에서 실행되므로 각자 로컬 재생.
+		if (GetNetMode() != NM_DedicatedServer)
+		{
+			UGameSoundStatics::PlaySoundAtLocationFromTable(
+				this, GetGameSoundTable(), SoundRows::TrainDerail, GetActorLocation());
+		}
 	}
+
+	UpdateRunningAudio();
 }

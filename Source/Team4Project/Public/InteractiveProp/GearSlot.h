@@ -11,6 +11,7 @@ class UBoxComponent;
 class APickupGear;
 class ABaseCharacter;
 class UPressureComponent;
+class UDataTable;
 
 // 메인 기어가 장착되는 고정 축(소켓). 와이어커터로 깨지면 MountedGear가 물리적으로 튕겨나가고,
 // 기어를 들고 온 플레이어가 F로 화살표 QTE를 통과하면 재조립된다.
@@ -74,6 +75,15 @@ public:
 	// 이탈 시 부여할 속도(cm/s). AddImpulse(bVelChange=true) 기준이라 질량 무관.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gear")
 	float EjectImpulseStrength = 400.f;
+
+	// 파손/조립 사운드 DT (캐릭터 사운드 DT 공용 — Gear.Break / Gear.Repair 행 사용)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gear")
+	TObjectPtr<UDataTable> SoundTable;
+
+	// 슬롯 위치에서 DT 사운드 재생 (전 클라). 기어 파손은 주변 플레이어에게 들려야
+	// 사보타주를 알아챌 수 있으므로 능력음(로컬)과 달리 월드 사운드로 낸다.
+	UFUNCTION(NetMulticast, Unreliable)
+	void Multicast_PlaySlotSound(FName RowName);
 
 	// 마피아 와이어커터에 의해 호출 (서버 전용)
 	void BreakGear();
