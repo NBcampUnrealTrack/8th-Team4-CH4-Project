@@ -347,6 +347,7 @@ void UMainMenu::ConfirmJoinPasswordPressed()
                 PasswordErrorText->SetText(NSLOCTEXT("MainMenu", "WrongPassword",
                     "비밀번호가 올바르지 않습니다."));
                 PasswordErrorText->SetVisibility(ESlateVisibility::HitTestInvisible);
+                PlayPasswordErrorAnim();
             }
             else if (GEngine)
             {
