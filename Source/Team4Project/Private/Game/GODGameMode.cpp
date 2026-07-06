@@ -18,6 +18,7 @@
 #include "UI/HUD/GODHUD.h"
 #include "Game/PlayerGameInstance.h"
 #include "Kismet/GameplayStatics.h"
+#include "Sound/GameSoundTypes.h"
 
 
 AGODGameMode::AGODGameMode()
@@ -467,6 +468,9 @@ void AGODGameMode::HandlePlayerDeath(AGODPlayerState* KillerPS, AGODPlayerState*
 					// MaxAmmo 는 PreAttributeChange 에서 클램프된다.
 					ASC->ApplyModToAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute(),
 						EGameplayModOp::Additive, 1.f);
+
+					// 리필 규칙 발동 = 장전 사운드 (킬러 위치, 전 클라).
+					KillerChar->Multicast_PlayCharacterSound(SoundRows::GunReload);
 				}
 			}
 		}

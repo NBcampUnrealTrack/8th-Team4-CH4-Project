@@ -7,6 +7,7 @@
 
 class UStaticMeshComponent;
 class UBoxComponent;
+class UDataTable;
 
 UCLASS()
 class TEAM4PROJECT_API ADoorBase : public AActor, public IInteractable
@@ -81,6 +82,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Door|Config")
 	bool bStartLocked = false;
 
+	/** 문 사운드 DT (캐릭터 사운드 DT 공용 — Door.Open / Door.Close 행 사용) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Door|Config")
+	TObjectPtr<UDataTable> SoundTable;
+
 protected:
 	UFUNCTION()
 	void OnRep_IsOpen();
@@ -94,4 +99,7 @@ private:
 	FRotator TargetRotation;
 	bool bIsAnimating = false;
 	bool bRotationsInitialized = false;
+
+	// 마지막으로 사운드를 재생한 개폐 상태 — 초기 복제(bStartOpen)로 인한 시작 시 소리 방지.
+	bool bLastOpenStateForSound = false;
 };

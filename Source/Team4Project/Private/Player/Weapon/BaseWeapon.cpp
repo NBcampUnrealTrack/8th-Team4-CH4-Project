@@ -7,6 +7,9 @@
 #include "GameFramework/Character.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Net/UnrealNetwork.h"
+#include "Player/BaseCharacter.h"
+#include "Sound/GameSoundStatics.h"
+#include "Sound/GameSoundTypes.h"
 
 ABaseWeapon::ABaseWeapon()
 {
@@ -82,5 +85,12 @@ void ABaseWeapon::Multicast_PlayFireFX_Implementation(bool bHit, FVector HitLoca
 	{
 		UNiagaraFunctionLibrary::SpawnSystemAtLocation(
 			this, ImpactEffect, HitLocation, HitNormal.Rotation());
+	}
+
+	// 총성: 소지 캐릭터의 사운드 DT 에서 조회해 총구 위치에 재생.
+	if (const ABaseCharacter* Holder = Cast<ABaseCharacter>(HolderCharacter))
+	{
+		UGameSoundStatics::PlaySoundAtLocationFromTable(
+			this, Holder->GetCharacterSoundTable(), SoundRows::GunFire, GetMuzzleLocation());
 	}
 }

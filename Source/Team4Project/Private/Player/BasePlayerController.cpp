@@ -18,8 +18,10 @@
 #include "Game/GODGameState.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
-#include "Game/ChatTypes.h"  
+#include "Game/ChatTypes.h"
 #include "HAL/FileManager.h"
+#include "Sound/GameSoundStatics.h"
+#include "Sound/GameSoundTypes.h"
 
 // [임시 디버그] Shipping 에서도 보이는 유일한 채널 = 파일. Saved/NameDebug.log 에 누적. 확인 후 제거.
 namespace
@@ -210,8 +212,11 @@ void ABasePlayerController::BeginPlay()
 		{
 			if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
 			{
+				// 백필은 과거 메시지라 수신음을 내지 않는다.
+				bChatBackfillInProgress = true;
 				for (const FChatMessage& Msg : GS->ChatHistory)
 					HandleChatMessage(Msg);
+				bChatBackfillInProgress = false;
 			}
 		});
 	}
@@ -439,7 +444,12 @@ void ABasePlayerController::HandleChatMessage(const FChatMessage& Msg)
 
 	ScrollBox->AddChild(Entry);
 	ScrollBox->ScrollToEnd();
-	
+
+	// 수신음 — 접속 시 히스토리 백필 중에는 생략.
+	if (!bChatBackfillInProgress)
+	{
+		UGameSoundStatics::PlaySound2DFromTable(this, UISoundTable, SoundRows::UIChatReceive);
+	}
 }
 
 void ABasePlayerController::CloseChat()

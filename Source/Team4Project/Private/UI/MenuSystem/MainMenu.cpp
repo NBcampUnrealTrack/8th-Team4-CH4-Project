@@ -14,6 +14,7 @@
 
 #include "UI/MenuSystem/ServerRow.h"
 #include "Game/PlayerGameInstance.h"
+#include "Sound/GameSoundTypes.h"
 
 namespace
 {
@@ -88,7 +89,39 @@ bool UMainMenu::Initialize()
     if (ConfirmSkinButton) ConfirmSkinButton->OnClicked.AddDynamic(this, &UMainMenu::ConfirmSkinSelection);
     UpdateSelectedSkinText();
 
+    // 모든 버튼에 클릭/호버 사운드 바인딩 (UISoundTable 의 UI.Click / UI.Hover 행. null 은 무시됨)
+    BindButtonSounds(HostButton);
+    BindButtonSounds(CancelHostMenuButton);
+    BindButtonSounds(ConfirmHostMenuButton);
+    BindButtonSounds(JoinButton);
+    BindButtonSounds(CancelJoinMenuButton);
+    BindButtonSounds(ConfirmJoinMenuButton);
+    BindButtonSounds(QuitButton);
+    BindButtonSounds(QuickJoinButton);
+    BindButtonSounds(ConfirmPasswordButton);
+    BindButtonSounds(CancelPasswordButton);
+    BindButtonSounds(SkinButton);
+    BindButtonSounds(BackFromSkinMenuButton);
+    BindButtonSounds(SkinDogButton);
+    BindButtonSounds(SkinFrogButton);
+    BindButtonSounds(SkinPandaButton);
+    BindButtonSounds(SkinRabbitButton);
+    BindButtonSounds(SkinRaccoonButton);
+    BindButtonSounds(ConfirmSkinButton);
+
     return true;
+}
+
+void UMainMenu::NativeConstruct()
+{
+    Super::NativeConstruct();
+    PlayUIMusic(SoundRows::BGMMainMenu);
+}
+
+void UMainMenu::NativeDestruct()
+{
+    StopUIMusic();
+    Super::NativeDestruct();
 }
 
 FReply UMainMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)

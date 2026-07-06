@@ -19,6 +19,8 @@ class AGODGameState;
 class AGODPlayerState;
 class UTexture2D;
 class UGODAbilitySlotWidget;
+class UDataTable;
+class UAudioComponent;
 
 // ─────────────────────────────────────────────
 // 역할 아이콘 / 설명 정보
@@ -90,6 +92,10 @@ public:
 	/** 경고 문구 점멸 간격(초) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Warning")
 	float WarningBlinkInterval = 0.5f;
+
+	/** UI 사운드 DT (BGM.InGame 행으로 인게임 BGM 재생). WBP 디폴트에서 지정. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Sound")
+	TObjectPtr<UDataTable> UISoundTable;
 
 protected:
 	virtual void NativeConstruct() override;
@@ -256,6 +262,10 @@ private:
 
 	void HideGunsUnlockedNotice();
 	FTimerHandle GunsNoticeTimer;
+
+	// 인게임 BGM (NativeConstruct 에서 시작, NativeDestruct 에서 정지)
+	UPROPERTY(Transient)
+	TObjectPtr<UAudioComponent> BGMAudio;
 
 	// ─── UI 갱신 ────────────────────────────────
 

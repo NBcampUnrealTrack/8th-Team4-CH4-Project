@@ -13,6 +13,7 @@ class UNiagaraComponent;
 class UPointLightComponent;
 class USoundBase;
 class UWidgetComponent;
+class UAudioComponent;
 
 // 석탄 투입구. 플레이어가 석탄을 든 채로 상호작용키를 누르면 트레인 화로에 연료를 넣는다.
 // (PressureValve 와 동일한 패턴: 메시 + 상호작용 박스 + TrainActor 참조)
@@ -115,6 +116,11 @@ private:
 
 	// 바인딩된 화로 캐시(재탐색 방지 + 초기 갱신용)
 	UPROPERTY() UFurnanceComponent* BoundFurnace = nullptr;
+
+	// 화로 연소 루프음 (게임 사운드 DT 의 Furnace.Burning 행 — GameState 에서 읽어옴).
+	// UpdateFireFX 가 불 이펙트와 함께 켜고 끈다.
+	UPROPERTY(Transient)
+	TObjectPtr<UAudioComponent> BurningAudio;
 
 	// 클라이언트에서 기차/화로 복제 타이밍이 늦을 때 재시도용 타이머
 	FTimerHandle FurnaceBindTimer;

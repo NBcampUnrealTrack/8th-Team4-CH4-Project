@@ -5,6 +5,9 @@
 #include "Interface/Interactable.h"
 #include "SinkBase.generated.h"
 
+class UDataTable;
+class UAudioComponent;
+
 UCLASS()
 class TEAM4PROJECT_API ASinkBase : public AActor, public IInteractable
 {
@@ -35,6 +38,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WashBasin")
 	float CleanPerSecond = 0.25f;
 
+	// 씻기 사운드 DT (캐릭터 사운드 DT 공용 — Sink.Washing 루프 행 사용)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WashBasin")
+	TObjectPtr<UDataTable> SoundTable;
+
 	
 	virtual void Interact_Implementation(ACharacter* Interactor) override;
 	virtual FText GetInteractPrompt_Implementation() const override;
@@ -54,6 +61,12 @@ private:
 	bool CanKeepWashing(const ACharacter* User) const;
 
 	void SetInUse(bool bNewInUse);
-	
+
+	// bIsInUse 상태를 씻기 루프음에 반영 (서버/클라 공통 — SetInUse/OnRep 양쪽에서 호출).
+	void UpdateWashingAudio();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAudioComponent> WashingAudio;
+
 	TWeakObjectPtr<ACharacter> WashingUser;
 };

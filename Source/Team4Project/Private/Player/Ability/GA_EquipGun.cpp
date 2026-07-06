@@ -6,6 +6,7 @@
 #include "Player/Weapon/BaseWeapon.h"
 #include "Game/BaseGameplayTags.h"
 #include "AbilitySystemComponent.h"
+#include "Sound/GameSoundTypes.h"
 
 UGA_EquipGun::UGA_EquipGun()
 {
@@ -50,6 +51,8 @@ void UGA_EquipGun::ActivateAbility(
 		ASC->RemoveLooseGameplayTag(EquippedTag);
 		ASC->RemoveReplicatedLooseGameplayTag(EquippedTag);
 
+		Character->Client_PlayCharacterSound(SoundRows::GunUnequip);
+
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 		return;
 	}
@@ -82,6 +85,8 @@ void UGA_EquipGun::ActivateAbility(
 		ASC->AddLooseGameplayTag(EquippedTag);
 		// 클라이언트까지 복제 (HUD 등에서 장착 상태 확인용)
 		ASC->AddReplicatedLooseGameplayTag(EquippedTag);
+
+		Character->Client_PlayCharacterSound(SoundRows::GunEquip);
 	}
 
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);

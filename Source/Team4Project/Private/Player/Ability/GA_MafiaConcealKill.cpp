@@ -4,6 +4,7 @@
 #include "Player/Ability/GA_MafiaConcealKill.h"
 #include "Player/BaseCharacter.h"
 #include "Game/BaseGameplayTags.h"
+#include "Sound/GameSoundTypes.h"
 
 UGA_MafiaConcealKill::UGA_MafiaConcealKill()
 {
@@ -36,6 +37,8 @@ void UGA_MafiaConcealKill::ActivateAbility(
 	if (ABaseCharacter* Victim = const_cast<ABaseCharacter*>(Cast<ABaseCharacter>(VictimActor)))
 	{
 		Victim->HideCorpseForDuration(ConcealDuration);
+		// 은폐 발동을 마피아 본인에게만 알린다 (타인이 들으면 은폐 사실이 노출됨).
+		Owner->Client_PlayCharacterSound(SoundRows::AbilityConceal);
 	}
 
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);

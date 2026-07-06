@@ -1,5 +1,6 @@
 ﻿#include "InteractiveProp/ItemBase.h"
 #include "Player/BaseCharacter.h"
+#include "Sound/GameSoundTypes.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemComponent.h"
@@ -47,6 +48,13 @@ void AItemBase::Server_PickUp_Implementation(ACharacter* Holder)
 
 	bIsHeld = true;
 	HolderCharacter = Holder;
+
+	// 줍기 사운드 (전 클라, 홀더 위치). 버리기 사운드는 플레이어 직접 버리기 경로
+	// (BaseCharacter::Server_DropHeldItem)에서만 낸다.
+	if (BaseChar)
+	{
+		BaseChar->Multicast_PlayCharacterSound(SoundRows::ItemPickup);
+	}
 
 	// 홀더를 Owner 로 지정 — 소유 클라이언트가 이 아이템의 Server RPC(Server_Drop 등)를
 	// 보낼 수 있게 한다. (Owner 가 없으면 클라가 보낸 RPC 를 서버가 버린다)

@@ -74,8 +74,15 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Chat")
 	TSubclassOf<UUserWidget> ChatEntryWidgetClass; // BP에서 WBP_ChatEntry 할당
 
+	// UI 사운드 DT (채팅 수신음 UI.ChatReceive 행). 컨트롤러 BP 디폴트에서 지정.
+	UPROPERTY(EditDefaultsOnly, Category = "Chat")
+	TObjectPtr<class UDataTable> UISoundTable;
+
 	UFUNCTION()
 	void HandleChatMessage(const FChatMessage& Msg);
+
+	// 접속 직후 히스토리 백필 중에는 수신음을 내지 않기 위한 플래그
+	bool bChatBackfillInProgress = false;
 	
 	// 위젯에서 named slot/named widget 접근용
 	UScrollBox*     GetChatScrollBox()  const;

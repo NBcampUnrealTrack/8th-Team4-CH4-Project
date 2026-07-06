@@ -1,5 +1,7 @@
 #include "InteractiveProp/CoalPile.h"
 #include "InteractiveProp/CoalItem.h"
+#include "Player/BaseCharacter.h"
+#include "Sound/GameSoundTypes.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "TimerManager.h"
@@ -58,6 +60,12 @@ void ACoalPile::Interact_Implementation(ACharacter* Interactor)
 	if (!Coal) return;
 
 	SetCoalCount(CurrentCoalCount - 1);
+
+	// 배출 사운드 (전 클라, 캐릭터 위치 ≈ 더미 위치). 캐릭터의 사운드 DT 를 재사용.
+	if (ABaseCharacter* BaseChar = Cast<ABaseCharacter>(Interactor))
+	{
+		BaseChar->Multicast_PlayCharacterSound(SoundRows::CoalDispense);
+	}
 }
 
 FText ACoalPile::GetInteractPrompt_Implementation() const

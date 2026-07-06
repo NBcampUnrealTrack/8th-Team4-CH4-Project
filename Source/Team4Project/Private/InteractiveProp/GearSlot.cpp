@@ -8,6 +8,8 @@
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
 #include "TimerManager.h"
+#include "Sound/GameSoundStatics.h"
+#include "Sound/GameSoundTypes.h"
 
 AGearSlot::AGearSlot()
 {
@@ -102,6 +104,8 @@ void AGearSlot::BreakGear()
 	bQTEActive = false;
 	QTEProgressIndex = 0;
 	ReleaseQTEPlayer();
+
+	Multicast_PlaySlotSound(SoundRows::GearBreak);
 }
 
 void AGearSlot::ForceReassemble()
@@ -134,6 +138,8 @@ void AGearSlot::CompleteRepair()
 	bIsAssembled = true;
 	bQTEActive = false;
 	QTEProgressIndex = 0;
+
+	Multicast_PlaySlotSound(SoundRows::GearRepair);
 
 	// QTE 진행 중 완료(정상 성공/라운드 재시작 ForceReassemble 포함)라면 플레이어에게
 	// 종료를 알린다. 안 보내면 클라 쪽 bInputLockedByMinigame 이 남아 조작 불능이 된다.
@@ -264,6 +270,15 @@ UPressureComponent* AGearSlot::GetPressureComponent() const
 	}
 
 	return nullptr;
+}
+
+void AGearSlot::Multicast_PlaySlotSound_Implementation(FName RowName)
+{
+	if (GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	UGameSoundStatics::PlaySoundAtLocationFromTable(this, SoundTable, RowName, GetActorLocation());
 }
 
 void AGearSlot::Interact_Implementation(ACharacter* Interactor)

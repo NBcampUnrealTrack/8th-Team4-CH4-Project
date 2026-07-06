@@ -3,6 +3,7 @@
 
 #include "UI/MenuSystem/InGameMenu.h"
 #include "Components/Button.h"
+#include "Sound/GameSoundTypes.h"
 
 bool UInGameMenu::Initialize()
 {
@@ -17,7 +18,22 @@ bool UInGameMenu::Initialize()
 		return false;
 	QuitButton->OnClicked.AddDynamic(this, &UInGameMenu::QuitPressed);
 
+	BindButtonSounds(CancelButton);
+	BindButtonSounds(QuitButton);
+
 	return true;
+}
+
+void UInGameMenu::NativeConstruct()
+{
+	Super::NativeConstruct();
+	PlayUISound(SoundRows::UIMenuOpen);
+}
+
+void UInGameMenu::NativeDestruct()
+{
+	PlayUISound(SoundRows::UIMenuClose);
+	Super::NativeDestruct();
 }
 
 FReply UInGameMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)

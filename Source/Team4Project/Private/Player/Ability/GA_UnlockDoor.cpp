@@ -3,6 +3,7 @@
 #include "Player/Ability/GA_UnlockDoor.h"
 #include "Player/BaseCharacter.h"
 #include "Game/BaseGameplayTags.h"
+#include "Sound/GameSoundTypes.h"
 
 UGA_UnlockDoor::UGA_UnlockDoor()
 {
@@ -36,5 +37,6 @@ void UGA_UnlockDoor::ActivateAbility(
 	}
 
 	Sheriff->UnlockDoor(DoorActor);
+	Sheriff->Client_PlayCharacterSound(SoundRows::AbilityUnlockDoor);
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }

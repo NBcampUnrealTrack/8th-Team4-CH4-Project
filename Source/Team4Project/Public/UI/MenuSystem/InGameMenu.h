@@ -18,6 +18,10 @@ protected:
 	virtual bool Initialize() override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
+	// ESC 메뉴 열기/닫기 사운드
+	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
+
 public:
 	UPROPERTY(meta = (BindWidget))
 	class UButton* CancelButton;

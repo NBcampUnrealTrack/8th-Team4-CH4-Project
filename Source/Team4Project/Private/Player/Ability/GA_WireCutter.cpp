@@ -5,6 +5,7 @@
 #include "Component/InteractComponent.h"
 #include "InteractiveProp/GearSlot.h"
 #include "Game/BaseGameplayTags.h"
+#include "Sound/GameSoundTypes.h"
 
 UGA_WireCutter::UGA_WireCutter()
 {
@@ -44,5 +45,7 @@ void UGA_WireCutter::ActivateAbility(
 	}
 
 	Mafia->UseWireCutter(GearActor);
+	// 절단기 사용음은 본인만. 기어 파손음(Gear.Break)은 GearSlot 이 전 클라에 따로 낸다.
+	Mafia->Client_PlayCharacterSound(SoundRows::AbilityWireCutter);
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }
