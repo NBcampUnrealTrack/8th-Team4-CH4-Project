@@ -18,8 +18,17 @@ class TEAM4PROJECT_API UVoipTalkerComponent : public UVOIPTalker
 public:
 	virtual void OnTalkingBegin(UAudioComponent* AudioComponent) override;
 	virtual void OnTalkingEnd() override;
-	
+
 	void TeardownVoiceAudio();
+
+	/**
+	 * 발화자/청자의 생사 조합에 따라 볼륨·공간화를 재생 중인 컴포넌트에 적용.
+	 *  - 생존 발화자: 전원에게 들림. 산 청자=3D 감쇠, 죽은 청자=2D(거리 무관).
+	 *  - 사망 발화자: 죽은 청자에게만 들림(2D). 산 청자는 음소거.
+	 * 호출 시점: OnTalkingBegin(발화 시작) + VoiceChannelSubsystem(생사 변화 이벤트).
+	 * 폴링 없음 — 상태가 바뀌는 순간에만 재적용된다.
+	 */
+	void ApplyVoicePolicy();
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Voice")
 	TObjectPtr<USoundAttenuation> VoiceAttenuationOverride;
@@ -36,6 +45,10 @@ private:
 	// 에셋이 없을 때 한 번만 만들어 재사용하는 런타임 감쇠.
 	UPROPERTY(Transient)
 	TObjectPtr<USoundAttenuation> RuntimeAttenuation;
+
+	/** 발화 중 Pawn 이 늦게 붙는 경우(빙의 지연) attach/감쇠를 바로잡기 위한 콜백 */
+	UFUNCTION()
+	void HandleOwnerPawnSet(APlayerState* Player, APawn* NewPawn, APawn* OldPawn);
 
 	/** 현재 재생 중인 synth 의 AudioComponent. teardown 대상. */
 	TWeakObjectPtr<UAudioComponent> PlayingAudioComponent;

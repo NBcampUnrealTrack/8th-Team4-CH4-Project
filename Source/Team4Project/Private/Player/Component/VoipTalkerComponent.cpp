@@ -4,12 +4,15 @@
 #include "Player/Component/VoipTalkerComponent.h"
 #include "Player/GODPlayerState.h"
 #include "Player/BaseCharacter.h"
+#include "Player/VoiceChannelSubsystem.h"
 #include "Components/AudioComponent.h"
 #include "Sound/SoundAttenuation.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 
 namespace
 {
@@ -50,20 +53,61 @@ void UVoipTalkerComponent::OnTalkingBegin(UAudioComponent* AudioComponent)
 		Super::OnTalkingBegin(AudioComponent);
 		return;
 	}
-	
+
 	PlayingAudioComponent = AudioComponent;
+
+	ApplyVoicePolicy();
+
+	// 사망/생존과 무관하게 발화자 Pawn 이 파괴(seamless travel 포함)되면 즉시 teardown 하도록 구독.
+	// TALKING 인 채로 travel 이 일어나면 OnTalkingEnd 가 파괴 "후"에야 불려 늦기 때문.
+	APlayerState* OwnerPS = GetOwner<APlayerState>();
+	if (APawn* OwnerPawn = OwnerPS ? OwnerPS->GetPawn() : nullptr)
+	{
+		BindOwnerPawnEndPlay(OwnerPawn);
+	}
+
+	// 발화 중 생사 상태가 바뀌면(사망/부활/청자 사망) 서브시스템이 ApplyVoicePolicy를
+	// 다시 불러준다 — 폴링 없이 이벤트 시점에만 재적용되는 구조.
+	if (UVoiceChannelSubsystem* Voice = UVoiceChannelSubsystem::Get(GetWorld()))
+	{
+		Voice->RegisterActiveTalker(this);
+	}
+
+	// 발화 중 빙의가 늦게 도착하면(Pawn 복제 지연) attach/감쇠를 그 시점에 바로잡는다.
+	if (OwnerPS)
+	{
+		OwnerPS->OnPawnSet.AddUniqueDynamic(this, &UVoipTalkerComponent::HandleOwnerPawnSet);
+	}
+
+	Super::OnTalkingBegin(AudioComponent);
+}
+
+void UVoipTalkerComponent::HandleOwnerPawnSet(APlayerState* /*Player*/, APawn* /*NewPawn*/, APawn* /*OldPawn*/)
+{
+	ApplyVoicePolicy();
+}
+
+void UVoipTalkerComponent::ApplyVoicePolicy()
+{
+	UAudioComponent* AudioComponent = PlayingAudioComponent.Get();
+	if (!IsValid(AudioComponent))
+	{
+		return;
+	}
 
 	APlayerState* OwnerPS = GetOwner<APlayerState>();
 	APawn* OwnerPawn = OwnerPS ? OwnerPS->GetPawn() : nullptr;
 	USceneComponent* PawnRoot = OwnerPawn ? OwnerPawn->GetRootComponent() : nullptr;
 
+	const bool bListenerDead = IsLocalListenerDead();
+
 	if (IsSpeakerDead())
 	{
 		// 사망자 보이스: 죽은 사람끼리만 들린다.
-		// 청자가 살아있으면 음소거(0), 청자도 죽었으면 정상 청취(1, 이전 세션에서 줄었을 수 있어 복구).
+		// 청자가 살아있으면 음소거(0), 청자도 죽었으면 정상 청취(1, 이전에 줄었을 수 있어 복구).
 		// ※ 단방향 격리(산 사람→안 들림 / 죽은 사람→들림)는 엔진 양방향 Mute 로 표현 불가해
 		//   청자 머신에서 재생 여부를 직접 결정한다.
-		AudioComponent->SetVolumeMultiplier(IsLocalListenerDead() ? 1.f : 0.f);
+		AudioComponent->SetVolumeMultiplier(bListenerDead ? 1.f : 0.f);
 
 		// 2D 처리: 공간화/감쇠 없이, 죽은 캐릭터(래그돌)를 따라다니지 않게 떼어낸다.
 		Settings.AttenuationSettings = nullptr;
@@ -71,17 +115,27 @@ void UVoipTalkerComponent::OnTalkingBegin(UAudioComponent* AudioComponent)
 
 		AudioComponent->bAllowSpatialization = false;
 		AudioComponent->SetAttenuationSettings(nullptr);
-		AudioComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+		if (AudioComponent->GetAttachParent())
+		{
+			AudioComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+		}
 	}
 	else
 	{
-		// 생존자 보이스: 모두에게 들림(죽은 청자 포함). 3D 공간화 감쇠(근접 보이스).
+		// 생존자 보이스: 모두에게 들림(죽은 청자 포함).
 		// 이전에 사망자 음소거(0)로 쓰였던 컴포넌트가 재사용될 수 있어 볼륨 복구.
 		AudioComponent->SetVolumeMultiplier(1.f);
 
+		if (bListenerDead)
+		{
+			// 죽은 청자: 관전 중 어디에 있든 생존자 대화가 들리도록 거리 감쇠 없이 2D 재생.
+			Settings.AttenuationSettings = nullptr;
+			AudioComponent->bAllowSpatialization = false;
+			AudioComponent->SetAttenuationSettings(nullptr);
+		}
 		// Settings 는 엔진 ApplyVoiceSettings 가 "다음" 재생에 적용하고,
 		// SetAttenuationSettings 는 "현재" 재생 중인 ActiveSound 에 즉시 반영한다(둘 다 해 둠).
-		if (USoundAttenuation* Attenuation = ResolveAttenuation())
+		else if (USoundAttenuation* Attenuation = ResolveAttenuation())
 		{
 			Settings.AttenuationSettings = Attenuation;
 			AudioComponent->bAllowSpatialization = true;
@@ -94,20 +148,14 @@ void UVoipTalkerComponent::OnTalkingBegin(UAudioComponent* AudioComponent)
 		if (PawnRoot)
 		{
 			Settings.ComponentToAttachTo = PawnRoot;
-			AudioComponent->AttachToComponent(
-				PawnRoot,
-				FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+			if (AudioComponent->GetAttachParent() != PawnRoot)
+			{
+				AudioComponent->AttachToComponent(
+					PawnRoot,
+					FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+			}
 		}
 	}
-
-	// 사망/생존과 무관하게 발화자 Pawn 이 파괴(seamless travel 포함)되면 즉시 teardown 하도록 구독.
-	// TALKING 인 채로 travel 이 일어나면 OnTalkingEnd 가 파괴 "후"에야 불려 늦기 때문.
-	if (OwnerPawn)
-	{
-		BindOwnerPawnEndPlay(OwnerPawn);
-	}
-
-	Super::OnTalkingBegin(AudioComponent);
 }
 
 bool UVoipTalkerComponent::IsSpeakerDead() const
@@ -130,6 +178,16 @@ void UVoipTalkerComponent::OnTalkingEnd()
 
 void UVoipTalkerComponent::TeardownVoiceAudio()
 {
+	// 발화 종료 → 채널 등록 해제 (정책 재적용 대상에서 제외)
+	if (UVoiceChannelSubsystem* Voice = UVoiceChannelSubsystem::Get(GetWorld()))
+	{
+		Voice->UnregisterActiveTalker(this);
+	}
+	if (APlayerState* OwnerPS = GetOwner<APlayerState>())
+	{
+		OwnerPS->OnPawnSet.RemoveDynamic(this, &UVoipTalkerComponent::HandleOwnerPawnSet);
+	}
+
 	// 재생 컴포넌트를 죽는 월드에서 완전히 빼낸다.
 	// synth 는 /Engine/Transient 전역이라 월드가 죽어도 살아남으므로, 단순 detach 만으론
 	// 죽은 월드의 오디오 디바이스에 "등록된 채" 남아 오디오 렌더 스레드가 역참조하다 크래시한다.

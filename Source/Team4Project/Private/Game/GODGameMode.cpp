@@ -16,6 +16,8 @@
 #include "TimerManager.h"
 #include "EngineUtils.h"
 #include "UI/HUD/GODHUD.h"
+#include "Game/PlayerGameInstance.h"
+#include "Kismet/GameplayStatics.h"
 
 
 AGODGameMode::AGODGameMode()
@@ -34,6 +36,28 @@ void AGODGameMode::BeginPlay()
 // ============================================================
 // 접속 / 이탈
 // ============================================================
+
+void AGODGameMode::PreLogin(const FString& Options, const FString& Address,
+	const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)
+{
+	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
+	if (!ErrorMessage.IsEmpty()) return;
+
+	// 비밀번호 방 검증 (서버 권위). 클라이언트는 접속 URL에 ?SessionPassword= 로 전달한다.
+	// ErrorMessage를 채우면 엔진이 접속을 거부하고 클라에 사유를 보낸다.
+	if (const UPlayerGameInstance* GI = GetGameInstance<UPlayerGameInstance>())
+	{
+		const FString& HostPassword = GI->GetHostSessionPassword();
+		if (!HostPassword.IsEmpty())
+		{
+			const FString Supplied = UGameplayStatics::ParseOption(Options, TEXT("SessionPassword"));
+			if (Supplied != HostPassword)
+			{
+				ErrorMessage = TEXT("비밀번호가 올바르지 않습니다.");
+			}
+		}
+	}
+}
 
 void AGODGameMode::PostLogin(APlayerController* NewPlayer)
 {
@@ -64,7 +88,7 @@ void AGODGameMode::Logout(AController* Exiting)
 	{
 		if (AGODPlayerState* PS = Exiting->GetPlayerState<AGODPlayerState>())
 		{
-			PS->bIsAlive = false;
+			PS->SetIsAlive(false);
 		}
 		if (ABaseCharacter* Char = Cast<ABaseCharacter>(Exiting->GetPawn()))
 		{
@@ -181,10 +205,20 @@ void AGODGameMode::AssignRoles()
 		if (APlayerController* PC = It->Get()) PlayerArray.Add(PC);
 	}
 
+	// 접속 인원수에 맞춰 역할 풀을 동적으로 구성 (5~8인 지원).
+	//  - 5~7인: 보안관 1 · 무법자 1 · 마피아 1 + 나머지 시민(2~4명)
+	//  - 8인:   마피아를 2명으로 늘려 밸런스 유지 → 시민 4명 (시민 직업 4종과 정확히 일치)
 	TArray<EMainRole> RolePool = {
-		EMainRole::Sheriff, EMainRole::Outlaw, EMainRole::Mafia,
-		EMainRole::Citizen, EMainRole::Citizen
+		EMainRole::Sheriff, EMainRole::Outlaw, EMainRole::Mafia
 	};
+	if (PlayerArray.Num() >= 8)
+	{
+		RolePool.Add(EMainRole::Mafia);
+	}
+	while (RolePool.Num() < PlayerArray.Num())
+	{
+		RolePool.Add(EMainRole::Citizen);
+	}
 
 	for (int32 i = RolePool.Num() - 1; i > 0; i--)
 	{
@@ -211,10 +245,11 @@ void AGODGameMode::AssignRoles()
 		if (!PS || i >= RolePool.Num()) continue;
 
 		PS->MainRole     = RolePool[i];
+		// 시민이 직업 종류(4종)보다 많아지는 예외 상황엔 직업을 순환 배정 (배열 초과 방지)
 		PS->CitizenClass = (PS->MainRole == EMainRole::Citizen)
-			? CitizenPool[CitizenIndex++]
+			? CitizenPool[CitizenIndex++ % CitizenPool.Num()]
 			: ECitizenClass::None;
-		PS->bIsAlive  = true;
+		PS->SetIsAlive(true);
 
 		// 로비 캐릭터를 그대로 유지하고 태그만 부여 (열차 위 위치 보존).
 		FGameplayTag AssignedTag = GetTagForRole(PS);
@@ -405,7 +440,7 @@ void AGODGameMode::HandlePlayerDeath(AGODPlayerState* KillerPS, AGODPlayerState*
 {
 	if (!VictimPS || !VictimPS->bIsAlive) return;
 
-	VictimPS->bIsAlive = false;
+	VictimPS->SetIsAlive(false);
 
 	// 캐릭터 사망 처리 (래그돌 + bIsDead 설정)
 	if (AController* VictimPC = Cast<AController>(VictimPS->GetOwner()))

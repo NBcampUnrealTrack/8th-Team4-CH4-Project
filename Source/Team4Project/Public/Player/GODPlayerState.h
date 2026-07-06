@@ -49,9 +49,17 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Role")
 	ECitizenClass CitizenClass;
 
-	// 총기 및 생존 상태
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "State")
+	// 총기 및 생존 상태.
+	// 쓰기는 반드시 SetIsAlive()로 — 보이스 채널(생사별 격리) 갱신이 걸려 있다.
+	UPROPERTY(ReplicatedUsing = OnRep_bIsAlive, BlueprintReadOnly, Category = "State")
 	bool bIsAlive;
+
+	// 서버 전용 생사 설정. 변경 시 이 머신(리슨 호스트)의 보이스 정책을 즉시 갱신하고,
+	// 클라이언트들은 OnRep_bIsAlive 복제 도착 시점에 각자 갱신한다.
+	void SetIsAlive(bool bNewAlive);
+
+	UFUNCTION()
+	void OnRep_bIsAlive();
 
 	// [사용 안 함] 탄약은 UBaseAttributeSet::CurrentAmmo 어트리뷰트로 단일화됨.
 	// (발사 소모 = GA_FireGun, 리필 = GODGameMode::HandlePlayerDeath, 도둑질 = StealAmmo)
