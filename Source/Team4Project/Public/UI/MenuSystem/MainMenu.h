@@ -54,6 +54,12 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Skin")
 	void OnSkinPreviewChanged(int32 SkinIndex);
 
+	// 비밀번호 틀림 문구가 표시될 때 호출 — WBP 에서 PasswordErrorText 의
+	// Opacity 1 유지 → 0 페이드아웃 애니메이션을 재생 (유지 시간/곡선은 WBP 에서 조절).
+	// 미구현 시 문구가 팝업이 닫힐 때까지 남는 기존 동작 유지.
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI Animation")
+	void PlayPasswordErrorAnim();
+
 private:
 	TSubclassOf<class UUserWidget> ServerRowClass;
 
