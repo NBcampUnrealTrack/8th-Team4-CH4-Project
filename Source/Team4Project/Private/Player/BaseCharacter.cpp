@@ -78,7 +78,7 @@ ABaseCharacter::ABaseCharacter(const FObjectInitializer& ObjectInitializer)
 	LanternLight->Intensity     = 3000.f;
 	LanternLight->OuterConeAngle = 35.f;
 
-	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
+	GetCapsuleComponent()->InitCapsuleSize(30.f, 48.f);
 
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;

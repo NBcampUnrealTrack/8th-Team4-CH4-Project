@@ -5,7 +5,6 @@
 #include "Player/BaseCharacter.h"
 #include "Component/CustomMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
-#include "Player/BaseCharacter.h"
 
 void UCharacterAnimInstance::NativeInitializeAnimation()
 {
