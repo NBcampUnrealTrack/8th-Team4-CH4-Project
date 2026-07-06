@@ -75,3 +75,4 @@ Plugins/**/Intermediate/*
 DerivedDataCache/*
 Tools/create_pp_toonshader.py
 Tools/create_toonfire_vfx.py
+Docs/TIL/2026-07-03_멀티플레이어_보이스_생사별_격리.md

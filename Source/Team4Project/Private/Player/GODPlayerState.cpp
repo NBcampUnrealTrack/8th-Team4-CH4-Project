@@ -1,4 +1,5 @@
 ﻿#include "Player/GODPlayerState.h"
+#include "Player/VoiceChannelSubsystem.h"
 #include "Net/UnrealNetwork.h"
 #include "Game/ChatTypes.h"
 #include "Game/GODGameState.h"
@@ -25,6 +26,26 @@ void AGODPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(AGODPlayerState, AmmoCount);
 	DOREPLIFETIME(AGODPlayerState, SootLevel);
 	
+}
+
+void AGODPlayerState::SetIsAlive(bool bNewAlive)
+{
+	if (!HasAuthority() || bIsAlive == bNewAlive)
+	{
+		return;
+	}
+
+	bIsAlive = bNewAlive;
+	OnRep_bIsAlive(); // 리슨 서버(호스트)는 OnRep이 안 오므로 직접 호출
+}
+
+void AGODPlayerState::OnRep_bIsAlive()
+{
+	// 생사 변화 → 발화 중인 보이스들의 격리 정책(죽은 사람끼리만 등)을 즉시 재적용
+	if (UVoiceChannelSubsystem* Voice = UVoiceChannelSubsystem::Get(GetWorld()))
+	{
+		Voice->RefreshVoicePolicies();
+	}
 }
 
 void AGODPlayerState::Server_SendChat_Implementation(const FString& Message)

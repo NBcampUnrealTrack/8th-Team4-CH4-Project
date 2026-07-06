@@ -57,14 +57,22 @@ public:
 	void LobbyLoadMenu();
 
 	UFUNCTION(Exec)
-	virtual void Host(FString ServerName) override;
+	virtual void Host(FString ServerName, FString Password) override;
 
 	UFUNCTION(Exec)
-	virtual void Join(uint32 Index) override;
+	virtual void Join(uint32 Index, FString Password) override;
+
+	// 빠른 방찾기: 검색 후 자리 있고 비밀번호 없는 방 중 최적을 자동 조인
+	UFUNCTION(Exec)
+	virtual void QuickJoin() override;
 
 	virtual void LoadMainMenu() override;
 
 	virtual void RefreshServerList() override;
+
+	// 호스트가 설정한 세션 비밀번호 (빈 문자열 = 공개 방).
+	// GameMode::PreLogin의 서버 권위 검증에서 사용한다. 세션에 광고되지 않는다.
+	const FString& GetHostSessionPassword() const { return HostSessionPassword; }
 
 	// ============================================================
 	// 플레이어 데이터 영속화
@@ -118,6 +126,23 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category = "Skin")
 	int32 SelectedSkinIndex = 0;
 
+	// ============================================================
+	// 세션 설정
+	// ============================================================
+
+	// 방 최대 인원 (세션 정원). BP_PlayerGameInstance에서 조절 가능.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Session")
+	int32 MaxSessionPlayers = 8;
+
+	// ── 빠른 방찾기 판정 가중치 ──
+	// 점수 = 현재인원 × PlayersWeight − 핑(ms) × PingWeight. 점수가 가장 높은 방에 참여.
+	// 기본값(100:1)은 "핑 100ms 차이 = 인원 1명 차이"로 취급한다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Session|QuickJoin")
+	float QuickJoinPlayersWeight = 100.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Session|QuickJoin")
+	float QuickJoinPingWeight = 1.f;
+
 private:
 	int32 PendingSharedCredits = 0;
 
@@ -150,6 +175,18 @@ private:
 	void OnNetworkFailure(UWorld* world, UNetDriver* NetDriver, ENetworkFailure::Type FailureType, const FString& ErrorString);
 
 	FString DesiredServerName;
+
+	// Host() 입력 비밀번호 (세션 생성 대기 중 임시 보관)
+	FString DesiredPassword;
+
+	// 생성된 세션의 비밀번호 (호스트 머신 전용 — PreLogin 검증 소스)
+	FString HostSessionPassword;
+
+	// Join() 입력 비밀번호 — 접속 URL에 ?SessionPassword= 옵션으로 전달
+	FString PendingJoinPassword;
+
+	// QuickJoin() 진행 중 플래그 — 검색 완료 시 최적 방 자동 조인
+	bool bQuickJoinPending = false;
 
 	void CreateSession();
 

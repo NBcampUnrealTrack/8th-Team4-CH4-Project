@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Types/SlateEnums.h" // ETextCommit
 #include "UI/MenuSystem/MenuWidget.h"
 #include "MainMenu.generated.h"
 
@@ -15,6 +16,9 @@ struct FServerData
 	uint16 CurrentPlayers;
 	uint16 MaxPlayers;
 	FString HostUsername;
+	bool bHasPassword = false;
+	// 비밀번호 CRC32 해시 — 참여 팝업의 클라 선검증용 (원문은 호스트에만 보관)
+	int32 PasswordHash = 0;
 };
 
 UENUM(BlueprintType)
@@ -80,6 +84,44 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	class UEditableTextBox* ServerHostName;
 
+	// ── 방 비밀번호 / 빠른 방찾기 (WBP 에 아직 없어도 되도록 Optional 바인딩) ──
+
+	// Host 메뉴: 공개방/비밀방 선택. 체크 시에만 ServerPassword 가 활성화되고,
+	// 체크했는데 비밀번호가 비어 있으면 방 생성이 차단된다.
+	// (이 체크박스 없이 ServerPassword 만 있으면 "빈칸 = 공개방" 규칙으로 동작)
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UCheckBox* PrivateRoomCheckBox;
+
+	// Host 메뉴: 방 비밀번호 입력
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UEditableTextBox* ServerPassword;
+
+	// ── 비밀방 참여 비밀번호 팝업 ──
+	// 비밀방을 선택하고 Join 을 누르면 이 팝업이 뜬다.
+	// 팝업 패널(Border/Overlay 등) — 있으면 팝업 방식, 없으면 JoinPassword 상시 노출 방식으로 동작
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UWidget* JoinPasswordPopup;
+
+	// 팝업 안의 비밀번호 입력창 (팝업 없이 단독으로 두면 기존 상시 노출 방식)
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UEditableTextBox* JoinPassword;
+
+	// 팝업: 확인(입장) 버튼
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UButton* ConfirmPasswordButton;
+
+	// 팝업: 취소 버튼
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UButton* CancelPasswordButton;
+
+	// 팝업: 비밀번호 틀림 안내 텍스트
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UTextBlock* PasswordErrorText;
+
+	// 빠른 방찾기 버튼 (메인 페이지나 Join 메뉴 어디든 배치 가능)
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UButton* QuickJoinButton;
+
 	UPROPERTY(meta = (BindWidget))
 	class UButton* CancelHostMenuButton;
 
@@ -135,6 +177,26 @@ private:
 	UFUNCTION()
 	void JoinServer();
 
+	// ── 비밀방 참여 팝업 ──
+	UFUNCTION()
+	void ConfirmJoinPasswordPressed();
+
+	UFUNCTION()
+	void CancelJoinPasswordPressed();
+
+	// 팝업 입력창에서 엔터 → 확인과 동일
+	UFUNCTION()
+	void OnJoinPasswordCommitted(const FText& Text, ETextCommit::Type CommitMethod);
+
+	void CloseJoinPasswordPopup();
+
+	UFUNCTION()
+	void QuickJoinPressed();
+
+	// 비밀방 체크박스 토글 → 비밀번호 입력창 활성/비활성
+	UFUNCTION()
+	void OnPrivateRoomChanged(bool bIsChecked);
+
 	UFUNCTION()
 	void OpenHostMenu();
 
@@ -170,6 +232,9 @@ private:
 	void UpdateSelectedSkinText();
 
 	TOptional<uint32> SelectedIndex;
+
+	// 마지막으로 받은 서버 목록 — 선택한 방의 비밀방 여부/해시 조회용
+	TArray<FServerData> ServerListData;
 
 	void UpdateChildren();
 };

@@ -3,6 +3,7 @@
 
 #include "Player/BaseCharacter.h"
 #include "Player/GODPlayerState.h"
+#include "Player/VoiceChannelSubsystem.h"
 #include "Player/BasePlayerController.h"
 #include "Player/Component/BaseAbilitySystemComponent.h"
 #include "Player/Component/BaseAttributeSet.h"
@@ -634,9 +635,10 @@ void ABaseCharacter::Die(AActor* Killer)
 	}
 
 	// HandlePlayerDeath를 거치지 않는 직접 호출에서도 두 사망 상태가 일치하도록 동기화.
+	// (SetIsAlive가 보이스 채널 격리도 함께 갱신한다)
 	if (AGODPlayerState* PS = GetPlayerState<AGODPlayerState>())
 	{
-		PS->bIsAlive = false;
+		PS->SetIsAlive(false);
 	}
 
 	OnCharacterDied.Broadcast(this, Killer);
@@ -751,6 +753,13 @@ void ABaseCharacter::OnRep_IsDead()
 	if (bIsDead)
 	{
 		Multicast_HandleDeath_Implementation();
+	}
+
+	// 래그돌 사망 복제 도착 → 발화 중인 보이스 격리 정책 재적용.
+	// (bIsAlive 복제와 별개 경로로 죽는 케이스 대비 — 보이스 판정은 둘 중 하나만 죽어도 사망 취급)
+	if (UVoiceChannelSubsystem* Voice = UVoiceChannelSubsystem::Get(GetWorld()))
+	{
+		Voice->RefreshVoicePolicies();
 	}
 }
 

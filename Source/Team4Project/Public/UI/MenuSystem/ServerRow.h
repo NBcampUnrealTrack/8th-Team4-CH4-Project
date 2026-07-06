@@ -24,6 +24,10 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	class UTextBlock* ConnectionFraction;
 
+	// 비밀번호 방 자물쇠 표시 (이미지/텍스트 등 아무 위젯). WBP에 있으면 자동 연결.
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UWidget* LockIcon;
+
 	UPROPERTY(BlueprintReadOnly)
 	bool Selected = false;
 
