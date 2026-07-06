@@ -19,6 +19,10 @@ public:
 
 	virtual void BeginPlay() override;
 
+	/** 접속 승인 전 비밀번호 방 검증 (서버 권위 — 클라 조작으로 우회 불가) */
+	virtual void PreLogin(const FString& Options, const FString& Address,
+		const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
+
 	/** 플레이어 접속 시 인원 체크 → MaxPlayers 충족 시 카운트다운 시작 */
 	virtual void PostLogin(APlayerController* NewPlayer) override;
 
@@ -42,9 +46,9 @@ public:
 	// ============================================================
 	// 설정
 	// ============================================================
-	/** 게임 시작에 필요한 플레이어 수 (기본 5인) */
+	/** 게임 시작에 필요한 플레이어 수 (기본 8인, 세션 정원과 동일하게 유지) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic")
-	int32 MaxPlayers = 5;
+	int32 MaxPlayers = 8;
 
 	/** 인원 충족 후 출발까지 카운트다운 시간 (초) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic")
