@@ -53,8 +53,18 @@ public:
 	virtual FText GetInteractPrompt_Implementation() const override;
 
 protected:
+	
+	virtual void BeginPlay() override;
+	
 	UFUNCTION(BlueprintImplementableEvent, Category = "CoalPile")
 	void OnCoalCountChanged(int32 NewCount, int32 MaxCount);
+	
+	// 자동 생성 주기 (초)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CoalPile")
+	float RegenInterval = 20.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CoalPile")
+	bool bAutoRegen = true;
 
 private:
 	UFUNCTION() void OnRep_CurrentCoalCount();
@@ -63,4 +73,7 @@ private:
 
 	// 서버 전용 쿨다운 타임스탬프
 	float LastDispenseTime = -1000.f;
+	
+	FTimerHandle RegenTimerHandle;
+	void RegenTick();
 };

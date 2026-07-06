@@ -2,6 +2,7 @@
 #include "InteractiveProp/CoalItem.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
+#include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
 
 ACoalPile::ACoalPile()
@@ -68,6 +69,18 @@ FText ACoalPile::GetInteractPrompt_Implementation() const
 	return FText::FromString(FString::Printf(TEXT("석탄 꺼내기 (%d개)"), CurrentCoalCount));
 }
 
+void ACoalPile::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (HasAuthority() && bAutoRegen)
+	{
+		GetWorldTimerManager().SetTimer(
+			RegenTimerHandle, this, &ACoalPile::RegenTick,
+			RegenInterval, /*bLoop=*/true);
+	}
+}
+
 void ACoalPile::AddCoal(int32 Amount)
 {
 	if (!HasAuthority() || Amount <= 0) return;
@@ -83,6 +96,14 @@ void ACoalPile::SetCoalCount(int32 NewCount)
 
 	
 	OnCoalCountChanged(CurrentCoalCount, MaxCoalCount);
+}
+
+void ACoalPile::RegenTick()
+{
+	if (CurrentCoalCount < MaxCoalCount)
+	{
+		AddCoal(1);
+	}
 }
 
 void ACoalPile::OnRep_CurrentCoalCount()

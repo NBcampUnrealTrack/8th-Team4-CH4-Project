@@ -190,7 +190,7 @@ void ABasePlayerController::BeginPlay()
 	{
 		ChatBoxWidget = CreateWidget(this, ChatBoxWidgetClass);
 		ChatBoxWidget->AddToViewport();
-		ChatBoxWidget->SetVisibility(ESlateVisibility::Collapsed);
+		ChatBoxWidget->SetVisibility(ESlateVisibility::HitTestInvisible); // 변경: Collapsed → HitTestInvisible
 
 		if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
 		{
@@ -202,7 +202,18 @@ void ABasePlayerController::BeginPlay()
 		{
 			Input->OnTextCommitted.AddDynamic(
 				this, &ABasePlayerController::OnChatTextCommitted);
+			Input->SetVisibility(ESlateVisibility::Collapsed); // 추가: 시작 시 입력창은 숨김
 		}
+
+		// 추가: 시작할 때 히스토리 한 번 채우기 (한 프레임 뒤)
+		GetWorldTimerManager().SetTimerForNextTick([this]()
+		{
+			if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+			{
+				for (const FChatMessage& Msg : GS->ChatHistory)
+					HandleChatMessage(Msg);
+			}
+		});
 	}
 }
 
@@ -368,32 +379,19 @@ void ABasePlayerController::OpenChat()
 	if (bIsSpectating || bChatOpen || !ChatBoxWidget) return;
 	bChatOpen = true;
 
-	ChatBoxWidget->SetVisibility(ESlateVisibility::Visible);
+	if (UEditableText* Input = GetChatInputWidget())
+	{
+		Input->SetVisibility(ESlateVisibility::Visible);
 
-	// 히스토리는 한 프레임 뒤
-	GetWorldTimerManager().SetTimerForNextTick([this]()
-	{
-		if (UScrollBox* ScrollBox = GetChatScrollBox())
+		GetWorldTimerManager().SetTimerForNextTick([this, Input]()
 		{
-			if (ScrollBox->GetChildrenCount() == 0)
+			TSharedPtr<SWidget> SlateWidget = Input->GetCachedWidget();
+			if (SlateWidget.IsValid())
 			{
-				if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
-				{
-					for (const FChatMessage& Msg : GS->ChatHistory)
-						HandleChatMessage(Msg);
-				}
+				FSlateApplication::Get().SetKeyboardFocus(SlateWidget, EFocusCause::SetDirectly);
 			}
-		}
-		
-		if (UEditableText* Input = GetChatInputWidget())
-	{
-		TSharedPtr<SWidget> SlateWidget = Input->GetCachedWidget();
-		if (SlateWidget.IsValid())
-		{
-			FSlateApplication::Get().SetKeyboardFocus(SlateWidget, EFocusCause::SetDirectly);
-		}
+		});
 	}
-	});
 
 	FInputModeGameAndUI InputMode;
 	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
@@ -449,12 +447,13 @@ void ABasePlayerController::CloseChat()
 	if (!bChatOpen) return;
 	bChatOpen = false;
 
-	// 입력창 비우기
 	if (UEditableText* Input = GetChatInputWidget())
+	{
 		Input->SetText(FText::GetEmpty());
+		Input->SetVisibility(ESlateVisibility::Collapsed); // 변경: 입력창만 숨김
+	}
 
-	if (ChatBoxWidget)
-		ChatBoxWidget->SetVisibility(ESlateVisibility::Collapsed);
+	// 삭제: ChatBoxWidget->SetVisibility(Collapsed) 하지 않음 (로그 유지)
 
 	GetWorldTimerManager().SetTimerForNextTick([this]()
 	{
@@ -463,7 +462,6 @@ void ABasePlayerController::CloseChat()
 		SetInputMode(InputMode);
 	});
 }
-
 
 UScrollBox* ABasePlayerController::GetChatScrollBox() const
 {

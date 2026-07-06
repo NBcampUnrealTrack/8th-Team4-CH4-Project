@@ -111,4 +111,5 @@ protected:
 	void ApplyHUDCursorMode();
 	bool bCursorHeldByKey = false;
 	bool bCursorForced = false;
+	
 };
