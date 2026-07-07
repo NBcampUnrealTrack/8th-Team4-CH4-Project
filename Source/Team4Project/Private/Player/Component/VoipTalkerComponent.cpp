@@ -46,6 +46,31 @@ namespace
 	}
 }
 
+void UVoipTalkerComponent::OnRegister()
+{
+	Super::OnRegister();
+
+	// 발화가 시작되기 훨씬 전(빙의 시점)부터 Settings 를 최신 상태로 유지하기 위해 미리 구독한다.
+	// 엔진은 발화 세션 시작 시(OnTalkingBegin 직전) Settings.AttenuationSettings/ComponentToAttachTo 를
+	// 읽어 synth 에 적용하므로, 이걸 OnTalkingBegin 에서 채우면 항상 한 발 늦어 감쇠가 안 걸린다.
+	if (APlayerState* OwnerPS = GetOwner<APlayerState>())
+	{
+		OwnerPS->OnPawnSet.AddUniqueDynamic(this, &UVoipTalkerComponent::HandleOwnerPawnSet);
+	}
+
+	RefreshVoiceSettings();
+}
+
+void UVoipTalkerComponent::OnUnregister()
+{
+	if (APlayerState* OwnerPS = GetOwner<APlayerState>())
+	{
+		OwnerPS->OnPawnSet.RemoveDynamic(this, &UVoipTalkerComponent::HandleOwnerPawnSet);
+	}
+
+	Super::OnUnregister();
+}
+
 void UVoipTalkerComponent::OnTalkingBegin(UAudioComponent* AudioComponent)
 {
 	if (!IsValid(AudioComponent))
@@ -73,32 +98,49 @@ void UVoipTalkerComponent::OnTalkingBegin(UAudioComponent* AudioComponent)
 		Voice->RegisterActiveTalker(this);
 	}
 
-	// 발화 중 빙의가 늦게 도착하면(Pawn 복제 지연) attach/감쇠를 그 시점에 바로잡는다.
-	if (OwnerPS)
-	{
-		OwnerPS->OnPawnSet.AddUniqueDynamic(this, &UVoipTalkerComponent::HandleOwnerPawnSet);
-	}
-
 	Super::OnTalkingBegin(AudioComponent);
 }
 
 void UVoipTalkerComponent::HandleOwnerPawnSet(APlayerState* /*Player*/, APawn* /*NewPawn*/, APawn* /*OldPawn*/)
 {
+	// 빙의(또는 빙의 해제) 시점마다 Settings 를 갱신 → 다음 발화가 올바른 감쇠/부착으로 시작된다.
+	// 발화 중이면 ApplyVoicePolicy 가 현재 재생에도 즉시 반영한다.
 	ApplyVoicePolicy();
 }
 
-void UVoipTalkerComponent::ApplyVoicePolicy()
+void UVoipTalkerComponent::RefreshVoiceSettings()
 {
-	UAudioComponent* AudioComponent = PlayingAudioComponent.Get();
-	if (!IsValid(AudioComponent))
-	{
-		return;
-	}
-
 	APlayerState* OwnerPS = GetOwner<APlayerState>();
 	APawn* OwnerPawn = OwnerPS ? OwnerPS->GetPawn() : nullptr;
 	USceneComponent* PawnRoot = OwnerPawn ? OwnerPawn->GetRootComponent() : nullptr;
 
+	// 사망 발화자: 래그돌을 따라가지 않도록 2D + 미부착.
+	if (IsSpeakerDead())
+	{
+		Settings.AttenuationSettings = nullptr;
+		Settings.ComponentToAttachTo = nullptr;
+		return;
+	}
+
+	// 생존 발화자: Pawn 에 부착(2D여도 위치는 무시되므로 무해).
+	//  - 산 청자 → 3D 근접 감쇠(ResolveAttenuation)
+	//  - 죽은 청자 → 거리 무관 2D(감쇠 없음)
+	Settings.ComponentToAttachTo = PawnRoot;
+	Settings.AttenuationSettings = IsLocalListenerDead() ? nullptr : ResolveAttenuation();
+}
+
+void UVoipTalkerComponent::ApplyVoicePolicy()
+{
+	// 다음 발화 세션을 위해 Settings 를 항상 먼저 최신화한다(엔진이 그 시점에 이 값을 읽는다).
+	RefreshVoiceSettings();
+
+	UAudioComponent* AudioComponent = PlayingAudioComponent.Get();
+	if (!IsValid(AudioComponent))
+	{
+		return; // 재생 중이 아니면 Settings 갱신만으로 충분(다음 발화에 반영).
+	}
+
+	// 현재 재생 중인 사운드에도 즉시 반영(Settings 는 '다음' 재생, 아래는 '현재' 재생용).
 	const bool bListenerDead = IsLocalListenerDead();
 
 	if (IsSpeakerDead())
@@ -110,50 +152,40 @@ void UVoipTalkerComponent::ApplyVoicePolicy()
 		AudioComponent->SetVolumeMultiplier(bListenerDead ? 1.f : 0.f);
 
 		// 2D 처리: 공간화/감쇠 없이, 죽은 캐릭터(래그돌)를 따라다니지 않게 떼어낸다.
-		Settings.AttenuationSettings = nullptr;
-		Settings.ComponentToAttachTo = nullptr;
-
 		AudioComponent->bAllowSpatialization = false;
 		AudioComponent->SetAttenuationSettings(nullptr);
 		if (AudioComponent->GetAttachParent())
 		{
 			AudioComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
 		}
+		return;
 	}
-	else
+
+	// 생존자 보이스: 모두에게 들림(죽은 청자 포함).
+	// 이전에 사망자 음소거(0)로 쓰였던 컴포넌트가 재사용될 수 있어 볼륨 복구.
+	AudioComponent->SetVolumeMultiplier(1.f);
+
+	if (bListenerDead)
 	{
-		// 생존자 보이스: 모두에게 들림(죽은 청자 포함).
-		// 이전에 사망자 음소거(0)로 쓰였던 컴포넌트가 재사용될 수 있어 볼륨 복구.
-		AudioComponent->SetVolumeMultiplier(1.f);
+		// 죽은 청자: 관전 중 어디에 있든 생존자 대화가 들리도록 거리 감쇠 없이 2D 재생.
+		AudioComponent->bAllowSpatialization = false;
+		AudioComponent->SetAttenuationSettings(nullptr);
+	}
+	else if (USoundAttenuation* Attenuation = ResolveAttenuation())
+	{
+		AudioComponent->bAllowSpatialization = true;
+		AudioComponent->SetAttenuationSettings(Attenuation);
+	}
 
-		if (bListenerDead)
+	// 재생 컴포넌트를 발화자 Pawn 에 부착 → 감쇠가 카메라가 아닌 캐릭터 위치 기준으로 계산되게.
+	// (RefreshVoiceSettings 에서 Settings.ComponentToAttachTo 는 이미 PawnRoot 로 세팅됨)
+	if (USceneComponent* PawnRoot = Settings.ComponentToAttachTo)
+	{
+		if (AudioComponent->GetAttachParent() != PawnRoot)
 		{
-			// 죽은 청자: 관전 중 어디에 있든 생존자 대화가 들리도록 거리 감쇠 없이 2D 재생.
-			Settings.AttenuationSettings = nullptr;
-			AudioComponent->bAllowSpatialization = false;
-			AudioComponent->SetAttenuationSettings(nullptr);
-		}
-		// Settings 는 엔진 ApplyVoiceSettings 가 "다음" 재생에 적용하고,
-		// SetAttenuationSettings 는 "현재" 재생 중인 ActiveSound 에 즉시 반영한다(둘 다 해 둠).
-		else if (USoundAttenuation* Attenuation = ResolveAttenuation())
-		{
-			Settings.AttenuationSettings = Attenuation;
-			AudioComponent->bAllowSpatialization = true;
-			AudioComponent->SetAttenuationSettings(Attenuation);
-		}
-
-		// 재생 컴포넌트를 발화자 Pawn 에 부착 → 감쇠가 카메라가 아닌 캐릭터 위치 기준으로 계산되게.
-		// 엔진 ApplyVoiceSettings 는 OnTalkingBegin 보다 먼저 실행돼 World origin 에서 재생 중이므로,
-		// 여기서 직접 Attach 해 현재 재생의 위치를 즉시 바로잡는다(Settings 는 다음 재생용).
-		if (PawnRoot)
-		{
-			Settings.ComponentToAttachTo = PawnRoot;
-			if (AudioComponent->GetAttachParent() != PawnRoot)
-			{
-				AudioComponent->AttachToComponent(
-					PawnRoot,
-					FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-			}
+			AudioComponent->AttachToComponent(
+				PawnRoot,
+				FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 		}
 	}
 }
@@ -183,10 +215,9 @@ void UVoipTalkerComponent::TeardownVoiceAudio()
 	{
 		Voice->UnregisterActiveTalker(this);
 	}
-	if (APlayerState* OwnerPS = GetOwner<APlayerState>())
-	{
-		OwnerPS->OnPawnSet.RemoveDynamic(this, &UVoipTalkerComponent::HandleOwnerPawnSet);
-	}
+	// OnPawnSet 구독은 OnRegister/OnUnregister 가 컴포넌트 수명 동안 유지한다(여기서 해제하지 않음).
+	// 정상 발화 종료 시엔 Pawn 이 살아있어 Settings.ComponentToAttachTo 를 그대로 두어야
+	// 다음 발화가 곧바로 Pawn 에 부착돼 감쇠가 유지된다. (부착 대상 해제는 Pawn 파괴 시에만)
 
 	// 재생 컴포넌트를 죽는 월드에서 완전히 빼낸다.
 	// synth 는 /Engine/Transient 전역이라 월드가 죽어도 살아남으므로, 단순 detach 만으론
@@ -202,9 +233,6 @@ void UVoipTalkerComponent::TeardownVoiceAudio()
 		}
 	}
 	PlayingAudioComponent.Reset();
-
-	// 다음 재생이 죽은 컴포넌트에 attach 되지 않도록 Settings 도 비운다(빙의 후 OnTalkingBegin 이 다시 채움).
-	Settings.ComponentToAttachTo = nullptr;
 
 	UnbindOwnerPawnEndPlay();
 }
@@ -236,6 +264,10 @@ void UVoipTalkerComponent::UnbindOwnerPawnEndPlay()
 
 void UVoipTalkerComponent::HandleOwnerPawnEndPlay(AActor* /*Actor*/, EEndPlayReason::Type /*EndPlayReason*/)
 {
+	// 발화자 Pawn 파괴(travel 포함) → 다음 재생이 죽은 컴포넌트에 attach 되지 않도록 부착 대상 해제.
+	// (재빙의 시 OnPawnSet → RefreshVoiceSettings 가 새 Pawn 으로 다시 채운다.)
+	Settings.ComponentToAttachTo = nullptr;
+
 	TeardownVoiceAudio();
 }
 
