@@ -275,7 +275,7 @@ void AGODTrain::UpdateTransformAlongSpline(float LeadDistance)
 
 	// 부모(TrainMesh 루트)를 통째로 이동 → 자식 칸들이 조립된 그대로 붙어서 따라온다(틈 없음).
 	// 크기·간격 등 네가 설정한 값은 하나도 바꾸지 않는다.
-	SetActorLocationAndRotation(RailT.GetLocation(), R);
+	SetActorLocationAndRotation(RailT.GetLocation(), R, true);
 
 	TrainVelocity = R.Vector() * TrainSpeed;
 }

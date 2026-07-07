@@ -19,6 +19,12 @@ public:
 	virtual void OnTalkingBegin(UAudioComponent* AudioComponent) override;
 	virtual void OnTalkingEnd() override;
 
+	// 발화 전에 OnPawnSet 을 미리 구독해 Settings(감쇠/부착 대상)를 항상 최신 상태로 유지한다.
+	// 엔진은 발화 세션 시작 시점(OnTalkingBegin 직전)에 Settings 를 읽어 synth 에 감쇠를 적용하므로,
+	// 그 전에 Settings 가 채워져 있어야 3D 감쇠가 실제로 걸린다.
+	virtual void OnRegister() override;
+	virtual void OnUnregister() override;
+
 	void TeardownVoiceAudio();
 
 	/**
@@ -29,7 +35,11 @@ public:
 	 * 폴링 없음 — 상태가 바뀌는 순간에만 재적용된다.
 	 */
 	void ApplyVoicePolicy();
-	
+
+	// 현재 생사 상태·빙의 Pawn 을 반영해 Settings.AttenuationSettings / ComponentToAttachTo 만 갱신.
+	// (재생 중이 아니어도 호출 가능 — 다음 발화 세션에 엔진이 이 값을 읽어 적용한다.)
+	void RefreshVoiceSettings();
+
 	UPROPERTY(EditDefaultsOnly, Category = "Voice")
 	TObjectPtr<USoundAttenuation> VoiceAttenuationOverride;
 
