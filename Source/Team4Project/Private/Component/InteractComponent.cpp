@@ -1,6 +1,7 @@
 #include "Component/InteractComponent.h"
 #include "Interface/Interactable.h"
 #include "Components/SphereComponent.h"
+#include "Components/MeshComponent.h"
 #include "GameFramework/Character.h"
 #include "Player/BaseCharacter.h"
 #include "InteractiveProp/ItemBase.h"
@@ -53,6 +54,8 @@ void UInteractComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		GetWorld()->GetTimerManager().ClearTimer(TargetCheckTimer);
 	}
+	// 종료 시 남아있는 하이라이트 제거 (포커스 중 폰 파괴/레벨 전환 대비)
+	SetActorHighlight(LastTarget.Get(), false);
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -73,9 +76,35 @@ void UInteractComponent::CheckTargetChanged()
 	// 대상이 바뀌었거나, 같은 대상이라도 문구가 바뀐 경우(문 잠김↔열림 등)만 알림
 	if (Target != LastTarget.Get() || !Prompt.EqualTo(LastPrompt))
 	{
+		// 포커스 대상이 실제로 바뀐 경우에만 하이라이트를 이전 대상→새 대상으로 옮긴다.
+		// (같은 대상에서 프롬프트 문구만 바뀐 경우는 오버레이 유지)
+		if (Target != LastTarget.Get())
+		{
+			SetActorHighlight(LastTarget.Get(), false);
+			SetActorHighlight(Target, true);
+		}
+
 		LastTarget = Target;
 		LastPrompt = Prompt;
 		OnInteractTargetChanged.Broadcast(Target, Prompt);
+	}
+}
+
+void UInteractComponent::SetActorHighlight(AActor* Actor, bool bEnable)
+{
+	if (!IsValid(Actor)) return;
+
+	// 액터의 모든 메시를 CustomDepth 스텐실로 마킹/해제 → 툰 PP가 값 2를 하이라이트로 그린다.
+	// (Nanite 호환. 캐릭터 실루엣은 값 1을 쓰므로 서로 안 겹침)
+	TArray<UMeshComponent*> Meshes;
+	Actor->GetComponents<UMeshComponent>(Meshes);
+	for (UMeshComponent* Mesh : Meshes)
+	{
+		if (bEnable)
+		{
+			Mesh->SetCustomDepthStencilValue(HighlightStencilValue);
+		}
+		Mesh->SetRenderCustomDepth(bEnable);
 	}
 }
 
