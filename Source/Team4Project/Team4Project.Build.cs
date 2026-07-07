@@ -30,8 +30,9 @@ public class Team4Project : ModuleRules
 			"AdvancedSessions",
 			"OnlineSubsystem", 
 			"OnlineSubsystemSteam", 
-			"OnlineSubsystemUtils" 
-		});
+			"OnlineSubsystemUtils",
+            "PhysicsCore"
+        });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 		
