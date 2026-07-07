@@ -334,7 +334,7 @@ void UGODMainHUDWidget::UpdateTrainProgress()
 		float TrackTotalLength = 1000.f;
 
 		// 왼쪽(0%)에서 오른쪽(100%)으로 정방향 전진하기 위한 진짜 진행율 계산
-		float RealMovePercent = (TotalDistance > 0.f) ? FMath::Clamp(CurrentDistance / TotalDistance, 0.f, 1.f) : 0.f;
+		float RealMovePercent = Progress;
 
 		// 최종 X 좌표 계산
 		float NewXPosition = RealMovePercent * TrackTotalLength;
