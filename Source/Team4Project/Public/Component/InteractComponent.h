@@ -56,9 +56,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
 	float InteractCooldown = 0.5f;
 
+	// 포커스(최근접 대상)한 오브젝트를 CustomDepth 스텐실로 마킹 → 툰 PP가 하이라이트 외곽선을 그린다.
+	// 캐릭터 실루엣(값 1)과 겹치지 않게 값 2 사용. 로컬 전용 · 순수 비주얼(복제 X).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Highlight")
+	int32 HighlightStencilValue = 2;
+
 private:
 	// 타이머 콜백: 최근접 대상/프롬프트를 재계산해 바뀌었을 때만 브로드캐스트
 	void CheckTargetChanged();
+
+	// 액터의 모든 메시 컴포넌트에 강조 오버레이를 켜거나 끈다 (로컬 비주얼).
+	void SetActorHighlight(AActor* Actor, bool bEnable);
 
 	FTimerHandle TargetCheckTimer;
 	TWeakObjectPtr<AActor> LastTarget;
