@@ -45,6 +45,12 @@ void ACoalPile::Interact_Implementation(ACharacter* Interactor)
 		UE_LOG(LogTemp, Warning, TEXT("[CoalPile] CoalItemClass 미지정: %s"), *GetName());
 		return;
 	}
+	
+	ABaseCharacter* BaseChar = Cast<ABaseCharacter>(Interactor);
+	if (BaseChar && Cast<ACoalItem>(BaseChar->GetCurrentHeldItem()))
+	{
+		return;
+	}
 
 	// 쿨다운 체크 (연속 배출 방지)
 	const float Now = GetWorld()->GetTimeSeconds();
@@ -60,9 +66,12 @@ void ACoalPile::Interact_Implementation(ACharacter* Interactor)
 	if (!Coal) return;
 
 	SetCoalCount(CurrentCoalCount - 1);
+	
+	//스폰 즉시 손에 들려줌
+	Coal->Server_PickUp(Interactor);
 
 	// 배출 사운드 (전 클라, 캐릭터 위치 ≈ 더미 위치). 캐릭터의 사운드 DT 를 재사용.
-	if (ABaseCharacter* BaseChar = Cast<ABaseCharacter>(Interactor))
+	if (BaseChar)
 	{
 		BaseChar->Multicast_PlayCharacterSound(SoundRows::CoalDispense);
 	}
