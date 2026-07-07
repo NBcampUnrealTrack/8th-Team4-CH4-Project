@@ -102,4 +102,6 @@ private:
 
 	// 마지막으로 사운드를 재생한 개폐 상태 — 초기 복제(bStartOpen)로 인한 시작 시 소리 방지.
 	bool bLastOpenStateForSound = false;
+	
+	void ApplyDoorCollision();
 };

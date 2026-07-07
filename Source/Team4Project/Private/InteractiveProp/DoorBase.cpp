@@ -22,6 +22,9 @@ ADoorBase::ADoorBase()
 	InteractionVolume->SetupAttachment(DoorFrame);
 	InteractionVolume->SetBoxExtent(FVector(50.f, 100.f, 100.f));
 	InteractionVolume->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+	
+	DoorFrame->SetGenerateOverlapEvents(false);
+	DoorMesh->SetGenerateOverlapEvents(false);
 }
 
 void ADoorBase::BeginPlay()
@@ -103,6 +106,7 @@ void ADoorBase::OnRep_IsOpen()
 
 	TargetRotation = bIsOpen ? OpenRotation : ClosedRotation;
 	bIsAnimating = true;
+	ApplyDoorCollision();
 
 	// 개폐 사운드 — 서버(ToggleDoor 의 수동 호출)와 클라(복제) 양쪽에서 재생.
 	// 접속 직후 초기 복제로 상태만 맞춰질 때(GameTime 0 부근)는 소리를 내지 않는다.
@@ -148,4 +152,13 @@ FText ADoorBase::GetInteractPrompt_Implementation() const
 {
 	if (bIsLocked) return FText::FromString(TEXT("잠김"));
 	return bIsOpen ? FText::FromString(TEXT("닫기")) : FText::FromString(TEXT("열기"));
+}
+
+void ADoorBase::ApplyDoorCollision()
+{
+	const ECollisionEnabled::Type NewCollision = bIsOpen
+			 ? ECollisionEnabled::NoCollision
+			 : ECollisionEnabled::QueryAndPhysics;
+	DoorFrame->SetCollisionEnabled(NewCollision);
+	DoorMesh->SetCollisionEnabled(NewCollision);
 }
