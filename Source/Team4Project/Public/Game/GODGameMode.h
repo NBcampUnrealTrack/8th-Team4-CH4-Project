@@ -17,6 +17,7 @@ class TEAM4PROJECT_API AGODGameMode : public AGameModeBase
 public:
 	AGODGameMode();
 
+	void StartCountdown();
 	virtual void BeginPlay() override;
 
 	/** 접속 승인 전 비밀번호 방 검증 (서버 권위 — 클라 조작으로 우회 불가) */
@@ -95,7 +96,6 @@ private:
 	FTimerHandle CountdownTimerHandle;
 	FTimerHandle MenuReturnTimerHandle;
 
-	void StartCountdown();
 	void UpdateCountdown();
 	void UpdateGameTimer();
 	void AssignRoles();

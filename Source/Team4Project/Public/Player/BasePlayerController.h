@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Game/ChatTypes.h"
 #include "BasePlayerController.generated.h"
 
 class UScrollBox;      
@@ -63,6 +64,17 @@ public:
 	
 	UFUNCTION(Server, Reliable)
 	void Server_SpectateNext();
+
+	// 이전 사람 보기 서버 RPC
+	UFUNCTION(Server, Reliable)
+	void Server_SpectatePrev();
+
+	// UI 위젯 버튼 호출용
+	UFUNCTION(BlueprintCallable, Category = "Spectate")
+	void SpectateNext();
+
+	UFUNCTION(BlueprintCallable, Category = "Spectate")
+	void SpectatePrev();
 	
 	// BasePlayerController.h
 	UPROPERTY()
@@ -84,6 +96,16 @@ public:
 	// 접속 직후 히스토리 백필 중에는 수신음을 내지 않기 위한 플래그
 	bool bChatBackfillInProgress = false;
 	
+	//채팅 로그가 새 메시지를 수신 후 화면에 유지되는 시간
+	UPROPERTY(EditDefaultsOnly, Category = "Chat")
+	float ChatLogVisibleDuration = 5.f;
+	
+	FTimerHandle ChatLogHideTimer;
+	
+	// 로그를 보여주고, 채팅창이 닫혀 있으면 일정 시간 후 자동으로 숨김
+	void ShowChatLogTemporarily();
+	void HideChatLog();
+	
 	// 위젯에서 named slot/named widget 접근용
 	UScrollBox*     GetChatScrollBox()  const;
 	UEditableText*  GetChatInputWidget() const;
@@ -96,13 +118,22 @@ public:
 	void CloseChat();
 	void SubmitChat(const FString& Message);
 
+	// HOST가 시작 버튼 눌러야 시작
+	UFUNCTION(Server, Reliable)
+	void Server_RequestStartGame();
+
+	// esc 누를 시 정지메뉴
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void TogglePauseMenu();
+
+
 protected:
 	bool bIsSpectating = false;
 	bool bChatOpen = false; 
 
 	// 살아있는 플레이어 목록에서 다음 대상 찾기
 	APawn* FindNextSpectateTarget() const;
-
+	APawn* FindPrevSpectateTarget() const;
 	// 현재 관전 중인 Pawn
 	UPROPERTY()
 	TWeakObjectPtr<APawn> CurrentSpectateTarget;
@@ -118,5 +149,16 @@ protected:
 	void ApplyHUDCursorMode();
 	bool bCursorHeldByKey = false;
 	bool bCursorForced = false;
+
+	// 에디터 디폴트 창에서 WBP_PauseMenu 클래스를 지정해 줄 변수
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> PauseMenuClass;
+
+	// 생성된 위젯 인스턴스를 관리할 레퍼런스 변수
+	UPROPERTY()
+	UUserWidget* PauseMenuRef;
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Spectate")
+	void OnStartSpectatingBP();
 	
 };
