@@ -11,6 +11,9 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Sound/GameSoundStatics.h"
 #include "Sound/GameSoundTypes.h"
+#include "NiagaraComponent.h"
+#include "VFX/GameVFXStatics.h"
+#include "VFX/GameVFXTypes.h"
 
 // 기차 칸(피벗) 개수. BP에서 각 피벗(Car_0~) 밑에 메시를 붙인다.
 static constexpr int32 GTrainNumCars = 6;
@@ -51,6 +54,11 @@ AGODTrain::AGODTrain()
 
 	Furnace = CreateDefaultSubobject<UFurnanceComponent>(TEXT("Furnace"));
 	Pressure = CreateDefaultSubobject<UPressureComponent>(TEXT("Pressure"));
+	
+	
+	VFXSpawnPoint = CreateDefaultSubobject<USceneComponent>(TEXT("VFXSpawnPoint"));
+	VFXSpawnPoint->SetupAttachment(EngineRoom);
+	VFXSpawnPoint->SetMobility(EComponentMobility::Movable);
 }
 
 void AGODTrain::BeginPlay()
@@ -321,6 +329,7 @@ void AGODTrain::OnRep_bIsRunning()
 	}
 
 	UpdateRunningAudio();
+	UpdateSmokeVFX();
 }
 
 const UDataTable* AGODTrain::GetGameSoundTable() const
@@ -483,4 +492,23 @@ void AGODTrain::OnRep_bIsDerailed()
 	}
 
 	UpdateRunningAudio();
+	UpdateSmokeVFX();
+}
+
+void AGODTrain::UpdateSmokeVFX()
+{
+	if (GetNetMode() == NM_DedicatedServer) return;
+
+	const bool bShouldPlay = bIsRunning && !bIsDerailed;
+
+	if (bShouldPlay && !SmokeVFX)
+	{
+		SmokeVFX = UGameVFXStatics::SpawnVFXAttachedFromTable(
+	VFXTable, FName(TEXT("Train.Smoke")), VFXSpawnPoint);
+	}
+	else if (!bShouldPlay && SmokeVFX)
+	{
+		SmokeVFX->Deactivate();
+		SmokeVFX = nullptr;
+	}
 }

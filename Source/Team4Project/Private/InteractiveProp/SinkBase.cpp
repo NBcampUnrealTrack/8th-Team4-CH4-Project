@@ -8,6 +8,9 @@
 #include "Components/AudioComponent.h"
 #include "Sound/GameSoundStatics.h"
 #include "Sound/GameSoundTypes.h"
+#include "VFX/GameVFXStatics.h"
+#include "VFX/GameVFXTypes.h"
+#include "NiagaraComponent.h"
 
 // Sets default values
 ASinkBase::ASinkBase()
@@ -28,6 +31,9 @@ ASinkBase::ASinkBase()
 	InteractionBox->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	InteractionBox->SetCollisionResponseToAllChannels(ECR_Ignore);
 	InteractionBox->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+	
+	VFXSpawnPoint = CreateDefaultSubobject<USceneComponent>(TEXT("VFXSpawnPoint"));
+	VFXSpawnPoint->SetupAttachment(SceneRoot);
 
 }
 
@@ -131,12 +137,14 @@ void ASinkBase::SetInUse(bool bNewInUse)
 	// OnRep 은 서버(리슨 호스트)에서 호출되지 않으므로 연출 훅을 직접 호출
 	OnWashingStateChanged(bIsInUse);
 	UpdateWashingAudio();
+	UpdateWashingVFX();
 }
 
 void ASinkBase::OnRep_IsInUse()
 {
 	OnWashingStateChanged(bIsInUse);
 	UpdateWashingAudio();
+	UpdateWashingVFX();
 }
 
 void ASinkBase::UpdateWashingAudio()
@@ -161,3 +169,22 @@ void ASinkBase::UpdateWashingAudio()
 	}
 }
 
+
+void ASinkBase::UpdateWashingVFX()
+{
+	if (GetNetMode() == NM_DedicatedServer) return;
+
+	if (bIsInUse)
+	{
+		if (!WashingVFX)
+		{
+			WashingVFX = UGameVFXStatics::SpawnVFXAttachedFromTable(
+				VFXTable, VFXRows::SinkWashing, VFXSpawnPoint);
+		}
+	}
+	else if (WashingVFX)
+	{
+		WashingVFX->Deactivate();
+		WashingVFX = nullptr;
+	}
+}
