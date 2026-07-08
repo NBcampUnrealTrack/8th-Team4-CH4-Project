@@ -108,8 +108,9 @@ public:
 	// ============================================================
 	// 에디터 설정
 	// ============================================================
+	// 만석(1500) 6분40초 / 고연료(1200) 8분20초 도착, 중간연료(850) 이하 유지 시 10분 초과 → 마피아 승
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
-	float TotalDistance = 10000.f;
+	float TotalDistance = 600000.f;
 
 	// 연료가 없어도 유지되는 최소 속도 (기차는 절대 멈추지 않음)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
