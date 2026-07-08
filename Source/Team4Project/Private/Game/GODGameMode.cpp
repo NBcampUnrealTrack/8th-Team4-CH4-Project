@@ -64,20 +64,20 @@ void AGODGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
 
-	AGODGameState* GODGS = GetGameState<AGODGameState>();
-	if (!GODGS || GODGS->CurrentPhase != EGamePhase::WaitingForPlayers) return;
+	//AGODGameState* GODGS = GetGameState<AGODGameState>();
+	//if (!GODGS || GODGS->CurrentPhase != EGamePhase::WaitingForPlayers) return;
 
 	// 현재 접속한 플레이어 수 확인
-	int32 Connected = 0;
-	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-	{
-		if (It->Get()) Connected++;
-	}
+	//int32 Connected = 0;
+	//for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	//{
+		//if (It->Get()) Connected++;
+	//}
 
-	if (Connected >= MaxPlayers)
-	{
-		StartCountdown();
-	}
+	//if (Connected >= MaxPlayers)
+	//{
+		//StartCountdown();
+	//}
 }
 
 void AGODGameMode::Logout(AController* Exiting)
