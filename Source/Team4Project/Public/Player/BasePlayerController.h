@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Game/ChatTypes.h"
 #include "BasePlayerController.generated.h"
 
 class UScrollBox;      
@@ -83,6 +84,16 @@ public:
 
 	// 접속 직후 히스토리 백필 중에는 수신음을 내지 않기 위한 플래그
 	bool bChatBackfillInProgress = false;
+	
+	//채팅 로그가 새 메시지를 수신 후 화면에 유지되는 시간
+	UPROPERTY(EditDefaultsOnly, Category = "Chat")
+	float ChatLogVisibleDuration = 5.f;
+	
+	FTimerHandle ChatLogHideTimer;
+	
+	// 로그를 보여주고, 채팅창이 닫혀 있으면 일정 시간 후 자동으로 숨김
+	void ShowChatLogTemporarily();
+	void HideChatLog();
 	
 	// 위젯에서 named slot/named widget 접근용
 	UScrollBox*     GetChatScrollBox()  const;

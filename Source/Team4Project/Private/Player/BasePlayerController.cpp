@@ -220,6 +220,11 @@ void ABasePlayerController::BeginPlay()
 			}
 		});
 	}
+	
+	if (UScrollBox* ScrollBox = GetChatScrollBox())
+	{
+		ScrollBox->SetVisibility(ESlateVisibility::Hidden);
+	}
 }
 
 void ABasePlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -383,6 +388,12 @@ void ABasePlayerController::OpenChat()
 {
 	if (bIsSpectating || bChatOpen || !ChatBoxWidget) return;
 	bChatOpen = true;
+	
+	GetWorldTimerManager().ClearTimer(ChatLogHideTimer);
+	if (UScrollBox* ScrollBox = GetChatScrollBox())
+	{
+		ScrollBox->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
 
 	if (UEditableText* Input = GetChatInputWidget())
 	{
@@ -449,6 +460,7 @@ void ABasePlayerController::HandleChatMessage(const FChatMessage& Msg)
 	if (!bChatBackfillInProgress)
 	{
 		UGameSoundStatics::PlaySound2DFromTable(this, UISoundTable, SoundRows::UIChatReceive);
+		ShowChatLogTemporarily();
 	}
 }
 
@@ -456,15 +468,15 @@ void ABasePlayerController::CloseChat()
 {
 	if (!bChatOpen) return;
 	bChatOpen = false;
+	
+	GetWorldTimerManager().SetTimer(ChatLogHideTimer, this, &ABasePlayerController::HideChatLog, ChatLogVisibleDuration, false);
 
 	if (UEditableText* Input = GetChatInputWidget())
 	{
 		Input->SetText(FText::GetEmpty());
-		Input->SetVisibility(ESlateVisibility::Collapsed); // 변경: 입력창만 숨김
+		Input->SetVisibility(ESlateVisibility::Collapsed);
 	}
-
-	// 삭제: ChatBoxWidget->SetVisibility(Collapsed) 하지 않음 (로그 유지)
-
+	
 	GetWorldTimerManager().SetTimerForNextTick([this]()
 	{
 		FInputModeGameOnly InputMode;
@@ -493,4 +505,28 @@ void ABasePlayerController::OnChatToggle()
 		CloseChat();
 	else
 		OpenChat();
+}
+
+void ABasePlayerController::ShowChatLogTemporarily()
+{
+	if (UScrollBox* ScrollBox = GetChatScrollBox())
+	{
+		ScrollBox->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	
+	if (!bChatOpen)
+	{
+		GetWorldTimerManager().SetTimer(ChatLogHideTimer, this,
+			&ABasePlayerController::HideChatLog, ChatLogVisibleDuration, false);
+	}
+}
+
+void ABasePlayerController::HideChatLog()
+{
+	if (bChatOpen) return; // 타이머 도중 채팅창이 열렸으면 숨기지 않음
+
+	if (UScrollBox* ScrollBox = GetChatScrollBox())
+	{
+		ScrollBox->SetVisibility(ESlateVisibility::Hidden);
+	}
 }
