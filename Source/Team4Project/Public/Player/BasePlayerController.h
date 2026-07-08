@@ -64,6 +64,17 @@ public:
 	
 	UFUNCTION(Server, Reliable)
 	void Server_SpectateNext();
+
+	// 이전 사람 보기 서버 RPC
+	UFUNCTION(Server, Reliable)
+	void Server_SpectatePrev();
+
+	// UI 위젯 버튼 호출용
+	UFUNCTION(BlueprintCallable, Category = "Spectate")
+	void SpectateNext();
+
+	UFUNCTION(BlueprintCallable, Category = "Spectate")
+	void SpectatePrev();
 	
 	// BasePlayerController.h
 	UPROPERTY()
@@ -107,13 +118,22 @@ public:
 	void CloseChat();
 	void SubmitChat(const FString& Message);
 
+	// HOST가 시작 버튼 눌러야 시작
+	UFUNCTION(Server, Reliable)
+	void Server_RequestStartGame();
+
+	// esc 누를 시 정지메뉴
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void TogglePauseMenu();
+
+
 protected:
 	bool bIsSpectating = false;
 	bool bChatOpen = false; 
 
 	// 살아있는 플레이어 목록에서 다음 대상 찾기
 	APawn* FindNextSpectateTarget() const;
-
+	APawn* FindPrevSpectateTarget() const;
 	// 현재 관전 중인 Pawn
 	UPROPERTY()
 	TWeakObjectPtr<APawn> CurrentSpectateTarget;
@@ -129,5 +149,16 @@ protected:
 	void ApplyHUDCursorMode();
 	bool bCursorHeldByKey = false;
 	bool bCursorForced = false;
+
+	// 에디터 디폴트 창에서 WBP_PauseMenu 클래스를 지정해 줄 변수
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> PauseMenuClass;
+
+	// 생성된 위젯 인스턴스를 관리할 레퍼런스 변수
+	UPROPERTY()
+	UUserWidget* PauseMenuRef;
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Spectate")
+	void OnStartSpectatingBP();
 	
 };
