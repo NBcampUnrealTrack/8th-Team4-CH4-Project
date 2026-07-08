@@ -7,6 +7,7 @@
 
 class UDataTable;
 class UAudioComponent;
+class UNiagaraComponent;
 
 UCLASS()
 class TEAM4PROJECT_API ASinkBase : public AActor, public IInteractable
@@ -29,6 +30,12 @@ public:
 	// 플레이어가 인터랙션할 수 있는 범위
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Components")
 	TObjectPtr<class UBoxComponent> InteractionBox;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<class USceneComponent> VFXSpawnPoint;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WashBasin")
+	TObjectPtr<UDataTable> VFXTable;
 	
 	// 사용 중 여부 
 	UPROPERTY(ReplicatedUsing = OnRep_IsInUse, BlueprintReadOnly, Category = "WashBasin")
@@ -69,4 +76,10 @@ private:
 	TObjectPtr<UAudioComponent> WashingAudio;
 
 	TWeakObjectPtr<ACharacter> WashingUser;
+	
+	
+	void UpdateWashingVFX();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNiagaraComponent> WashingVFX;
 };

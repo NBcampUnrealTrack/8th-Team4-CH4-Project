@@ -10,6 +10,7 @@ class UPressureComponent;
 class AGODTrainTrack;
 class UAudioComponent;
 class UDataTable;
+class UNiagaraComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTrainArrived);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTrainDerailed);
@@ -192,6 +193,14 @@ public:
 	// 열차 위치에서 게임 사운드 DT 행 재생 (전 클라 — 폭발 등 서버 이벤트용)
 	UFUNCTION(NetMulticast, Unreliable)
 	void Multicast_PlayTrainSound(FName RowName);
+	
+	
+	// 열차 나이아가라 이펙트 추가 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<USceneComponent> VFXSpawnPoint;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|VFX")
+	TObjectPtr<UDataTable> VFXTable;
 
 private:
 	UFUNCTION() void OnRep_bIsDerailed();
@@ -242,4 +251,9 @@ private:
 
 	// 현재 기차의 대표 월드 속도(선두 접선 × 속력). 점프 impart 폴백용.
 	FVector TrainVelocity = FVector::ZeroVector;
+	
+	void UpdateSmokeVFX();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNiagaraComponent> SmokeVFX;
 };
