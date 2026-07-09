@@ -9,6 +9,13 @@
 #include "UI/MenuSystem/MainMenu.h"
 #include "UI/MenuSystem/MenuWidget.h"
 #include "Game/GODGameState.h"
+#include "Game/GODGameUserSettings.h"
+
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundClass.h"
+#include "Sound/SoundMix.h"
+#include "Internationalization/Internationalization.h"
+#include "Misc/Base64.h"
 
 #include "OnlineSubsystem.h"
 #include "OnlineSubsystemUtils.h"
@@ -47,6 +54,31 @@ namespace
 			}
 		}
 		return FPlatformMisc::GetLoginId();
+	}
+
+	const TCHAR* GRoomNameB64Prefix = TEXT("b64:");
+
+	FString EncodeRoomName(const FString& In)
+	{
+		FTCHARToUTF8 Utf8(*In);
+		const FString Encoded = FBase64::Encode(reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length());
+		return FString(GRoomNameB64Prefix) + Encoded;
+	}
+
+	FString DecodeRoomName(const FString& In)
+	{
+		if (!In.StartsWith(GRoomNameB64Prefix))
+		{
+			return In;
+		}
+		const FString Payload = In.RightChop(FCString::Strlen(GRoomNameB64Prefix));
+		TArray<uint8> Bytes;
+		if (!FBase64::Decode(Payload, Bytes))
+		{
+			return In;
+		}
+		Bytes.Add(0);
+		return FString(UTF8_TO_TCHAR(reinterpret_cast<const char*>(Bytes.GetData())));
 	}
 }
 
@@ -98,6 +130,57 @@ void UPlayerGameInstance::Init()
 	{
 		NetworkFailureDelegateHandle = GEngine->OnNetworkFailure().AddUObject(this, &UPlayerGameInstance::OnNetworkFailure);
 	}
+
+	ApplyLanguage();
+	ApplyAudioSettings();
+	if (UGODGameUserSettings* Settings = UGODGameUserSettings::Get())
+	{
+		Settings->ApplyGamma();
+	}
+}
+
+void UPlayerGameInstance::ApplySoundClassOverride(USoundMix* Mix, USoundClass* Class, float Volume)
+{
+	if (Mix == nullptr || Class == nullptr)
+	{
+		return;
+	}
+	UGameplayStatics::SetSoundMixClassOverride(this, Mix, Class, Volume, 1.f, 0.f, true);
+}
+
+void UPlayerGameInstance::ApplyAudioSettings()
+{
+	UGODGameUserSettings* Settings = UGODGameUserSettings::Get();
+	if (Settings == nullptr)
+	{
+		return;
+	}
+
+	USoundMix* Mix = MasterSoundMix.LoadSynchronous();
+	if (Mix == nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Audio] MasterSoundMix 미지정 — BP_PlayerGameInstance 에 SoundMix/SoundClass 를 지정하세요."));
+		return;
+	}
+
+	const float MasterVol = Settings->bMuted ? 0.f : FMath::Clamp(Settings->MasterVolume, 0.f, 1.f);
+
+	ApplySoundClassOverride(Mix, MasterSoundClass.LoadSynchronous(), MasterVol);
+	ApplySoundClassOverride(Mix, BGMSoundClass.LoadSynchronous(), FMath::Clamp(Settings->BGMVolume, 0.f, 1.f));
+	ApplySoundClassOverride(Mix, SFXSoundClass.LoadSynchronous(), FMath::Clamp(Settings->SFXVolume, 0.f, 1.f));
+	ApplySoundClassOverride(Mix, UISoundClass.LoadSynchronous(), FMath::Clamp(Settings->UIVolume, 0.f, 1.f));
+
+	UGameplayStatics::PushSoundMixModifier(this, Mix);
+}
+
+void UPlayerGameInstance::ApplyLanguage()
+{
+	UGODGameUserSettings* Settings = UGODGameUserSettings::Get();
+	if (Settings == nullptr || Settings->LanguageCulture.IsEmpty())
+	{
+		return;
+	}
+	FInternationalization::Get().SetCurrentCulture(Settings->LanguageCulture);
 }
 
 void UPlayerGameInstance::Shutdown()
@@ -375,7 +458,7 @@ void UPlayerGameInstance::OnFindSessionComplete(bool Success)
 			FString ServerName;
 			if (SearchResult.Session.SessionSettings.Get(SERVER_NAME_SETTINGS_KEY, ServerName))
 			{
-				Data.Name = ServerName;
+				Data.Name = DecodeRoomName(ServerName);
 			}
 			else
 			{
@@ -465,7 +548,8 @@ void UPlayerGameInstance::CreateSession()
 		SessionSettings.bUseLobbiesIfAvailable = true; 
 		SessionSettings.bAllowJoinInProgress = true;
 		
-		SessionSettings.Set(SERVER_NAME_SETTINGS_KEY, DesiredServerName, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+		// 한글 보존을 위해 Base64(ASCII)로 인코딩해 광고 (읽는 측에서 DecodeRoomName).
+		SessionSettings.Set(SERVER_NAME_SETTINGS_KEY, EncodeRoomName(DesiredServerName), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 
 		// 유령 세션 필터링용: 호스트 고유 ID + 생성 시각(Unix time).
 		// 검색 측(OnFindSessionComplete)에서 같은 호스트의 세션이 여럿이면 최신 것만 남긴다.

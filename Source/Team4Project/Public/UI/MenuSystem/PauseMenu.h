@@ -1,6 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-#pragma once
+ï»¿#pragma once
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
@@ -15,17 +13,31 @@ class TEAM4PROJECT_API UPauseMenuWidget : public UUserWidget
 protected:
 	virtual void NativeConstruct() override;
 
-	// ºíÇÁ µğÀÚÀÌ³Ê Ã¢ÀÇ ¹öÆ° ÀÌ¸§°ú Á¤È®È÷ ÀÏÄ¡½ÃÄÑ Áİ´Ï´Ù.
 	UPROPERTY(meta = (BindWidget))
 	UButton* Btn_Resume;
 
 	UPROPERTY(meta = (BindWidget))
 	UButton* Btn_Exit;
 
-	// ¹öÆ°ÀÌ ´­·ÈÀ» ¶§ ½ÇÇàµÉ ³»ºÎ ÇÔ¼öµé
 	UFUNCTION()
 	void OnResumeClicked();
 
 	UFUNCTION()
 	void OnExitClicked();
+
+	// â”€â”€ ì„¤ì •ì°½ (WBP ì— ì•„ì§ ì—†ì–´ë„ ë˜ë„ë¡ Optional) â”€â”€
+	// ì´ ì´ë¦„(SettingsButton)ìœ¼ë¡œ ë²„íŠ¼ë§Œ ë°°ì¹˜í•˜ë©´ ìë™ìœ¼ë¡œ í´ë¦­ â†’ ì„¤ì •ì°½ ì—´ë¦¼.
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UButton* SettingsButton;
+
+	// ì„¤ì •ì°½ ìœ„ì ¯ í´ë˜ìŠ¤ (WBP_SettingsMenu). WBP_PauseMenu í´ë˜ìŠ¤ ë””í´íŠ¸ì—ì„œ ì§€ì •.
+	UPROPERTY(EditDefaultsOnly, Category = "Settings")
+	TSubclassOf<class USettingsMenu> SettingsMenuClass;
+
+	// ì—´ë ¤ ìˆëŠ” ì„¤ì •ì°½ ì¸ìŠ¤í„´ìŠ¤ (ì¤‘ë³µ ìƒì„± ë°©ì§€).
+	UPROPERTY()
+	TObjectPtr<class USettingsMenu> SettingsMenuInstance;
+
+	UFUNCTION()
+	void OnSettingsClicked();
 };

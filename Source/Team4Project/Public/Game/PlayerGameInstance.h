@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -15,6 +15,8 @@
 #include "PlayerGameInstance.generated.h"
 
 class UItemDefinition;
+class USoundClass;
+class USoundMix;
 
 UENUM(BlueprintType)
 enum class EMatchState : uint8
@@ -143,7 +145,35 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Session|QuickJoin")
 	float QuickJoinPingWeight = 1.f;
 
+	// ============================================================
+	// 오디오 설정 적용 (SoundClass/SoundMix)
+	// ============================================================
+
+	UPROPERTY(EditDefaultsOnly, Category = "Audio")
+	TSoftObjectPtr<USoundMix> MasterSoundMix;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Audio")
+	TSoftObjectPtr<USoundClass> MasterSoundClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Audio")
+	TSoftObjectPtr<USoundClass> BGMSoundClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Audio")
+	TSoftObjectPtr<USoundClass> SFXSoundClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Audio")
+	TSoftObjectPtr<USoundClass> UISoundClass;
+
+	UFUNCTION(BlueprintCallable, Category = "Audio")
+	void ApplyAudioSettings();
+
+	// UGODGameUserSettings.LanguageCulture 를 실제 컬처로 적용 (빈 값이면 무시).
+	UFUNCTION(BlueprintCallable, Category = "Settings")
+	void ApplyLanguage();
+
 private:
+
+	void ApplySoundClassOverride(USoundMix* Mix, USoundClass* Class, float Volume);
 	int32 PendingSharedCredits = 0;
 
 	TMap<FString, FPlayerPersistentData> PlayerDataMap;
