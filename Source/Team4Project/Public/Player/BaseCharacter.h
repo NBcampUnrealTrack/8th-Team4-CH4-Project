@@ -450,6 +450,12 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Death")
 	float CorpseSettleTime = 0.f;
 
+	void AttachRagdollToBase(UPrimitiveComponent* Base, bool bInAir);
+
+	// 죽은 척 해제 시 캡슐을 맞출 기준 본. 스켈레톤에 없으면 루트 본으로 폴백한다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Death")
+	FName RagdollPelvisBone = TEXT("pelvis");
+
 	// 시체를 지정 발판에 부착(kinematic 고정) → 발판을 따라 함께 이동.
 	void AttachCorpseToBase(UPrimitiveComponent* Base);
 

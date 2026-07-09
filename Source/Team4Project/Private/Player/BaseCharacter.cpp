@@ -168,11 +168,11 @@ void ABaseCharacter::BeginPlay()
 		SendSkinSelectionToServer();
 	}
 
+	CacheFallReferenceActors();
+
 	// 열차 밖으로 떨어졌을 때 감시 (서버 전용, KillZ 미설정 맵 대비).
 	if (HasAuthority())
 	{
-		CacheFallReferenceActors();
-
 		GetWorldTimerManager().SetTimer(
 			FallRescueTimer, this, &ABaseCharacter::CheckFallRescueOrDeath, 1.f, /*bLoop=*/true);
 	}
@@ -841,45 +841,48 @@ void ABaseCharacter::Multicast_HandleDeath_Implementation()
 		DisableInput(PC);
 	}
 
-	// 시체가 열차와 함께 이동하도록 발판(열차 메시)에 부착한다.
+	AttachRagdollToBase(DeathBase, bDiedInAir);
+}
+
+void ABaseCharacter::AttachRagdollToBase(UPrimitiveComponent* Base, bool bInAir)
+{
+	// 래그돌이 열차와 함께 이동하도록 발판(열차 메시)에 부착한다.
 	// 열차는 순간이동 방식이라, 부착 안 하고 래그돌이 시뮬 중이면 열차 콜리전에
 	// 튕겨 날아간다. GetMovementBase가 비면(클라 타이밍 등) 열차를 직접 찾아 폴백한다.
-	if (!DeathBase)
+	if (!Base && IsValid(CachedTrain))
 	{
-		for (TActorIterator<AGODTrain> It(GetWorld()); It; ++It)
-		{
-			DeathBase = (*It)->TrainMesh;
-			break;
-		}
+		Base = CachedTrain->TrainMesh;
 	}
 
-	if (DeathBase)
+	if (!Base)
 	{
-		if (bDiedInAir)
+		return;
+	}
+
+	if (bInAir)
+	{
+		// 공중: 즉시 kinematic 고정하면 몸이 공중에 뜬 채 남으므로,
+		// 래그돌이 바닥에 떨어져 멈춘 뒤에 부착한다.
+		WaitForCorpseToLand(Base);
+	}
+	else if (CorpseSettleTime <= 0.f)
+	{
+		// 즉시 부착(현재 포즈로 고정) → 열차 위에서 바로 함께 이동.
+		AttachCorpseToBase(Base);
+	}
+	else
+	{
+		// 짧게 래그돌 후 부착 (빠른 열차에선 그 사이 뒤로 밀릴 수 있음).
+		TWeakObjectPtr<ABaseCharacter> WeakThis(this);
+		TWeakObjectPtr<UPrimitiveComponent> WeakBase(Base);
+		FTimerDelegate Del = FTimerDelegate::CreateLambda([WeakThis, WeakBase]()
 		{
-			// 공중 사망: 즉시 kinematic 고정하면 시체가 공중에 뜬 채 남으므로,
-			// 래그돌이 바닥에 떨어져 멈춘 뒤에 부착한다.
-			WaitForCorpseToLand(DeathBase);
-		}
-		else if (CorpseSettleTime <= 0.f)
-		{
-			// 즉시 부착(현재 포즈로 고정) → 열차 위에서 바로 함께 이동.
-			AttachCorpseToBase(DeathBase);
-		}
-		else
-		{
-			// 짧게 래그돌 후 부착 (빠른 열차에선 그 사이 뒤로 밀릴 수 있음).
-			TWeakObjectPtr<ABaseCharacter> WeakThis(this);
-			TWeakObjectPtr<UPrimitiveComponent> WeakBase(DeathBase);
-			FTimerDelegate Del = FTimerDelegate::CreateLambda([WeakThis, WeakBase]()
+			if (WeakThis.IsValid() && WeakBase.IsValid())
 			{
-				if (WeakThis.IsValid() && WeakBase.IsValid())
-				{
-					WeakThis->AttachCorpseToBase(WeakBase.Get());
-				}
-			});
-			GetWorldTimerManager().SetTimer(CorpseAttachTimer, Del, CorpseSettleTime, /*bLoop=*/false);
-		}
+				WeakThis->AttachCorpseToBase(WeakBase.Get());
+			}
+		});
+		GetWorldTimerManager().SetTimer(CorpseAttachTimer, Del, CorpseSettleTime, /*bLoop=*/false);
 	}
 }
 
@@ -1299,7 +1302,17 @@ void ABaseCharacter::ApplyFakeDeathPhysics(bool bActivate)
 {
 	if (bActivate)
 	{
-		if (GetCharacterMovement()) GetCharacterMovement()->DisableMovement();
+		// 밟고 있던 발판과 공중 여부를 움직임 비활성화 전에 기억한다. (DisableMovement 가 베이스를 지운다)
+		UPrimitiveComponent* FakeDeathBase = nullptr;
+		bool bFakeDiedInAir = false;
+		if (GetCharacterMovement())
+		{
+			FakeDeathBase = GetCharacterMovement()->GetMovementBase();
+			bFakeDiedInAir = GetCharacterMovement()->IsFalling();
+			GetCharacterMovement()->StopMovementImmediately();
+			GetCharacterMovement()->DisableMovement();
+		}
+
 		if (GetCapsuleComponent()) GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		if (GetMesh())
 		{
@@ -1316,16 +1329,41 @@ void ABaseCharacter::ApplyFakeDeathPhysics(bool bActivate)
 				BPC->SetHUDCursorMode(true);
 			}
 		}
+
+		// 진짜 사망과 동일하게 열차에 부착한다. 안 붙이면 움직임이 꺼진 액터(캡슐+카메라)가
+		// 월드 좌표에 남고 열차만 달려나가, 카메라가 몸에서 떨어진 것처럼 보인다.
+		AttachRagdollToBase(FakeDeathBase, bFakeDiedInAir);
 	}
 	else
 	{
-		if (GetMesh())
+		// 부착 대기 타이머가 남아 있으면 일어난 뒤에 뒤늦게 부착되므로 먼저 취소한다.
+		GetWorldTimerManager().ClearTimer(CorpseAttachTimer);
+
+		// 래그돌이 쓰러진 위치(골반)로 캡슐을 옮긴 뒤 일어난다.
+		// 안 그러면 죽은 척을 시작한 지점에 그대로 서게 된다.
+		if (USkeletalMeshComponent* M = GetMesh())
 		{
-			GetMesh()->SetSimulatePhysics(false);
-			GetMesh()->SetCollisionProfileName(TEXT("CharacterMesh"));
-			GetMesh()->AttachToComponent(GetCapsuleComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-			GetMesh()->SetRelativeLocationAndRotation(DefaultMeshRelativeLocation, DefaultMeshRelativeRotation);
+			const FName PelvisBone = (M->GetBoneIndex(RagdollPelvisBone) != INDEX_NONE)
+				? RagdollPelvisBone : M->GetBoneName(0);
+			const FVector PelvisLocation = M->GetBoneLocation(PelvisBone);
+			const float HalfHeight = GetCapsuleComponent()
+				? GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 0.f;
+
+			M->SetSimulatePhysics(false);
+			M->SetCollisionProfileName(TEXT("CharacterMesh"));
+
+			// 열차에 붙어 있던 상태를 풀고, 캡슐을 시체 위치로 맞춘다. (서버 권위, 위치는 복제된다)
+			DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+			if (HasAuthority())
+			{
+				SetActorLocation(PelvisLocation + FVector(0.f, 0.f, HalfHeight), /*bSweep=*/false,
+					nullptr, ETeleportType::TeleportPhysics);
+			}
+
+			M->AttachToComponent(GetCapsuleComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+			M->SetRelativeLocationAndRotation(DefaultMeshRelativeLocation, DefaultMeshRelativeRotation);
 		}
+
 		if (GetCapsuleComponent()) GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 		if (GetCharacterMovement()) GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 		if (APlayerController* PC = Cast<APlayerController>(GetController()))
