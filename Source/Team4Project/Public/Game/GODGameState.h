@@ -140,9 +140,21 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Sound")
 	float FuelLowThreshold = 0.2f;
 
-	/** 경고음 반복 간격 (초) */
+	/** 압력이 폭발 임계값에 닿는 지점 (PressureComponent.ExplosionThreshold 와 맞출 것) */
 	UPROPERTY(EditDefaultsOnly, Category = "Sound")
-	float WarningRepeatInterval = 5.f;
+	float PressureCriticalLevel = 100.f;
+
+	/** 경고 임계값에서의 비프 간격 (초). 비프 한 번 길이보다 길게 둘 것 — 짧으면 재생이 겹친다. */
+	UPROPERTY(EditDefaultsOnly, Category = "Sound")
+	float PressureWarningIntervalMax = 1.5f;
+
+	/** 폭발 직전의 비프 간격 (초). 압력이 오를수록 Max 에서 여기까지 좁혀진다. */
+	UPROPERTY(EditDefaultsOnly, Category = "Sound")
+	float PressureWarningIntervalMin = 0.4f;
+
+	/** 연료 부족음 반복 간격 (초) */
+	UPROPERTY(EditDefaultsOnly, Category = "Sound")
+	float FuelWarningInterval = 3.f;
 
 protected:
 	/**
@@ -152,6 +164,9 @@ protected:
 	 */
 	void SoundMonitorTick();
 	void PlayPhaseSound(EGamePhase NewPhase);
+
+	/** 현재 압력에 따른 비프 간격. 폭발 임계값에 가까울수록 짧아진다. */
+	float GetPressureWarningInterval() const;
 
 	/** 로컬 플레이어의 MainRole 기준 승리 여부 (승리/패배 사운드 분기). */
 	bool IsLocalPlayerWinner(EGamePhase WinPhase) const;

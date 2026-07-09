@@ -32,6 +32,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
 #include "Game/GODGameState.h"
+#include "Game/GODGameMode.h"
 #include "InteractiveProp/GODTrain.h"
 #include "UI/HUD/GODHUD.h"
 #include "EngineUtils.h"
@@ -167,11 +168,11 @@ void ABaseCharacter::BeginPlay()
 		SendSkinSelectionToServer();
 	}
 
-	// 로비 페이즈에서 열차 밖으로 떨어졌을 때 복귀 감시 (서버 전용, KillZ 미설정 맵 대비).
+	// 열차 밖으로 떨어졌을 때 감시 (서버 전용, KillZ 미설정 맵 대비).
 	if (HasAuthority())
 	{
 		GetWorldTimerManager().SetTimer(
-			FallRescueTimer, this, &ABaseCharacter::CheckLobbyFallRescue, 1.f, /*bLoop=*/true);
+			FallRescueTimer, this, &ABaseCharacter::CheckFallRescueOrDeath, 1.f, /*bLoop=*/true);
 	}
 }
 
@@ -1144,30 +1145,63 @@ void ABaseCharacter::CheckForHiddenBodies()
 }
 
 // ============================================================
-// 로비(게임 시작 전) 낙하 복귀
+// 낙하 처리 (로비=복귀 / 진행 중=사망)
 // ============================================================
 
-void ABaseCharacter::CheckLobbyFallRescue()
+void ABaseCharacter::CheckFallRescueOrDeath()
 {
 	if (!HasAuthority() || bIsDead) return;
 
-	// 게임 시작 전(대기/카운트다운)에만 복귀. 진행 중 낙하는 기존 규칙 유지.
 	const AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>();
-	if (!GS || (GS->CurrentPhase != EGamePhase::WaitingForPlayers &&
-	            GS->CurrentPhase != EGamePhase::Countdown))
+	if (!GS) return;
+
+	if (GS->CurrentPhase == EGamePhase::WaitingForPlayers ||
+	    GS->CurrentPhase == EGamePhase::Countdown)
 	{
+		// 로비 동안 열차는 스타트 지점에 정차해 있으므로 PlayerStart 높이를 기준으로 낙하를 판정.
+		for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+		{
+			if (GetActorLocation().Z < It->GetActorLocation().Z - LobbyFallRescueDepth)
+			{
+				RescueToStart();
+			}
+			break;
+		}
 		return;
 	}
 
-	// 로비 동안 열차는 스타트 지점에 정차해 있으므로 PlayerStart 높이를 기준으로 낙하를 판정.
+	if (GS->CurrentPhase != EGamePhase::Playing) return;
+
+	// 주행 중에는 지형이 열차보다 높아 KillZ 에 닿지 않는 구간이 있으므로
+	// FellOutOfWorld 를 기다리지 않고 열차와의 고도차로 직접 판정한다.
+	float ReferenceZ = 0.f;
+	if (!GetFallReferenceZ(ReferenceZ)) return;
+
+	if (GetActorLocation().Z < ReferenceZ - FallDeathDepth)
+	{
+		// 승리조건 체크를 타려면 반드시 GameMode 경유 (Die() 직접 호출 금지).
+		if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
+		{
+			GM->HandlePlayerDeath(nullptr, GetPlayerState<AGODPlayerState>());
+		}
+	}
+}
+
+bool ABaseCharacter::GetFallReferenceZ(float& OutZ) const
+{
+	for (TActorIterator<AGODTrain> It(GetWorld()); It; ++It)
+	{
+		OutZ = It->GetActorLocation().Z;
+		return true;
+	}
+
 	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
 	{
-		if (GetActorLocation().Z < It->GetActorLocation().Z - LobbyFallRescueDepth)
-		{
-			RescueToStart();
-		}
-		break;
+		OutZ = It->GetActorLocation().Z;
+		return true;
 	}
+
+	return false;
 }
 
 bool ABaseCharacter::RescueToStart()
@@ -1195,13 +1229,27 @@ bool ABaseCharacter::RescueToStart()
 
 void ABaseCharacter::FellOutOfWorld(const UDamageType& dmgType)
 {
-	// 로비 페이즈면 파괴하지 않고 열차(스타트 지점)로 복귀.
 	const AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr;
-	const bool bLobbyPhase = GS && (GS->CurrentPhase == EGamePhase::WaitingForPlayers ||
-	                                GS->CurrentPhase == EGamePhase::Countdown);
-	if (HasAuthority() && bLobbyPhase && !bIsDead && RescueToStart())
+
+	if (HasAuthority() && GS && !bIsDead)
 	{
-		return;
+		// 로비 페이즈면 파괴하지 않고 열차(스타트 지점)로 복귀.
+		const bool bLobbyPhase = GS->CurrentPhase == EGamePhase::WaitingForPlayers ||
+		                         GS->CurrentPhase == EGamePhase::Countdown;
+		if (bLobbyPhase && RescueToStart())
+		{
+			return;
+		}
+
+		// 진행 중이면 폰을 그냥 파괴하지 않고 사망 경로를 태운다. (관전 전환 + 승리조건 체크)
+		if (GS->CurrentPhase == EGamePhase::Playing)
+		{
+			if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
+			{
+				GM->HandlePlayerDeath(nullptr, GetPlayerState<AGODPlayerState>());
+				return;
+			}
+		}
 	}
 
 	Super::FellOutOfWorld(dmgType);
