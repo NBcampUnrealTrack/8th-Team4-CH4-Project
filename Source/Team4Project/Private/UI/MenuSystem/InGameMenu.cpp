@@ -2,6 +2,7 @@
 
 
 #include "UI/MenuSystem/InGameMenu.h"
+#include "UI/MenuSystem/SettingsMenu.h"
 #include "Components/Button.h"
 #include "Sound/GameSoundTypes.h"
 
@@ -18,10 +19,32 @@ bool UInGameMenu::Initialize()
 		return false;
 	QuitButton->OnClicked.AddDynamic(this, &UInGameMenu::QuitPressed);
 
+	if (SettingsButton) SettingsButton->OnClicked.AddDynamic(this, &UInGameMenu::OpenSettings);
+
 	BindButtonSounds(CancelButton);
 	BindButtonSounds(QuitButton);
+	BindButtonSounds(SettingsButton);
 
 	return true;
+}
+
+void UInGameMenu::OpenSettings()
+{
+	if (!SettingsMenuClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Settings] SettingsMenuClass 미지정 — WBP_InGameMenu 에 WBP_SettingsMenu 를 지정하세요."));
+		return;
+	}
+	if (SettingsMenuInstance && SettingsMenuInstance->IsInViewport())
+	{
+		return;
+	}
+	SettingsMenuInstance = CreateWidget<USettingsMenu>(GetOwningPlayer(), SettingsMenuClass);
+	if (SettingsMenuInstance)
+	{
+		SettingsMenuInstance->SetMenuInterface(MenuInterface);
+		SettingsMenuInstance->AddToViewport(10);
+	}
 }
 
 void UInGameMenu::NativeConstruct()

@@ -13,6 +13,7 @@
 #include "Misc/Crc.h"
 
 #include "UI/MenuSystem/ServerRow.h"
+#include "UI/MenuSystem/SettingsMenu.h"
 #include "Game/PlayerGameInstance.h"
 #include "Sound/GameSoundTypes.h"
 
@@ -89,6 +90,9 @@ bool UMainMenu::Initialize()
     if (ConfirmSkinButton) ConfirmSkinButton->OnClicked.AddDynamic(this, &UMainMenu::ConfirmSkinSelection);
     UpdateSelectedSkinText();
 
+    // 설정창 버튼 — Optional
+    if (SettingsButton) SettingsButton->OnClicked.AddDynamic(this, &UMainMenu::OpenSettings);
+
     // 모든 버튼에 클릭/호버 사운드 바인딩 (UISoundTable 의 UI.Click / UI.Hover 행. null 은 무시됨)
     BindButtonSounds(HostButton);
     BindButtonSounds(CancelHostMenuButton);
@@ -108,8 +112,30 @@ bool UMainMenu::Initialize()
     BindButtonSounds(SkinRabbitButton);
     BindButtonSounds(SkinRaccoonButton);
     BindButtonSounds(ConfirmSkinButton);
+    BindButtonSounds(SettingsButton);
 
     return true;
+}
+
+void UMainMenu::OpenSettings()
+{
+    if (!SettingsMenuClass)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Settings] SettingsMenuClass 미지정 — WBP_MainMenu 에 WBP_SettingsMenu 를 지정하세요."));
+        return;
+    }
+    // 이미 떠 있으면 중복 생성 방지.
+    if (SettingsMenuInstance && SettingsMenuInstance->IsInViewport())
+    {
+        return;
+    }
+    SettingsMenuInstance = CreateWidget<USettingsMenu>(GetOwningPlayer(), SettingsMenuClass);
+    if (SettingsMenuInstance)
+    {
+        SettingsMenuInstance->SetMenuInterface(MenuInterface);
+        // 메인 메뉴 위에 오버레이 (Z-Order 높게)
+        SettingsMenuInstance->AddToViewport(10);
+    }
 }
 
 void UMainMenu::NativeConstruct()

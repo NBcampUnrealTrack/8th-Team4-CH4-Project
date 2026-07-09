@@ -26,6 +26,7 @@
 #include "TimerManager.h"
 #include "Game/BaseDataSubsystem.h"
 #include "Game/PlayerGameInstance.h"
+#include "Game/GODGameUserSettings.h"
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -47,6 +48,7 @@
 #include "GameFramework/Controller.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "UserSettings/EnhancedInputUserSettings.h"
 #include "InputActionValue.h"
 #include "Component/CustomMovementComponent.h"
 #include "Sound/GameSoundStatics.h"
@@ -152,6 +154,13 @@ void ABaseCharacter::BeginPlay()
 			if (EILPS)
 			{
 				EILPS->AddMappingContext(DefaultMappingContext, 0);
+
+				// 설정창 조작 탭 리바인딩 목록에 이 IMC 의 매핑이 뜨도록 User Settings 에 등록.
+				// (Project Settings → Enhanced Input → Enable User Settings 필요)
+				if (UEnhancedInputUserSettings* InputSettings = EILPS->GetUserSettings())
+				{
+					InputSettings->RegisterInputMappingContext(DefaultMappingContext);
+				}
 			}
 		}
 
@@ -1527,6 +1536,16 @@ void ABaseCharacter::HandleClimbMovementInput(const FInputActionValue& Value)
 void ABaseCharacter::Look(const FInputActionValue& Value)
 {
 	FVector2D LookAxisVector = Value.Get<FVector2D>();
+
+	// 설정창 마우스 감도 / Y축 반전 반영.
+	if (const UGODGameUserSettings* Settings = UGODGameUserSettings::Get())
+	{
+		LookAxisVector *= Settings->MouseSensitivity;
+		if (Settings->bInvertYAxis)
+		{
+			LookAxisVector.Y = -LookAxisVector.Y;
+		}
+	}
 
 	if (Controller != nullptr)
 	{

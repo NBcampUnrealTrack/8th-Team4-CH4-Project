@@ -27,7 +27,8 @@ enum class EMenuState : uint8
 	MainMenu    UMETA(DisplayName = "Main Menu"),
 	Host        UMETA(DisplayName = "Host Menu"),
 	Join        UMETA(DisplayName = "Join Menu"),
-	Skin        UMETA(DisplayName = "Skin Menu")
+	Skin        UMETA(DisplayName = "Skin Menu"),
+	Settings    UMETA(DisplayName = "Settings Menu")
 };
 
 UCLASS()
@@ -180,6 +181,22 @@ private:
 	// 현재 선택된 스킨 이름 표시 (선택 사항)
 	UPROPERTY(meta = (BindWidgetOptional))
 	class UTextBlock* SelectedSkinText;
+
+	// ── 설정창 (WBP 에 아직 없어도 되도록 Optional) ──
+	// 메인 페이지: 설정창 열기 버튼
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UButton* SettingsButton;
+
+	// 설정창 위젯 클래스 (WBP_SettingsMenu). WBP_MainMenu 디폴트에서 지정.
+	UPROPERTY(EditDefaultsOnly, Category = "Settings")
+	TSubclassOf<class USettingsMenu> SettingsMenuClass;
+
+	// 열려 있는 설정창 인스턴스 (재사용).
+	UPROPERTY()
+	TObjectPtr<class USettingsMenu> SettingsMenuInstance;
+
+	UFUNCTION()
+	void OpenSettings();
 
 	UFUNCTION()
 	void HostServer();

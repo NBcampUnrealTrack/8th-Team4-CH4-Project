@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -29,10 +29,22 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	class UButton* QuitButton;
 
+	// ── 설정창 (WBP 에 아직 없어도 되도록 Optional) ──
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UButton* SettingsButton;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Settings")
+	TSubclassOf<class USettingsMenu> SettingsMenuClass;
+
+	UPROPERTY()
+	TObjectPtr<class USettingsMenu> SettingsMenuInstance;
 
 	UFUNCTION()
 	void CancelPressed();
 
 	UFUNCTION()
 	void QuitPressed();
+
+	UFUNCTION()
+	void OpenSettings();
 };
