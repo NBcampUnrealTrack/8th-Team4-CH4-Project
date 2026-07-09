@@ -104,7 +104,9 @@ public:
 private:
 	void StartQTE(ABaseCharacter* Player);
 	void OnQTETimeout();
-	void CompleteRepair();
+
+	// bAnnounce=false 는 라운드 초기화(ForceReassemble)용. 게임 시작 직후 수리 방송이 뜨는 것을 막는다.
+	void CompleteRepair(bool bAnnounce = true);
 
 	// QTEPlayer 를 비우고 사망 델리게이트를 언바인딩한 뒤 반환 (모든 종료 경로 공용).
 	ABaseCharacter* ReleaseQTEPlayer();

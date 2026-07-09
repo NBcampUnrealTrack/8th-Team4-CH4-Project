@@ -1,4 +1,4 @@
-#include "InteractiveProp/GODTrain.h"
+﻿#include "InteractiveProp/GODTrain.h"
 #include "InteractiveProp/GODTrainTrack.h"
 #include "Component/FurnanceComponent.h"
 #include "Component/PressureComponent.h"
@@ -203,7 +203,6 @@ void AGODTrain::Tick(float DeltaTime)
 
 			// 게임플레이용 목적지 카운트다운
 			DistanceToDestination = FMath::Max(0.f, DistanceToDestination - TrainSpeed * DeltaTime);
-			SyncDistanceToGameState();
 
 			// 트랙 위 거리 누적 (닫힌 루프이므로 길이로 wrap)
 			if (SplineLen > 0.f)
@@ -211,6 +210,11 @@ void AGODTrain::Tick(float DeltaTime)
 				DistanceAlongSpline = FMath::Fmod(DistanceAlongSpline + TrainSpeed * DeltaTime, SplineLen);
 			}
 		}
+
+		// 정지(기어 전멸) 중에도 압력/연료는 계속 변하므로 GameState 동기화는 탈선 여부와 무관하게 돈다.
+		// 안 그러면 HUD 게이지가 얼어붙고, 경고음이 멈춘 시점의 값으로 계속 울린다.
+		SyncDistanceToGameState();
+
 		LocalDistanceAlongSpline = DistanceAlongSpline;
 	}
 	// ----- 클라이언트: 로컬 적분 후 복제값으로 부드럽게 보정 (끊김 없는 이동) -----
