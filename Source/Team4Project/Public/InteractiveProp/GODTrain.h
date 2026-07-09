@@ -118,7 +118,7 @@ public:
 
 	// 연료 가득(Full) 상태 속도
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
-	float MaxSpeed = 1500.f;
+	float MaxSpeed = 400.f;
 
 	// 연료 상태별 목표 속도. Empty=MinSpeed, Full=MaxSpeed, 중간 단계는 아래 값.
 	// Tick에서 SpeedInterpRate로 부드럽게 수렴하므로 단계가 튀지 않는다.

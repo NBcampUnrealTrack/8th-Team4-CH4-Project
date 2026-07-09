@@ -73,7 +73,8 @@ Plugins/**/Intermediate/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
-Tools/create_pp_toonshader.py
-Tools/create_toonfire_vfx.py
+
+# 로컬 에디터 스크립트 (머테리얼/VFX 생성용) — 커밋하지 않음
+Tools/
 Docs/TIL/2026-07-03_멀티플레이어_보이스_생사별_격리.md
 .claude/skills/toon-rendering/SKILL.md
