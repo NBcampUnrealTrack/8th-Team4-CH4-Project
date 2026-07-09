@@ -16,4 +16,7 @@ struct FChatMessage
 
 	UPROPERTY(BlueprintReadOnly)
 	float Timestamp = 0.f;
+	
+	UPROPERTY(BlueprintReadOnly)
+	bool bIsSpectatorChat = false;
 };
