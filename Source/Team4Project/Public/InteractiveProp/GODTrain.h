@@ -108,7 +108,9 @@ public:
 	// ============================================================
 	// 에디터 설정
 	// ============================================================
-	// 만석(1500) 6분40초 / 고연료(1200) 8분20초 도착, 중간연료(850) 이하 유지 시 10분 초과 → 마피아 승
+	// 제한 시간 10분(GODGameMode::TotalMatchTime) 기준 도착 시간:
+	// 만석(400) 5분 / 고연료(350) 5분43초 / 중간연료(300) 6분40초 / 저연료(250) 8분 /
+	// 연료 없이(200) 계속 기어가면 정확히 10분 → 아슬아슬하게 마피아 승
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
 	float TotalDistance = 120000.f;
 
@@ -123,13 +125,13 @@ public:
 	// 연료 상태별 목표 속도. Empty=MinSpeed, Full=MaxSpeed, 중간 단계는 아래 값.
 	// Tick에서 SpeedInterpRate로 부드럽게 수렴하므로 단계가 튀지 않는다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
-	float LowFuelSpeed = 500.f;
+	float LowFuelSpeed = 250.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
-	float MediumFuelSpeed = 850.f;
+	float MediumFuelSpeed = 300.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
-	float HighFuelSpeed = 1200.f;
+	float HighFuelSpeed = 350.f;
 
 	// 현재 속도가 목표 속도로 수렴하는 빠르기 (가/감속 부드러움)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
