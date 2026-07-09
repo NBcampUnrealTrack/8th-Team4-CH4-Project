@@ -582,7 +582,7 @@ private:
 	FTimerHandle BodyDetectionTimer;
 	void CheckForHiddenBodies();
 
-	// ── 로비(게임 시작 전) 낙하 복귀 ──
+	// ── 낙하 처리 (로비=복귀 / 진행 중=사망) ──
 public:
 	// 월드 KillZ 아래로 떨어졌을 때: 로비 페이즈면 파괴하지 않고 열차(스타트 지점)로 복귀.
 	virtual void FellOutOfWorld(const UDamageType& dmgType) override;
@@ -592,14 +592,21 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rescue")
 	float LobbyFallRescueDepth = 2000.f;
 
+	// 진행 중에 열차보다 이만큼 낮아지면 사망 처리한다 (cm).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rescue")
+	float FallDeathDepth = 2000.f;
+
 private:
 	FTimerHandle FallRescueTimer;
 
-	// 타이머 콜백(서버, 1초 주기): 로비 페이즈에서 낙하 감지 → 복귀.
-	void CheckLobbyFallRescue();
+	// 타이머 콜백(서버, 1초 주기): 로비면 복귀, 진행 중이면 사망.
+	void CheckFallRescueOrDeath();
 
 	// 스타트 지점(PlayerStart)으로 텔레포트. 성공 여부 반환. (서버 전용)
 	bool RescueToStart();
+
+	// 낙하 판정의 기준 높이. 주행 중 열차는 스플라인을 따라 고도가 바뀌므로 열차를 우선 사용한다.
+	bool GetFallReferenceZ(float& OutZ) const;
 
 #pragma region Input
 

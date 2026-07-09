@@ -48,7 +48,7 @@ void AGODGameState::SoundMonitorTick()
 	const double Now = GetWorld()->GetTimeSeconds();
 
 	if (PressureLevel >= PressureWarningThreshold &&
-		Now - LastPressureWarningTime >= WarningRepeatInterval)
+		Now - LastPressureWarningTime >= GetPressureWarningInterval())
 	{
 		LastPressureWarningTime = Now;
 		UGameSoundStatics::PlaySound2DFromTable(this, GameSoundTable, SoundRows::WarningPressure);
@@ -58,11 +58,24 @@ void AGODGameState::SoundMonitorTick()
 	{
 		bFuelInitialized = true;
 	}
-	else if (bFuelInitialized && Now - LastFuelWarningTime >= WarningRepeatInterval)
+	else if (bFuelInitialized && Now - LastFuelWarningTime >= FuelWarningInterval)
 	{
 		LastFuelWarningTime = Now;
 		UGameSoundStatics::PlaySound2DFromTable(this, GameSoundTable, SoundRows::WarningFuelLow);
 	}
+}
+
+float AGODGameState::GetPressureWarningInterval() const
+{
+	// 경고 임계값(80)에서 Max, 폭발 임계값(100)에서 Min 으로 선형 보간.
+	const float Span = PressureCriticalLevel - PressureWarningThreshold;
+	if (Span <= KINDA_SMALL_NUMBER)
+	{
+		return PressureWarningIntervalMin;
+	}
+
+	const float Alpha = FMath::Clamp((PressureLevel - PressureWarningThreshold) / Span, 0.f, 1.f);
+	return FMath::Lerp(PressureWarningIntervalMax, PressureWarningIntervalMin, Alpha);
 }
 
 void AGODGameState::PlayPhaseSound(EGamePhase NewPhase)
