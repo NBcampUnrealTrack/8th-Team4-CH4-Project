@@ -2,7 +2,7 @@
 
 
 #include "Player/BasePlayerController.h"
-
+#include "Game/GODGameMode.h"
 #include "OnlineSubsystem.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/EditableText.h"
@@ -22,6 +22,7 @@
 #include "HAL/FileManager.h"
 #include "Sound/GameSoundStatics.h"
 #include "Sound/GameSoundTypes.h"
+
 
 // [임시 디버그] Shipping 에서도 보이는 유일한 채널 = 파일. Saved/NameDebug.log 에 누적. 확인 후 제거.
 namespace
@@ -528,5 +529,103 @@ void ABasePlayerController::HideChatLog()
 	if (UScrollBox* ScrollBox = GetChatScrollBox())
 	{
 		ScrollBox->SetVisibility(ESlateVisibility::Hidden);
+	}
+}
+
+void ABasePlayerController::SpectateNext()
+{
+	if (bIsSpectating) Server_SpectateNext();
+}
+
+void ABasePlayerController::SpectatePrev()
+{
+	if (bIsSpectating) Server_SpectatePrev();
+}
+
+void ABasePlayerController::Server_SpectatePrev_Implementation()
+{
+	APawn* Target = FindPrevSpectateTarget();
+	if (!Target) return;
+
+	CurrentSpectateTarget = Target;
+	SetViewTargetWithBlend(Target, 0.3f);
+}
+
+APawn* ABasePlayerController::FindPrevSpectateTarget() const
+{
+	AGameStateBase* GS = GetWorld()->GetGameState();
+	if (!GS) return nullptr;
+
+	TArray<APawn*> AlivePlayers;
+	for (APlayerState* PS : GS->PlayerArray)
+	{
+		if (!PS || PS == GetPlayerState<APlayerState>()) continue;
+
+		if (const AGODPlayerState* GPS = Cast<AGODPlayerState>(PS))
+		{
+			if (!GPS->bIsAlive) continue;
+		}
+
+		APawn* OtherPawn = PS->GetPawn();
+		if (!OtherPawn) continue;
+
+		AlivePlayers.Add(OtherPawn);
+	}
+
+	if (AlivePlayers.Num() == 0) return nullptr;
+
+	int32 CurrentIndex = -1;
+	if (CurrentSpectateTarget.IsValid())
+	{
+		CurrentIndex = AlivePlayers.IndexOfByKey(CurrentSpectateTarget.Get());
+	}
+
+	int32 PrevIndex = (CurrentIndex - 1 + AlivePlayers.Num()) % AlivePlayers.Num();
+	return AlivePlayers[PrevIndex];
+}
+
+void ABasePlayerController::Server_RequestStartGame_Implementation()
+{
+	AGODGameMode* GM = Cast<AGODGameMode>(GetWorld()->GetAuthGameMode());
+	AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>();
+
+	if (!GM || !GS || GS->CurrentPhase != EGamePhase::WaitingForPlayers) return;
+
+	int32 Connected = 0;
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (It->Get()) Connected++;
+	}
+
+	if (Connected >= GM->MaxPlayers)
+	{
+		GM->StartCountdown();
+		UE_LOG(LogTemp, Warning, TEXT("[Host] %s requested game start. Countdown started!"), *GetName());
+	}
+}
+
+void ABasePlayerController::TogglePauseMenu()
+{
+	if (PauseMenuRef && PauseMenuRef->IsInViewport())
+	{
+		PauseMenuRef->RemoveFromParent();
+		SetShowMouseCursor(false);
+		FInputModeGameOnly InputMode;
+		SetInputMode(InputMode);
+		return;
+	}
+
+	if (!PauseMenuRef && PauseMenuClass)
+	{
+		PauseMenuRef = CreateWidget<UUserWidget>(this, PauseMenuClass);
+	}
+
+	if (PauseMenuRef)
+	{
+		PauseMenuRef->AddToViewport();
+		SetShowMouseCursor(true);
+		FInputModeUIOnly InputMode;
+		InputMode.SetWidgetToFocus(PauseMenuRef->TakeWidget());
+		SetInputMode(InputMode);
 	}
 }
