@@ -599,6 +599,17 @@ protected:
 private:
 	FTimerHandle FallRescueTimer;
 
+	// 낙하 판정 기준이 되는 액터 캐시 (서버 전용). 매초 TActorIterator 를 돌지 않기 위함.
+	// 열차와 스타트 지점은 레벨 배치 액터라 런타임에 교체되지 않는다.
+	UPROPERTY()
+	TObjectPtr<class AGODTrain> CachedTrain;
+
+	UPROPERTY()
+	TObjectPtr<class APlayerStart> CachedPlayerStart;
+
+	// 위 두 캐시를 채운다. BeginPlay 에서 1회 (서버 전용).
+	void CacheFallReferenceActors();
+
 	// 타이머 콜백(서버, 1초 주기): 로비면 복귀, 진행 중이면 사망.
 	void CheckFallRescueOrDeath();
 

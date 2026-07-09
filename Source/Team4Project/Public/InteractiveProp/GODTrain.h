@@ -143,6 +143,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
 	float HighPressureSpeedMultiplier = 0.5f;
 
+	// 기어가 하나라도 파손됐을 때 적용할 속도 배수. 고압 배수와 곱연산으로 겹친다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
+	float GearBrokenSpeedMultiplier = 0.5f;
+
+	// 모든 기어가 파손되면 열차를 정지시킨다. 기어를 하나라도 수리하면 다시 출발한다.
+	// (압력 폭발로 인한 탈선과 달리 게임이 끝나지 않는다)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
+	bool bHaltWhenAllGearsBroken = true;
+
+	// 연료 부족 방송 임계값 (0~1)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
+	float FuelLowAnnounceThreshold = 0.2f;
+
+	// 남은 거리가 전체의 이 비율 이하로 떨어지면 "목적지 임박" 방송 (0~1)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
+	float NearDestinationRatio = 0.25f;
+
 	// ============================================================
 	// 트랙 이동
 	// ============================================================
@@ -231,6 +248,33 @@ private:
 
 	// 고압 경고 중인지 여부. 목표 속도에 HighPressureSpeedMultiplier 를 적용한다.
 	bool bHighPressure = false;
+
+	// 기어가 하나라도 풀렸는지. Tick 앞부분에서 한 번만 계산해 압력/속도 양쪽에 쓴다.
+	bool bAnyGearBroken = false;
+
+	// ── 알림 방송 에지 감지 (서버 전용) ──
+	// 연료가 한 번이라도 임계값 위로 올라온 뒤에만 부족 경고 (시작 직후 0 초기값 오경보 방지).
+	bool bFuelInitialized = false;
+	bool bFuelLowAnnounced = false;
+	bool bFuelEmptyAnnounced = false;
+	bool bNearDestinationAnnounced = false;
+
+	// 매 Tick 연료/거리를 보고 경계를 넘는 순간에만 방송한다.
+	void CheckAnnouncementEdges();
+
+	// 레벨의 기어 슬롯 캐시 (서버 전용). 매 Tick TActorIterator 를 돌지 않기 위함.
+	UPROPERTY()
+	TArray<TObjectPtr<class AGearSlot>> GearSlots;
+
+	// 캐시된 슬롯 중 분해 상태인 개수. 유효한 슬롯 수는 OutValidCount 로 함께 돌려준다.
+	int32 CountBrokenGears(int32& OutValidCount) const;
+
+	// 이번 정지가 기어 전멸 때문인지. 압력 폭발로 인한 탈선은 되돌릴 수 없으므로 구분해 둔다.
+	bool bDerailedByGears = false;
+
+	// 기어 전멸 → 정지 / 기어 수리 → 최저 속도로 재출발 (둘 다 서버 전용)
+	void HaltForBrokenGears();
+	void ResumeFromGearHalt();
 
 	void SyncDistanceToGameState();
 

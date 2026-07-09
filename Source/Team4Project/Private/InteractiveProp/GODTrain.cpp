@@ -1,8 +1,10 @@
-#include "InteractiveProp/GODTrain.h"
+﻿#include "InteractiveProp/GODTrain.h"
 #include "InteractiveProp/GODTrainTrack.h"
 #include "Component/FurnanceComponent.h"
 #include "Component/PressureComponent.h"
+#include "InteractiveProp/GearSlot.h"
 #include "Game/GODGameState.h"
+#include "EngineUtils.h"
 #include "Net/UnrealNetwork.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SplineComponent.h"
@@ -81,6 +83,13 @@ void AGODTrain::BeginPlay()
 		DistanceAlongSpline = 0.f;
 		LocalDistanceAlongSpline = 0.f;
 		bIsDerailed = false;
+		bDerailedByGears = false;
+
+		bFuelInitialized = false;
+		bFuelLowAnnounced = false;
+		bFuelEmptyAnnounced = false;
+		bNearDestinationAnnounced = false;
+
 		SyncDistanceToGameState();
 
 		if (Furnace)
@@ -94,6 +103,13 @@ void AGODTrain::BeginPlay()
 			Pressure->OnPressureExplode.AddDynamic(this, &AGODTrain::OnPressureExploded);
 			Pressure->OnPressureWarning.AddDynamic(this, &AGODTrain::OnPressureWarningStarted);
 			Pressure->OnPressureRecovered.AddDynamic(this, &AGODTrain::OnPressureWarningEnded);
+		}
+
+		// 기어 슬롯은 레벨 배치 액터라 개수가 고정이다. 매 Tick 액터 이터레이터를 도는 대신 한 번만 모은다.
+		GearSlots.Reset();
+		for (TActorIterator<AGearSlot> It(GetWorld()); It; ++It)
+		{
+			GearSlots.Add(*It);
 		}
 	}
 
@@ -126,10 +142,35 @@ void AGODTrain::Tick(float DeltaTime)
 
 	// 서버: 압력 컴포넌트에 주행/화로 상태 전달.
 	// 주행 중에만 압력이 오르고(출발 전에는 0 유지), 석탄 연소 중이면 상승률이 배가된다.
-	if (HasAuthority() && Pressure)
+	if (HasAuthority())
 	{
-		Pressure->bTrainRunning = bIsRunning && !bIsDerailed;
-		Pressure->bFurnaceActive = Furnace && Furnace->bIsBurning;
+		// 압력 상승률과 목표 속도 양쪽이 같은 값을 봐야 하므로 Tick 당 한 번만 계산한다.
+		int32 ValidGearCount = 0;
+		const int32 BrokenGearCount = CountBrokenGears(ValidGearCount);
+		bAnyGearBroken = BrokenGearCount > 0;
+
+		if (Pressure)
+		{
+			Pressure->bTrainRunning = bIsRunning && !bIsDerailed;
+			Pressure->bFurnaceActive = Furnace && Furnace->bIsBurning;
+		}
+
+		// 기어 전멸 → 정지, 하나라도 수리 → 재출발.
+		// 주행 중일 때만 본다 (로비에서 기어를 뽑아도 아무 일도 없어야 한다).
+		// 압력 폭발로 탈선한 경우는 bDerailedByGears 가 false 라 여기서 되살아나지 않는다.
+		if (bHaltWhenAllGearsBroken && bIsRunning)
+		{
+			const bool bAllGearsBroken = ValidGearCount > 0 && BrokenGearCount == ValidGearCount;
+
+			if (bAllGearsBroken && !bIsDerailed)
+			{
+				HaltForBrokenGears();
+			}
+			else if (!bAllGearsBroken && bIsDerailed && bDerailedByGears)
+			{
+				ResumeFromGearHalt();
+			}
+		}
 	}
 
 	// 출발 전에는 제자리 대기. 게임 시작 시 서버가 StartRunning()을 호출하면 주행한다.
@@ -154,11 +195,14 @@ void AGODTrain::Tick(float DeltaTime)
 			{
 				TargetSpeed *= HighPressureSpeedMultiplier;
 			}
+			if (bAnyGearBroken)
+			{
+				TargetSpeed *= GearBrokenSpeedMultiplier;
+			}
 			TrainSpeed = FMath::FInterpTo(TrainSpeed, TargetSpeed, DeltaTime, SpeedInterpRate);
 
 			// 게임플레이용 목적지 카운트다운
 			DistanceToDestination = FMath::Max(0.f, DistanceToDestination - TrainSpeed * DeltaTime);
-			SyncDistanceToGameState();
 
 			// 트랙 위 거리 누적 (닫힌 루프이므로 길이로 wrap)
 			if (SplineLen > 0.f)
@@ -166,6 +210,11 @@ void AGODTrain::Tick(float DeltaTime)
 				DistanceAlongSpline = FMath::Fmod(DistanceAlongSpline + TrainSpeed * DeltaTime, SplineLen);
 			}
 		}
+
+		// 정지(기어 전멸) 중에도 압력/연료는 계속 변하므로 GameState 동기화는 탈선 여부와 무관하게 돈다.
+		// 안 그러면 HUD 게이지가 얼어붙고, 경고음이 멈춘 시점의 값으로 계속 울린다.
+		SyncDistanceToGameState();
+
 		LocalDistanceAlongSpline = DistanceAlongSpline;
 	}
 	// ----- 클라이언트: 로컬 적분 후 복제값으로 부드럽게 보정 (끊김 없는 이동) -----
@@ -398,9 +447,112 @@ void AGODTrain::TriggerDerailment()
 {
 	if (!HasAuthority()) return;
 
+	// 압력 폭발 등으로 인한 되돌릴 수 없는 탈선. 기어 수리로 복구되지 않는다.
+	bDerailedByGears = false;
 	bIsDerailed = true;
 	TrainSpeed = 0.f;
 	OnRep_bIsDerailed();
+
+	if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+	{
+		GS->Announce(NSLOCTEXT("Announce", "Derailed", "열차 탈선"), EAnnouncementType::Critical);
+	}
+}
+
+void AGODTrain::HaltForBrokenGears()
+{
+	if (!HasAuthority()) return;
+
+	bDerailedByGears = true;
+	bIsDerailed = true;
+	TrainSpeed = 0.f;
+	OnRep_bIsDerailed();
+
+	if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+	{
+		GS->Announce(NSLOCTEXT("Announce", "GearHalt", "기어 전멸 — 열차 정지. 기어를 수리하라"),
+			EAnnouncementType::Critical);
+	}
+}
+
+void AGODTrain::ResumeFromGearHalt()
+{
+	if (!HasAuthority()) return;
+
+	bDerailedByGears = false;
+	bIsDerailed = false;
+	TrainSpeed = MinSpeed; // 정지 상태에서 최저 속도로 재출발, 이후 Tick 에서 목표 속도로 수렴
+	OnRep_bIsDerailed();
+
+	if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+	{
+		GS->Announce(NSLOCTEXT("Announce", "GearResume", "기어 수리 — 열차 운행 재개"),
+			EAnnouncementType::Info);
+	}
+}
+
+void AGODTrain::CheckAnnouncementEdges()
+{
+	AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>();
+	if (!GS) return;
+
+	// ── 연료 ──
+	// 시작 직후 CurrentFuel 이 0 이라 곧바로 "소진" 이 뜨는 것을 막기 위해,
+	// 한 번이라도 임계값 위로 올라온 뒤부터 감시한다.
+	if (Furnace && Furnace->MaxFuel > 0.f)
+	{
+		const float FuelRatio = Furnace->CurrentFuel / Furnace->MaxFuel;
+
+		if (FuelRatio > FuelLowAnnounceThreshold)
+		{
+			bFuelInitialized = true;
+			// 연료를 다시 채웠으므로 다음 하락 때 또 경고할 수 있게 되돌린다.
+			bFuelLowAnnounced = false;
+			bFuelEmptyAnnounced = false;
+		}
+		else if (bFuelInitialized)
+		{
+			if (FuelRatio <= KINDA_SMALL_NUMBER && !bFuelEmptyAnnounced)
+			{
+				bFuelEmptyAnnounced = true;
+				GS->Announce(NSLOCTEXT("Announce", "FuelEmpty", "연료 소진 — 열차가 최저 속도로 기어간다"),
+					EAnnouncementType::Critical);
+			}
+			else if (FuelRatio > KINDA_SMALL_NUMBER && !bFuelLowAnnounced)
+			{
+				bFuelLowAnnounced = true;
+				GS->Announce(NSLOCTEXT("Announce", "FuelLow", "연료 부족 — 화로에 석탄을 투입하라"),
+					EAnnouncementType::Warning);
+			}
+		}
+	}
+
+	// ── 목적지 임박 ──
+	if (!bNearDestinationAnnounced && TotalDistance > 0.f &&
+		DistanceToDestination <= TotalDistance * NearDestinationRatio)
+	{
+		bNearDestinationAnnounced = true;
+		GS->Announce(NSLOCTEXT("Announce", "NearDestination", "목적지 접근 — 마지막 구간이다"),
+			EAnnouncementType::Info);
+	}
+}
+
+int32 AGODTrain::CountBrokenGears(int32& OutValidCount) const
+{
+	int32 Broken = 0;
+	OutValidCount = 0;
+
+	for (const TObjectPtr<AGearSlot>& Slot : GearSlots)
+	{
+		if (!IsValid(Slot)) continue;
+
+		++OutValidCount;
+		if (!Slot->bIsAssembled)
+		{
+			++Broken;
+		}
+	}
+	return Broken;
 }
 
 float AGODTrain::ComputeTargetSpeed() const
@@ -448,12 +600,24 @@ void AGODTrain::OnPressureWarningStarted()
 {
 	// 고압 진입: 목표 속도가 배수만큼 줄어든다(Tick에서 부드럽게 감속).
 	bHighPressure = true;
+
+	if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+	{
+		GS->Announce(NSLOCTEXT("Announce", "PressureHigh", "보일러 압력 위험 수준 — 밸브를 열어 감압하라"),
+			EAnnouncementType::Warning);
+	}
 }
 
 void AGODTrain::OnPressureWarningEnded()
 {
 	// 고압 해제: 다시 정상 목표 속도로 복귀.
 	bHighPressure = false;
+
+	if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+	{
+		GS->Announce(NSLOCTEXT("Announce", "PressureNormal", "보일러 압력 정상 복귀"),
+			EAnnouncementType::Info);
+	}
 }
 
 void AGODTrain::SyncDistanceToGameState()
@@ -475,6 +639,8 @@ void AGODTrain::SyncDistanceToGameState()
 			GS->OnRep_FuelLevel(); // 리슨 서버 클라이언트 즉시 알림
 		}
 	}
+
+	CheckAnnouncementEdges();
 }
 
 void AGODTrain::OnRep_bIsDerailed()

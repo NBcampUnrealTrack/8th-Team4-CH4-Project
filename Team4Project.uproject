@@ -28,6 +28,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "StructUtils",
+			"Enabled": true
+		},
+		{
 			"Name": "OnlineSubsystem",
 			"Enabled": true
 		},

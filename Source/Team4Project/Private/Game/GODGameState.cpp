@@ -182,6 +182,22 @@ void AGODGameState::AddChatMessage(const FChatMessage& Msg)
 
 }
 
+void AGODGameState::Announce(const FText& Message, EAnnouncementType Type)
+{
+	// 라운드 초기화(ForceReassemble 등)나 로비 중의 상태 변화가 방송되지 않도록 페이즈로 막는다.
+	if (!HasAuthority() || CurrentPhase != EGamePhase::Playing) return;
+
+	Multicast_Announce(Message, Type);
+}
+
+void AGODGameState::Multicast_Announce_Implementation(const FText& Message, EAnnouncementType Type)
+{
+	// 데디케이티드 서버는 표시할 HUD 가 없다.
+	if (IsNetMode(NM_DedicatedServer)) return;
+
+	OnAnnouncement.Broadcast(Message, Type);
+}
+
 void AGODGameState::OnRep_ChatHistory()
 {
 	if (ChatHistory.Num() > 0)

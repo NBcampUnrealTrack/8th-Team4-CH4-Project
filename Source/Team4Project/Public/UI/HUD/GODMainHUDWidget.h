@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "GameplayTagContainer.h"
 #include "Player/GODPlayerState.h"      // EMainRole, ECitizenClass
+#include "Game/AnnouncementTypes.h"     // EAnnouncementType
 #include "UI/HUD/GODAbilitySlotWidget.h" // FAbilitySlotConfig
 #include "GODMainHUDWidget.generated.h"
 
@@ -195,6 +196,29 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "HUD|Warning")
 	void BP_OnGunsUnlocked();
 
+	// 중앙 상단 — 알림 방송 배너 (기어 파손, 압력 경고, 연료 부족 등).
+	// WBP에 이 이름의 TextBlock을 배치하면 자동 연결된다 (Optional이라 없어도 컴파일됨).
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> TB_Announcement;
+
+	// 알림 배너 표시 유지 시간(초)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Announcement")
+	float AnnouncementDuration = 3.f;
+
+	// 심각도별 배너 색상. WBP에서 덮어쓸 수 있다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Announcement")
+	FLinearColor AnnouncementInfoColor = FLinearColor(0.7f, 0.9f, 1.f, 1.f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Announcement")
+	FLinearColor AnnouncementWarningColor = FLinearColor(1.f, 0.75f, 0.2f, 1.f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Announcement")
+	FLinearColor AnnouncementCriticalColor = FLinearColor(1.f, 0.25f, 0.2f, 1.f);
+
+	// 알림 수신 시 WBP 확장 포인트 (애니메이션/사운드 등). TB_Announcement 없이 이것만 써도 된다.
+	UFUNCTION(BlueprintImplementableEvent, Category = "HUD|Announcement")
+	void BP_OnAnnouncement(const FText& Message, EAnnouncementType Type);
+
 	// 현재 인터랙트 대상 (없으면 None). WBP에서 월드 마커 위치 투영 등에 사용.
 	UPROPERTY(BlueprintReadOnly, Category = "HUD|Interact")
 	TObjectPtr<AActor> CurrentInteractTarget;
@@ -266,6 +290,13 @@ private:
 
 	void HideGunsUnlockedNotice();
 	FTimerHandle GunsNoticeTimer;
+
+	// GODGameState::OnAnnouncement 콜백 — 배너 표시
+	UFUNCTION()
+	void OnAnnouncement(const FText& Message, EAnnouncementType Type);
+
+	void HideAnnouncement();
+	FTimerHandle AnnouncementTimer;
 
 	// 인게임 BGM (NativeConstruct 에서 시작, NativeDestruct 에서 정지)
 	UPROPERTY(Transient)

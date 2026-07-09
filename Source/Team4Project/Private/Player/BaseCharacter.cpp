@@ -171,6 +171,8 @@ void ABaseCharacter::BeginPlay()
 	// 열차 밖으로 떨어졌을 때 감시 (서버 전용, KillZ 미설정 맵 대비).
 	if (HasAuthority())
 	{
+		CacheFallReferenceActors();
+
 		GetWorldTimerManager().SetTimer(
 			FallRescueTimer, this, &ABaseCharacter::CheckFallRescueOrDeath, 1.f, /*bLoop=*/true);
 	}
@@ -1148,6 +1150,21 @@ void ABaseCharacter::CheckForHiddenBodies()
 // 낙하 처리 (로비=복귀 / 진행 중=사망)
 // ============================================================
 
+void ABaseCharacter::CacheFallReferenceActors()
+{
+	for (TActorIterator<AGODTrain> It(GetWorld()); It; ++It)
+	{
+		CachedTrain = *It;
+		break;
+	}
+
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+	{
+		CachedPlayerStart = *It;
+		break;
+	}
+}
+
 void ABaseCharacter::CheckFallRescueOrDeath()
 {
 	if (!HasAuthority() || bIsDead) return;
@@ -1159,13 +1176,10 @@ void ABaseCharacter::CheckFallRescueOrDeath()
 	    GS->CurrentPhase == EGamePhase::Countdown)
 	{
 		// 로비 동안 열차는 스타트 지점에 정차해 있으므로 PlayerStart 높이를 기준으로 낙하를 판정.
-		for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+		if (IsValid(CachedPlayerStart) &&
+			GetActorLocation().Z < CachedPlayerStart->GetActorLocation().Z - LobbyFallRescueDepth)
 		{
-			if (GetActorLocation().Z < It->GetActorLocation().Z - LobbyFallRescueDepth)
-			{
-				RescueToStart();
-			}
-			break;
+			RescueToStart();
 		}
 		return;
 	}
@@ -1189,15 +1203,15 @@ void ABaseCharacter::CheckFallRescueOrDeath()
 
 bool ABaseCharacter::GetFallReferenceZ(float& OutZ) const
 {
-	for (TActorIterator<AGODTrain> It(GetWorld()); It; ++It)
+	if (IsValid(CachedTrain))
 	{
-		OutZ = It->GetActorLocation().Z;
+		OutZ = CachedTrain->GetActorLocation().Z;
 		return true;
 	}
 
-	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+	if (IsValid(CachedPlayerStart))
 	{
-		OutZ = It->GetActorLocation().Z;
+		OutZ = CachedPlayerStart->GetActorLocation().Z;
 		return true;
 	}
 
@@ -1206,13 +1220,8 @@ bool ABaseCharacter::GetFallReferenceZ(float& OutZ) const
 
 bool ABaseCharacter::RescueToStart()
 {
-	APlayerStart* Start = nullptr;
-	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
-	{
-		Start = *It;
-		break;
-	}
-	if (!Start) return false;
+	APlayerStart* Start = CachedPlayerStart;
+	if (!IsValid(Start)) return false;
 
 	if (GetCharacterMovement())
 	{

@@ -1,4 +1,4 @@
-#include "UI/HUD/GODMainHUDWidget.h"
+﻿#include "UI/HUD/GODMainHUDWidget.h"
 
 #include "AbilitySystemComponent.h"
 #include "Components/Button.h"
@@ -39,6 +39,9 @@ void UGODMainHUDWidget::NativeConstruct()
 	// 총기 해제 알림 초기 숨김
 	if (TB_GunsUnlockedNotice) TB_GunsUnlockedNotice->SetVisibility(ESlateVisibility::Collapsed);
 
+	// 알림 방송 배너 초기 숨김
+	if (TB_Announcement) TB_Announcement->SetVisibility(ESlateVisibility::Collapsed);
+
 	// 역할 아이콘 호버 버튼 바인딩
 	if (Btn_RoleIcon)
 	{
@@ -71,6 +74,7 @@ void UGODMainHUDWidget::NativeDestruct()
 		GS->OnPressureLevelChanged.RemoveAll(this);
 		GS->OnFuelLevelChanged.RemoveAll(this);
 		GS->OnGunsUnlocked.RemoveAll(this);
+		GS->OnAnnouncement.RemoveAll(this);
 	}
 
 	// 캐릭터 태그 변경 델리게이트 언바인딩
@@ -107,6 +111,7 @@ void UGODMainHUDWidget::TryBindGameState()
 	GS->OnPressureLevelChanged.AddDynamic(this,       &UGODMainHUDWidget::OnPressureLevelChanged);
 	GS->OnFuelLevelChanged.AddDynamic(this,           &UGODMainHUDWidget::OnFuelLevelChanged);
 	GS->OnGunsUnlocked.AddDynamic(this,               &UGODMainHUDWidget::OnGunsUnlocked);
+	GS->OnAnnouncement.AddDynamic(this,               &UGODMainHUDWidget::OnAnnouncement);
 
 	// 현재 값으로 즉시 갱신
 	CurrentTime     = GS->RemainingTime;
@@ -222,6 +227,41 @@ void UGODMainHUDWidget::HideGunsUnlockedNotice()
 	if (TB_GunsUnlockedNotice)
 	{
 		TB_GunsUnlockedNotice->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UGODMainHUDWidget::OnAnnouncement(const FText& Message, EAnnouncementType Type)
+{
+	// 연달아 들어오면 최신 것만 보여주고 타이머를 다시 잡는다.
+	if (TB_Announcement)
+	{
+		FLinearColor Color = AnnouncementInfoColor;
+		switch (Type)
+		{
+		case EAnnouncementType::Warning:  Color = AnnouncementWarningColor;  break;
+		case EAnnouncementType::Critical: Color = AnnouncementCriticalColor; break;
+		default: break;
+		}
+
+		TB_Announcement->SetText(Message);
+		TB_Announcement->SetColorAndOpacity(FSlateColor(Color));
+		TB_Announcement->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(AnnouncementTimer, this,
+				&UGODMainHUDWidget::HideAnnouncement, AnnouncementDuration, /*bLoop=*/false);
+		}
+	}
+
+	BP_OnAnnouncement(Message, Type);
+}
+
+void UGODMainHUDWidget::HideAnnouncement()
+{
+	if (TB_Announcement)
+	{
+		TB_Announcement->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 

@@ -1,4 +1,4 @@
-#include "InteractiveProp/GearSlot.h"
+﻿#include "InteractiveProp/GearSlot.h"
 #include "InteractiveProp/PickupGear.h"
 #include "Player/BaseCharacter.h"
 #include "Component/PressureComponent.h"
@@ -8,6 +8,7 @@
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
 #include "TimerManager.h"
+#include "Game/GODGameState.h"
 #include "Sound/GameSoundStatics.h"
 #include "Sound/GameSoundTypes.h"
 
@@ -106,15 +107,24 @@ void AGearSlot::BreakGear()
 	ReleaseQTEPlayer();
 
 	Multicast_PlaySlotSound(SoundRows::GearBreak);
+
+	if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+	{
+		GS->Announce(NSLOCTEXT("Announce", "GearBroken", "엔진 기어 파손 감지 — 열차 감속"),
+			EAnnouncementType::Warning);
+	}
 }
 
 void AGearSlot::ForceReassemble()
 {
 	if (!HasAuthority() || bIsAssembled) return;
-	CompleteRepair();
+
+	// 라운드 초기화 경로. StartGame 은 이미 CurrentPhase 를 Playing 으로 바꾼 뒤에 이 함수를 부르므로
+	// Announce 의 페이즈 게이트로는 막히지 않는다. 여기서 명시적으로 방송을 끈다.
+	CompleteRepair(/*bAnnounce=*/false);
 }
 
-void AGearSlot::CompleteRepair()
+void AGearSlot::CompleteRepair(bool bAnnounce)
 {
 	if (!IsValid(MountedGear)) return;
 
@@ -140,6 +150,15 @@ void AGearSlot::CompleteRepair()
 	QTEProgressIndex = 0;
 
 	Multicast_PlaySlotSound(SoundRows::GearRepair);
+
+	if (bAnnounce)
+	{
+		if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+		{
+			GS->Announce(NSLOCTEXT("Announce", "GearRepaired", "엔진 기어 수리 완료"),
+				EAnnouncementType::Info);
+		}
+	}
 
 	// QTE 진행 중 완료(정상 성공/라운드 재시작 ForceReassemble 포함)라면 플레이어에게
 	// 종료를 알린다. 안 보내면 클라 쪽 bInputLockedByMinigame 이 남아 조작 불능이 된다.
