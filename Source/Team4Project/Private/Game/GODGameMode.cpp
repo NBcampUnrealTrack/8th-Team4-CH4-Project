@@ -418,6 +418,13 @@ void AGODGameMode::UpdateGameTimer()
 		GODGS->OnRep_bGunsUnlocked(); // 리슨 서버(호스트)에도 "총기 제한 해제" 알림 발화
 	}
 
+	// 매초 감소하므로 정확히 한 번만 걸린다.
+	if (GODGS->RemainingTime == TimeWarningSeconds)
+	{
+		GODGS->Announce(NSLOCTEXT("Announce", "TimeWarning", "1분 남았다 — 목적지에 닿지 못하면 전원 패배"),
+			EAnnouncementType::Critical);
+	}
+
 	if (GODGS->RemainingTime <= 0)
 	{
 		EndGame(EGamePhase::MafiaWon);

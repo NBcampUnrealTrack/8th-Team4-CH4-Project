@@ -8,6 +8,7 @@
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
 #include "TimerManager.h"
+#include "Game/GODGameState.h"
 #include "Sound/GameSoundStatics.h"
 #include "Sound/GameSoundTypes.h"
 
@@ -106,6 +107,12 @@ void AGearSlot::BreakGear()
 	ReleaseQTEPlayer();
 
 	Multicast_PlaySlotSound(SoundRows::GearBreak);
+
+	if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+	{
+		GS->Announce(NSLOCTEXT("Announce", "GearBroken", "엔진 기어 파손 감지 — 열차 감속"),
+			EAnnouncementType::Warning);
+	}
 }
 
 void AGearSlot::ForceReassemble()
@@ -140,6 +147,12 @@ void AGearSlot::CompleteRepair()
 	QTEProgressIndex = 0;
 
 	Multicast_PlaySlotSound(SoundRows::GearRepair);
+
+	if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+	{
+		GS->Announce(NSLOCTEXT("Announce", "GearRepaired", "엔진 기어 수리 완료"),
+			EAnnouncementType::Info);
+	}
 
 	// QTE 진행 중 완료(정상 성공/라운드 재시작 ForceReassemble 포함)라면 플레이어에게
 	// 종료를 알린다. 안 보내면 클라 쪽 bInputLockedByMinigame 이 남아 조작 불능이 된다.

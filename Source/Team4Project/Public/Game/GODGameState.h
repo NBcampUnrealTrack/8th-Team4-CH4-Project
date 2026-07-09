@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
 #include "Game/ChatTypes.h"   // 채팅을 위한 헤더 추가 (준수)
+#include "Game/AnnouncementTypes.h"
 #include "GODGameState.generated.h"
 
 UENUM(BlueprintType)
@@ -23,6 +24,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDistanceChanged, float, NewDistan
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPressureLevelChanged, float, NewPressure);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrainFuelLevelChanged, float, NewFuel);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGunsUnlocked);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAnnouncement, const FText&, Message, EAnnouncementType, Type);
 
 class UDataTable;
 
@@ -117,9 +119,23 @@ public:
 	TArray<FChatMessage> ChatHistory;
 
 	UPROPERTY(BlueprintAssignable)
-	FOnChatMessageReceived OnChatMessageReceived; 
-	
+	FOnChatMessageReceived OnChatMessageReceived;
+
 	void AddChatMessage(const FChatMessage& Msg);
+
+	// ── 알림 방송 ──
+	// 서버에서 호출. Playing 페이즈에만 나가며, 전 클라의 HUD 배너에 표시된다.
+	// (라운드 초기화 중 ForceReassemble 등이 방송을 쏘지 않도록 페이즈로 게이트)
+	void Announce(const FText& Message, EAnnouncementType Type = EAnnouncementType::Info);
+
+	UPROPERTY(BlueprintAssignable, Category = "Announcement")
+	FOnAnnouncement OnAnnouncement;
+
+private:
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_Announce(const FText& Message, EAnnouncementType Type);
+
+public:
 
 	UFUNCTION()
 	void OnRep_ChatHistory();

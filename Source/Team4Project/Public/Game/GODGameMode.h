@@ -63,6 +63,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic")
 	int32 GunUnlockDelay = 60;
 
+	/** 남은 시간이 이 값에 도달하면 "시간 임박" 방송 (초) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic")
+	int32 TimeWarningSeconds = 60;
+
 	/** 게임 종료 후 복귀할 메인 메뉴 맵 경로 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic|Maps")
 	FString MainMenuMapPath = TEXT("/Game/Level/TitleMap");
