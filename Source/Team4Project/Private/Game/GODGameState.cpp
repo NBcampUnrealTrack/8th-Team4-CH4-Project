@@ -11,7 +11,7 @@ AGODGameState::AGODGameState()
 {
 	CurrentPhase = EGamePhase::WaitingForPlayers;
 	RemainingTime = 600;
-	DistanceToDestination = 10000.0f;
+	DistanceToDestination = 120000.0f; // 열차 BeginPlay에서 GODTrain::TotalDistance 로 덮어씀. 동일값 유지.
 	bGunsUnlocked = false;
 	LobbyCountdown = 0;
 }
