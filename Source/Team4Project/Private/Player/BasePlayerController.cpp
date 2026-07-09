@@ -625,26 +625,42 @@ void ABasePlayerController::Server_RequestStartGame_Implementation()
 
 void ABasePlayerController::TogglePauseMenu()
 {
+	// 1. 메뉴가 이미 켜져 있다면 닫기
 	if (PauseMenuRef && PauseMenuRef->IsInViewport())
 	{
 		PauseMenuRef->RemoveFromParent();
 		SetShowMouseCursor(false);
+
+		// 게임 전용 모드로 완벽히 복귀
 		FInputModeGameOnly InputMode;
+		InputMode.SetConsumeCaptureMouseDown(false);
 		SetInputMode(InputMode);
 		return;
 	}
 
+	// 2. 메뉴 위젯이 없다면 생성
 	if (!PauseMenuRef && PauseMenuClass)
 	{
 		PauseMenuRef = CreateWidget<UUserWidget>(this, PauseMenuClass);
 	}
 
+	// 3. 메뉴 열기
 	if (PauseMenuRef)
 	{
 		PauseMenuRef->AddToViewport();
 		SetShowMouseCursor(true);
-		FInputModeUIOnly InputMode;
-		InputMode.SetWidgetToFocus(PauseMenuRef->TakeWidget());
+
+		// 💡 UIOnly 대신 GameAndUI를 써야 일시정지 중에도 컨트롤러가 ESC 키를 감지할 수 있습니다.
+		FInputModeGameAndUI InputMode;
+
+		// 💡 TakeWidget() 대신 GetCachedWidget()을 써야 위젯 내부 구조가 파괴되지 않고 포커스가 유지됩니다.
+		if (PauseMenuRef->GetCachedWidget().IsValid())
+		{
+			InputMode.SetWidgetToFocus(PauseMenuRef->GetCachedWidget());
+		}
+
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
+		InputMode.SetHideCursorDuringCapture(false);
 		SetInputMode(InputMode);
 	}
 }

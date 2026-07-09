@@ -63,3 +63,14 @@ void UPauseMenuWidget::OnSettingsClicked()
 		SettingsMenuInstance->AddToViewport(20);
 	}
 }
+
+void UPauseMenuWidget::NativeDestruct()
+{
+	// 💡 일시정지 메뉴가 닫힐 때, 레이어 20에 떠 있던 환경설정 창도 확실하게 화면에서 지워버립니다.
+	if (SettingsMenuInstance && SettingsMenuInstance->IsInViewport())
+	{
+		SettingsMenuInstance->RemoveFromParent();
+	}
+
+	Super::NativeDestruct();
+}
