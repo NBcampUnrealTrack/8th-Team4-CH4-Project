@@ -97,6 +97,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Sound")
 	TObjectPtr<UDataTable> UISoundTable;
 
+	//조준점 ui 노출
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void UpdateCrosshair(bool bShow);
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
@@ -275,7 +279,7 @@ private:
 	void UpdateFuelDisplay();
 	void UpdateWarnings(float DeltaTime);
 	void UpdateAmmoDisplay();
-	void UpdateCrosshair();
+	//void UpdateCrosshair();
 
 	void SetupRoleHUD(const FGameplayTag& CharTag);
 

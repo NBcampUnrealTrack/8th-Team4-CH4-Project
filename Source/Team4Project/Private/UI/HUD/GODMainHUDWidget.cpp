@@ -270,7 +270,7 @@ void UGODMainHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	}
 
 	UpdateWarnings(InDeltaTime);
-	UpdateCrosshair();
+	//UpdateCrosshair();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -418,13 +418,10 @@ void UGODMainHUDWidget::UpdateAmmoDisplay()
 	}
 }
 
-void UGODMainHUDWidget::UpdateCrosshair()
+void UGODMainHUDWidget::UpdateCrosshair(bool bShow)
 {
 	if (!Img_Crosshair) return;
 
-	ABaseCharacter* Char = CachedCharacter.Get();
-	// 총기 장착 시 또는 항상 표시 (디자이너가 BP에서 선택 가능)
-	const bool bShow = Char && !Char->IsDead();
 	Img_Crosshair->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
 }
 
