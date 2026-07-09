@@ -387,7 +387,7 @@ void ABasePlayerController::OnSpectateNextClicked()
 
 void ABasePlayerController::OpenChat()
 {
-	if (bIsSpectating || bChatOpen || !ChatBoxWidget) return;
+	if (bChatOpen || !ChatBoxWidget) return;
 	bChatOpen = true;
 	
 	GetWorldTimerManager().ClearTimer(ChatLogHideTimer);
@@ -440,6 +440,13 @@ void ABasePlayerController::SubmitChat(const FString& Message)
 
 void ABasePlayerController::HandleChatMessage(const FChatMessage& Msg)
 {
+	
+	if (Msg.bIsSpectatorChat && !bIsSpectating)
+	{
+		const AGODPlayerState* PS = GetPlayerState<AGODPlayerState>();
+		if (PS && PS->bIsAlive) return;
+	}
+	
 	UScrollBox* ScrollBox = GetChatScrollBox();
 	if (!ScrollBox || !ChatEntryWidgetClass) return;
 
@@ -452,6 +459,10 @@ void ABasePlayerController::HandleChatMessage(const FChatMessage& Msg)
 	{
 		Text->SetText(FText::FromString(
 			FString::Printf(TEXT("[%s]: %s"), *Msg.SenderName, *Msg.Message)));
+		if (Msg.bIsSpectatorChat)
+		{
+			Text->SetColorAndOpacity(FSlateColor(FLinearColor::Yellow));
+		}
 	}
 
 	ScrollBox->AddChild(Entry);
@@ -479,11 +490,19 @@ void ABasePlayerController::CloseChat()
 	}
 	
 	GetWorldTimerManager().SetTimerForNextTick([this]()
-	{
-		FInputModeGameOnly InputMode;
-		InputMode.SetConsumeCaptureMouseDown(false);
-		SetInputMode(InputMode);
-	});
+{
+	  if (bIsSpectating)
+	  {
+			  bShowMouseCursor = true;
+			  SetInputMode(FInputModeGameAndUI()); 
+	  }
+	  else
+	  {
+			  FInputModeGameOnly InputMode;
+			  InputMode.SetConsumeCaptureMouseDown(false);
+			  SetInputMode(InputMode);
+	  }
+});
 }
 
 UScrollBox* ABasePlayerController::GetChatScrollBox() const

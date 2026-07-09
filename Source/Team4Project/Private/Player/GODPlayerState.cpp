@@ -61,6 +61,9 @@ void AGODPlayerState::Server_SendChat_Implementation(const FString& Message)
 	Msg.SenderName  = GetPlayerName(); 
 	Msg.Message     = Message.Left(MaxChatLength);
 	Msg.Timestamp   = GetWorld()->GetTimeSeconds();
+	
+	//관전자 채팅용
+	Msg.bIsSpectatorChat = !bIsAlive;
 
 	GS->AddChatMessage(Msg);
 }
