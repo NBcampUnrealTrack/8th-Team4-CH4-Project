@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
@@ -79,7 +79,7 @@ public:
 
 	/** 열차 전체 이동 거리 (GODTrain::TotalDistance 와 동일하게 설정) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Train")
-	float TotalDistance = 600000.f;
+	float TotalDistance = 120000.f;
 
 	/** 연료 경고 임계값 (0~1). 이 이하이면 경고 표시 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Warning")
