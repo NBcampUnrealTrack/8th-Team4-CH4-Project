@@ -7,6 +7,7 @@
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
 #include "Engine/Texture2D.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 #include "Game/GODGameState.h"
 #include "Player/BaseCharacter.h"
@@ -47,6 +48,26 @@ void UGODMainHUDWidget::NativeConstruct()
 	{
 		Btn_RoleIcon->OnHovered.AddDynamic(this, &UGODMainHUDWidget::OnRoleIconHovered);
 		Btn_RoleIcon->OnUnhovered.AddDynamic(this, &UGODMainHUDWidget::OnRoleIconUnhovered);
+	}
+	
+	if (PB_Pressure)
+	{
+		if (UMaterialInterface* FillMat = Cast<UMaterialInterface>(PB_Pressure->WidgetStyle.FillImage.GetResourceObject()))
+		{
+			PressureFillMID = UMaterialInstanceDynamic::Create(FillMat, this);
+			if (PressureFillMID)
+			{
+				PB_Pressure->WidgetStyle.FillImage.SetResourceObject(PressureFillMID);
+				UE_LOG(LogTemp, Warning, TEXT("[PressureBar] MID 생성 성공 (부모: %s)"), *FillMat->GetName());
+			}
+		}
+		else
+		{
+			// Fill 브러시가 머테리얼이 아니면(텍스처/None) 색 변경 불가.
+			UObject* Res = PB_Pressure->WidgetStyle.FillImage.GetResourceObject();
+			UE_LOG(LogTemp, Error, TEXT("[PressureBar] Fill이 머테리얼이 아님(%s) → MI_ProgressBar_Gauge 로 지정 필요"),
+				Res ? *Res->GetName() : TEXT("None"));
+		}
 	}
 
 	TryBindGameState();
@@ -95,6 +116,13 @@ void UGODMainHUDWidget::NativeDestruct()
 	{
 		IC->OnInteractTargetChanged.RemoveAll(this);
 	}
+
+	// 압력 게이지 동적 머테리얼/브러시 참조 해제 (GC 정리 순서 경고 예방)
+	if (PB_Pressure)
+	{
+		PB_Pressure->WidgetStyle.FillImage.SetResourceObject(nullptr);
+	}
+	PressureFillMID = nullptr;
 
 	Super::NativeDestruct();
 }
@@ -390,6 +418,21 @@ void UGODMainHUDWidget::UpdatePressureDisplay()
 
 	if (PB_Pressure)
 		PB_Pressure->SetPercent(Percent);
+
+	// 바 전체 색을 현재 값에 따라 Safe→Mid→Danger 로 보간 (MI_ProgressBar_Gauge)
+	if (PressureFillMID)
+		PressureFillMID->SetScalarParameterValue(TEXT("Percent"), Percent);
+
+	// ── 디버그(확인 후 삭제): 압력/퍼센트/MID 상태를 화면 좌상단에 표시 ──
+#if !UE_BUILD_SHIPPING
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			(uint64)(UPTRINT)this, 0.f, FColor::Yellow,
+			FString::Printf(TEXT("[PressureBar] Pressure=%.1f  Percent=%.2f  MID=%s"),
+				CurrentPressure, Percent, PressureFillMID ? TEXT("OK") : TEXT("NULL")));
+	}
+#endif
 
 	if (TB_PressureValue)
 		TB_PressureValue->SetText(FText::FromString(FString::Printf(TEXT("압력: %.0f%%"), CurrentPressure)));

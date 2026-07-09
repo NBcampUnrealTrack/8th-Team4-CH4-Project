@@ -22,6 +22,7 @@ class UTexture2D;
 class UGODAbilitySlotWidget;
 class UDataTable;
 class UAudioComponent;
+class UMaterialInstanceDynamic;
 
 // ─────────────────────────────────────────────
 // 역할 아이콘 / 설명 정보
@@ -110,7 +111,7 @@ protected:
 	// ─── BindWidget: BP 에서 반드시 동일 이름으로 위젯을 배치 ─────
 
 	// 상단 중앙 — 열차 진행도
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidget), BlueprintReadWrite)
 	TObjectPtr<UProgressBar> PB_TrainProgress;
 
 	UPROPERTY(meta = (BindWidget))
@@ -120,14 +121,14 @@ protected:
 	TObjectPtr<UImage> Train_img;
 
 	// 우 상단 — 압력
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidget), BlueprintReadWrite)
 	TObjectPtr<UProgressBar> PB_Pressure;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> TB_PressureValue;
 
 	// 우 상단 — 연료
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidget), BlueprintReadWrite)
 	TObjectPtr<UProgressBar> PB_Fuel;
 
 	UPROPERTY(meta = (BindWidget))
@@ -301,6 +302,12 @@ private:
 	// 인게임 BGM (NativeConstruct 에서 시작, NativeDestruct 에서 정지)
 	UPROPERTY(Transient)
 	TObjectPtr<UAudioComponent> BGMAudio;
+
+	// 압력 게이지(PB_Pressure) 채움의 동적 머테리얼. NativeConstruct 에서 생성,
+	// UpdatePressureDisplay 에서 "Percent" 스칼라를 넣어 바 전체 색을 값에 따라 보간한다.
+	// (Fill 브러시 머테리얼을 MI_ProgressBar_Gauge 로 지정해 둔 경우에만 동작)
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> PressureFillMID;
 
 	// ─── UI 갱신 ────────────────────────────────
 
