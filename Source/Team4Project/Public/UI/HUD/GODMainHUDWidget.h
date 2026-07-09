@@ -78,8 +78,8 @@ public:
 	TMap<FGameplayTag, FRoleHUDSetup> RoleSetupMap;
 
 	/** 열차 전체 이동 거리 (GODTrain::TotalDistance 와 동일하게 설정) */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Train")
-	float TotalDistance = 10000.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Train")
+	float TotalDistance = 120000.f;
 
 	/** 연료 경고 임계값 (0~1). 이 이하이면 경고 표시 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Warning")
@@ -105,7 +105,7 @@ protected:
 	// ─── BindWidget: BP 에서 반드시 동일 이름으로 위젯을 배치 ─────
 
 	// 상단 중앙 — 열차 진행도
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidget), BlueprintReadWrite)
 	TObjectPtr<UProgressBar> PB_TrainProgress;
 
 	UPROPERTY(meta = (BindWidget))

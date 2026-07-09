@@ -107,8 +107,10 @@ public:
 	// ============================================================
 	// 에디터 설정
 	// ============================================================
+	// 목적지까지 총 거리. 최저속도(MinSpeed) 기준 도착 시간 = TotalDistance / MinSpeed.
+	// 예) MinSpeed 200, 10분(600초) 목표 → 200 * 600 = 120000.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
-	float TotalDistance = 10000.f;
+	float TotalDistance = 120000.f;
 
 	// 연료가 없어도 유지되는 최소 속도 (기차는 절대 멈추지 않음)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
