@@ -91,6 +91,9 @@ public:
 	virtual void Interact_Implementation(ACharacter* Interactor) override;
 	virtual FText GetInteractPrompt_Implementation() const override;
 
+	// 지금 밸브를 조작할 수 있는가 (Playing 페이즈 + 미니게임 미진행 + 화부가 잠그지 않음).
+	bool IsUsableNow() const;
+
 private:
 	void StartMinigame(ABaseCharacter* Player);
 	void StartNextRound();

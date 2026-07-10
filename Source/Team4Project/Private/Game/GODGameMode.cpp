@@ -186,6 +186,10 @@ void AGODGameMode::StartGame()
 	{
 		if (Train->Pressure)
 		{
+			// 로비에서 밸브를 조작하다 폭발시켰다면 압력이 100 + bExploded 인 채로 넘어온다.
+			// 그 상태로 출발하면 Tick 이 막혀 압력이 100에 얼어붙고 경고음이 끝나지 않는다.
+			Train->Pressure->ResetForNewGame();
+
 			Train->Pressure->OnPressureExplode.RemoveDynamic(this, &AGODGameMode::HandlePressureExplosion);
 			Train->Pressure->OnPressureExplode.AddDynamic(this, &AGODGameMode::HandlePressureExplosion);
 		}

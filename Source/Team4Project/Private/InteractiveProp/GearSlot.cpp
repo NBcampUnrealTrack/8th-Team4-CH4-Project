@@ -174,6 +174,7 @@ ABaseCharacter* AGearSlot::ReleaseQTEPlayer()
 	QTEPlayer = nullptr;
 	if (Player)
 	{
+		Player->ActiveGearQTESlot = nullptr;
 		Player->OnCharacterDied.RemoveDynamic(this, &AGearSlot::OnQTEPlayerDied);
 	}
 	return Player;
@@ -209,6 +210,8 @@ void AGearSlot::StartQTE(ABaseCharacter* Player)
 	}
 
 	QTEPlayer = Player;
+
+	Player->ActiveGearQTESlot = this;
 
 	// 진행 중 사망하면 실패(폭발) 없이 중단하도록 감시.
 	Player->OnCharacterDied.AddDynamic(this, &AGearSlot::OnQTEPlayerDied);

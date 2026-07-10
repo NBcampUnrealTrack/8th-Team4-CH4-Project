@@ -1,5 +1,6 @@
-#include "InteractiveProp/PressureValve.h"
+﻿#include "InteractiveProp/PressureValve.h"
 #include "Component/PressureComponent.h"
+#include "Game/GODGameState.h"
 #include "Player/BaseCharacter.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
@@ -80,6 +81,8 @@ void APressureValve::StartMinigame(ABaseCharacter* Player)
 	MissCount = 0;
 	MinigamePlayer = Player;
 
+	Player->ActivePressureValve = this;
+
 	// 진행 중 사망하면 실패(폭발) 없이 중단하도록 감시.
 	Player->OnCharacterDied.AddDynamic(this, &APressureValve::OnMinigamePlayerDied);
 
@@ -94,6 +97,7 @@ ABaseCharacter* APressureValve::ReleaseMinigamePlayer()
 	MinigamePlayer = nullptr;
 	if (Player)
 	{
+		Player->ActivePressureValve = nullptr;
 		Player->OnCharacterDied.RemoveDynamic(this, &APressureValve::OnMinigamePlayerDied);
 	}
 	return Player;
@@ -202,9 +206,17 @@ void APressureValve::ForceStop()
 	if (Player) Player->Client_EndPressureMinigame(false);
 }
 
+bool APressureValve::IsUsableNow() const
+{
+	if (bMinigameActive || ActorHasTag(TEXT("Stoker.ForceClose"))) return false;
+
+	const AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr;
+	return GS && GS->CurrentPhase == EGamePhase::Playing;
+}
+
 void APressureValve::Interact_Implementation(ACharacter* Interactor)
 {
-	if (bMinigameActive || ActorHasTag(TEXT("Stoker.ForceClose"))) return;
+	if (!IsUsableNow()) return;
 
 	ABaseCharacter* BaseChar = Cast<ABaseCharacter>(Interactor);
 	if (!BaseChar) return;
@@ -214,6 +226,6 @@ void APressureValve::Interact_Implementation(ACharacter* Interactor)
 
 FText APressureValve::GetInteractPrompt_Implementation() const
 {
-	if (bMinigameActive) return FText::GetEmpty();
+	if (!IsUsableNow()) return FText::GetEmpty();
 	return FText::FromString(TEXT("밸브 조작"));
 }
