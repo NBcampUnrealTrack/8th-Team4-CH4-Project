@@ -158,6 +158,13 @@ protected:
 	UPROPERTY()
 	UUserWidget* PauseMenuRef;
 
+	// 슬라이드 아웃 애니가 끝난 뒤 실제 제거 + 입력/커서 복구를 지연 실행하기 위한 타이머/가드.
+	FTimerHandle PauseMenuCloseTimer;
+	bool bPauseMenuClosing = false;
+
+	// 슬라이드 아웃 애니 종료 후 호출 — 위젯 제거 + 게임 전용 입력 모드 복귀.
+	void FinishPauseMenuClose();
+
 	UFUNCTION(BlueprintImplementableEvent, Category = "Spectate")
 	void OnStartSpectatingBP();
 	

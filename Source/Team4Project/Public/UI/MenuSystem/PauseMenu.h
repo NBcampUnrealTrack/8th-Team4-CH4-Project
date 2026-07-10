@@ -10,9 +10,24 @@ class TEAM4PROJECT_API UPauseMenuWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
+public:
+	// 열릴 때 / 닫힐 때 애니메이션 — WBP 가 구현. 컨트롤러(TogglePauseMenu)가 호출.
+	UFUNCTION(BlueprintImplementableEvent, Category = "Animation")
+	void PlaySlideIn();
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Animation")
+	void PlaySlideOut();
+
+	// 슬라이드 아웃 애니 길이(초). 이 시간 뒤 컨트롤러가 위젯을 제거한다. WBP 애니 길이에 맞춰 조정.
+	float GetSlideOutDuration() const { return SlideOutDuration; }
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+
+	// 슬라이드 아웃 애니 길이(초). WBP_PauseMenu 클래스 디폴트에서 조정.
+	UPROPERTY(EditDefaultsOnly, Category = "Animation")
+	float SlideOutDuration = 0.3f;
 
 	UPROPERTY(meta = (BindWidget))
 	UButton* Btn_Resume;

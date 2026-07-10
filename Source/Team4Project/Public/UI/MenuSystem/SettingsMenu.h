@@ -62,6 +62,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Settings")
 	void BeginRebind(FName MappingName);
 
+	// 슬라이드 아웃 애니가 끝난 뒤 실제로 위젯을 화면에서 제거.
+	// 타이머가 자동 호출하지만, WBP 애니 종료 콜백(Bind to Animation Finished)에서 직접 불러도 됨(더 정확).
+	UFUNCTION(BlueprintCallable, Category = "Settings")
+	void FinishClose();
+
 protected:
 	virtual bool Initialize() override;
 	virtual void NativeConstruct() override;
@@ -276,6 +281,14 @@ private:
 	int32 PrevWindowMode = 0;
 	int32 RevertSecondsLeft = 0;
 	FTimerHandle RevertTimerHandle;
+
+	// 슬라이드 아웃 애니 길이(초). WBP 의 SlideOut 애니 길이에 맞춰 조정. 이 시간 뒤 위젯 제거.
+	UPROPERTY(EditDefaultsOnly, Category = "Settings")
+	float SlideOutDuration = 0.3f;
+
+	// 닫는 중 중복 호출/입력 방지 + 지연 제거용 타이머.
+	FTimerHandle CloseTimerHandle;
+	bool bClosing = false;
 
 	UGODGameUserSettings* GetSettings() const;
 	UPlayerGameInstance* GetGI() const;

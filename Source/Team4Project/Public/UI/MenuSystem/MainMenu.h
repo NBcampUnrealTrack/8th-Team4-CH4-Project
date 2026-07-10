@@ -52,8 +52,15 @@ protected:
 	// ESC 로 스킨 메뉴 → 메인 메뉴 복귀
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
+	// 새 페이지가 나타날 때(In) — 전환 완료 후 호출. WBP 가 등장 애니 재생.
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI Animation")
 	void PlayMenuTransition(EMenuState TargetIndex);
+
+	// 현재 페이지가 사라질 때(Out) — 전환 시작 시 호출. WBP 가 퇴장 애니 재생.
+	// LeavingIndex = 지금 나가는 페이지 (Host/Join 등 페이지별 다른 Out 애니를 주고 싶을 때 분기용).
+	// 이 애니가 끝난 뒤(TransitionDuration) 실제 페이지 전환 + PlayMenuTransition(In) 이 실행됨.
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI Animation")
+	void PlayMenuOut(EMenuState LeavingIndex);
 
 	// 스킨 미리보기가 바뀔 때 호출 — WBP 에서 구현해 레벨의 BP_SkinPreview 액터 메시를 교체.
 	UFUNCTION(BlueprintImplementableEvent, Category = "Skin")
@@ -232,6 +239,22 @@ private:
 
 	UFUNCTION()
 	void OpenMainMenu();
+
+	// ── 페이지 전환 (Out 애니 → 전환 → In 애니) ──
+	// 각 Open* 이 직접 SetActiveWidget 하지 않고 이걸 거쳐 Out→전환→In 순서를 만든다.
+	void BeginMenuTransition(EMenuState Target);
+	void CommitMenuTransition();
+	class UWidget* GetPageForState(EMenuState State) const;
+
+	// 퇴장 애니 길이(초). WBP 의 MenuOut 애니 길이에 맞춰 조정. 이 시간 뒤 페이지 전환.
+	UPROPERTY(EditDefaultsOnly, Category = "UI Animation")
+	float TransitionDuration = 0.3f;
+
+	FTimerHandle MenuTransitionTimer;
+	bool bMenuTransitioning = false;
+	EMenuState PendingState = EMenuState::MainMenu;
+	// 지금 화면에 떠 있는 페이지 (Out 애니에 "나가는 페이지"를 넘기기 위해 추적).
+	EMenuState CurrentState = EMenuState::MainMenu;
 
 	UFUNCTION()
 	void QuitPressed();
