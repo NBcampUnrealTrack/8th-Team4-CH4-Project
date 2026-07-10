@@ -46,7 +46,7 @@ struct FRoleDisplayInfo
 };
 
 // ─────────────────────────────────────────────
-// 역할별 HUD 세팅 (아이콘 + 능력 슬롯 최대 2개)
+// 역할별 HUD 세팅 (아이콘 + 능력 슬롯 최대 3개)
 // ─────────────────────────────────────────────
 USTRUCT(BlueprintType)
 struct FRoleHUDSetup
@@ -56,9 +56,13 @@ struct FRoleHUDSetup
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
 	FRoleDisplayInfo DisplayInfo;
 
-	/** 이 역할의 능력 슬롯 설정 (최대 2개). */
+	/** 패시브 스킬 설정 (없으면 에디터에서 None) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
-	TArray<FAbilitySlotConfig> AbilitySlots;
+	FAbilitySlotConfig PassiveSlot;
+
+	/** 액티브 능력 슬롯 설정 (최대 2개 - 0번: 우하단 고정, 1번: 우상단 추가) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
+	TArray<FAbilitySlotConfig> ActiveSlots;
 };
 
 /**
@@ -167,10 +171,13 @@ protected:
 
 	// 우 하단 — 능력 슬롯 (WBP_AbilitySlot 상속 위젯을 배치)
 	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UGODAbilitySlotWidget> Slot_Ability1;
+	TObjectPtr<UGODAbilitySlotWidget> Slot_Passive;
 
 	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UGODAbilitySlotWidget> Slot_Ability2;
+	TObjectPtr<UGODAbilitySlotWidget> Slot_Active1;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UGODAbilitySlotWidget> Slot_Active2;
 
 	// 우 하단 — 탄약 (총 장착 시 표시)
 	UPROPERTY(meta = (BindWidget))
