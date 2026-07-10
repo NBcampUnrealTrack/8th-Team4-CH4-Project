@@ -574,11 +574,19 @@ void UPlayerGameInstance::CreateSession()
 
 void UPlayerGameInstance::MoveToTitleMap()
 {
-	APlayerController* PlayerController = GetFirstLocalPlayerController();
-	if (!ensure(PlayerController != nullptr))
-		return;
+	// DestroySession 콜백은 비동기라 월드가 이미 정리되는 중(PIE 종료 등)에 도착할 수 있다.
+	// 그 시점엔 이동할 대상도, 로컬 컨트롤러도 없으므로 조용히 빠져나간다.
+	UWorld* World = GetWorld();
+	if (!World || World->bIsTearingDown) return;
 
-	PlayerController->ClientTravel("/Game/Level/TitleMap", ETravelType::TRAVEL_Absolute);
+	if (APlayerController* PlayerController = GetFirstLocalPlayerController())
+	{
+		PlayerController->ClientTravel("/Game/Level/TitleMap", ETravelType::TRAVEL_Absolute);
+		return;
+	}
+
+	// 레벨 전환 도중이라 컨트롤러가 아직 없는 경우의 폴백.
+	UGameplayStatics::OpenLevel(World, FName("TitleMap"));
 }
 
 void UPlayerGameInstance::Join(uint32 Index, FString Password)
