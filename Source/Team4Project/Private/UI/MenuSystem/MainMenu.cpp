@@ -146,6 +146,10 @@ void UMainMenu::NativeConstruct()
 
 void UMainMenu::NativeDestruct()
 {
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(MenuTransitionTimer);
+    }
     StopUIMusic();
     Super::NativeDestruct();
 }
@@ -179,7 +183,8 @@ void UMainMenu::OpenSkinMenu()
     if (!ensure(MenuSwitcher != nullptr)) return;
     if (!ensure(SkinMenu != nullptr)) return;
 
-    MenuSwitcher->SetActiveWidget(SkinMenu);
+    // Out 애니 → 전환 → In 애니. 실제 전환은 TransitionDuration 뒤 CommitMenuTransition 에서.
+    BeginMenuTransition(EMenuState::Skin);
 
     // 미리보기를 현재 저장된 스킨으로 초기화
     UWorld* World = GetWorld();
@@ -192,8 +197,6 @@ void UMainMenu::OpenSkinMenu()
 
     // ESC 키를 받으려면 이 위젯에 포커스가 있어야 한다.
     SetKeyboardFocus();
-
-    PlayMenuTransition(EMenuState::Skin);
 }
 
 void UMainMenu::SelectSkinDog()     { PreviewSkin(0); }
@@ -235,9 +238,7 @@ void UMainMenu::UpdateSelectedSkinText()
 
 void UMainMenu::OpenHostMenu()
 {
-    MenuSwitcher->SetActiveWidget(HostMenu);
-    
-    PlayMenuTransition(EMenuState::Host);
+    BeginMenuTransition(EMenuState::Host);
 }
 
 void UMainMenu::OnPrivateRoomChanged(bool bIsChecked)
@@ -467,10 +468,8 @@ void UMainMenu::OpenJoinMenu()
     if (!ensure(JoinMenu != nullptr))
         return;
     
-    MenuSwitcher->SetActiveWidget(JoinMenu);
+    BeginMenuTransition(EMenuState::Join);
 
-    PlayMenuTransition(EMenuState::Join);
-    
     if (MenuInterface != nullptr)
     {
         MenuInterface->RefreshServerList();
@@ -483,10 +482,81 @@ void UMainMenu::OpenMainMenu()
         return;
     if (!ensure(MainMenu != nullptr))
         return;
-   
-    MenuSwitcher->SetActiveWidget(MainMenu);
-    
-    PlayMenuTransition(EMenuState::MainMenu);
+
+    BeginMenuTransition(EMenuState::MainMenu);
+}
+
+// ============================================================
+// 페이지 전환 (Out 애니 → 전환 → In 애니)
+// ============================================================
+
+UWidget* UMainMenu::GetPageForState(EMenuState State) const
+{
+    switch (State)
+    {
+    case EMenuState::Host:     return HostMenu;
+    case EMenuState::Join:     return JoinMenu;
+    case EMenuState::Skin:     return SkinMenu;
+    case EMenuState::MainMenu:
+    default:                   return MainMenu;
+    }
+}
+
+void UMainMenu::BeginMenuTransition(EMenuState Target)
+{
+    if (!MenuSwitcher)
+        return;
+
+    UWidget* TargetPage = GetPageForState(Target);
+    if (!TargetPage)
+        return;
+
+    // 이미 그 페이지면 아무것도 안 함.
+    if (MenuSwitcher->GetActiveWidget() == TargetPage)
+        return;
+
+    // 전환 애니 진행 중이면 무시 (버튼 연타 방지).
+    if (bMenuTransitioning)
+        return;
+
+    PendingState = Target;
+
+    // 현재(나가는) 페이지 Out 애니 재생 (WBP 구현). 미구현이면 no-op.
+    PlayMenuOut(CurrentState);
+
+    if (TransitionDuration > 0.f)
+    {
+        if (UWorld* World = GetWorld())
+        {
+            bMenuTransitioning = true;
+            World->GetTimerManager().SetTimer(
+                MenuTransitionTimer, this, &UMainMenu::CommitMenuTransition, TransitionDuration, false);
+            return;
+        }
+    }
+
+    // 애니 길이 0 또는 월드 없음 → 즉시 전환.
+    CommitMenuTransition();
+}
+
+void UMainMenu::CommitMenuTransition()
+{
+    bMenuTransitioning = false;
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(MenuTransitionTimer);
+    }
+
+    // Out 애니가 끝난 지금 실제로 페이지를 바꾸고, 새 페이지 In 애니를 재생.
+    if (MenuSwitcher)
+    {
+        if (UWidget* Page = GetPageForState(PendingState))
+        {
+            MenuSwitcher->SetActiveWidget(Page);
+        }
+    }
+    CurrentState = PendingState;   // 이제 이 페이지가 화면에 떠 있음 (다음 Out 애니 기준).
+    PlayMenuTransition(PendingState);
 }
 
 void UMainMenu::QuitPressed()

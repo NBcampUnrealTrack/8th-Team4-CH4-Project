@@ -22,6 +22,7 @@
 #include "HAL/FileManager.h"
 #include "Sound/GameSoundStatics.h"
 #include "Sound/GameSoundTypes.h"
+#include "UI/MenuSystem/PauseMenu.h"
 
 
 // [임시 디버그] Shipping 에서도 보이는 유일한 채널 = 파일. Saved/NameDebug.log 에 누적. 확인 후 제거.
@@ -628,13 +629,31 @@ void ABasePlayerController::TogglePauseMenu()
 	// 1. 메뉴가 이미 켜져 있다면 닫기
 	if (PauseMenuRef && PauseMenuRef->IsInViewport())
 	{
-		PauseMenuRef->RemoveFromParent();
-		SetShowMouseCursor(false);
+		// 이미 닫는 중이면 무시 (ESC 연타 방지).
+		if (bPauseMenuClosing)
+		{
+			return;
+		}
+		bPauseMenuClosing = true;
 
-		// 게임 전용 모드로 완벽히 복귀
-		FInputModeGameOnly InputMode;
-		InputMode.SetConsumeCaptureMouseDown(false);
-		SetInputMode(InputMode);
+		// 슬라이드 아웃 애니 재생 후, 애니 길이만큼 지연시켜 실제 제거 + 입력 복구.
+		float Delay = 0.f;
+		if (UPauseMenuWidget* PM = Cast<UPauseMenuWidget>(PauseMenuRef))
+		{
+			PM->PlaySlideOut();
+			Delay = PM->GetSlideOutDuration();
+		}
+
+		if (Delay > 0.f)
+		{
+			GetWorldTimerManager().SetTimer(
+				PauseMenuCloseTimer, this, &ABasePlayerController::FinishPauseMenuClose, Delay, false);
+		}
+		else
+		{
+			// 애니가 없거나 길이 0 이면 즉시 닫기.
+			FinishPauseMenuClose();
+		}
 		return;
 	}
 
@@ -663,4 +682,23 @@ void ABasePlayerController::TogglePauseMenu()
 		InputMode.SetHideCursorDuringCapture(false);
 		SetInputMode(InputMode);
 	}
+}
+
+void ABasePlayerController::FinishPauseMenuClose()
+{
+	GetWorldTimerManager().ClearTimer(PauseMenuCloseTimer);
+
+	if (PauseMenuRef && PauseMenuRef->IsInViewport())
+	{
+		PauseMenuRef->RemoveFromParent();
+	}
+
+	SetShowMouseCursor(false);
+
+	// 게임 전용 모드로 완벽히 복귀
+	FInputModeGameOnly InputMode;
+	InputMode.SetConsumeCaptureMouseDown(false);
+	SetInputMode(InputMode);
+
+	bPauseMenuClosing = false;
 }
