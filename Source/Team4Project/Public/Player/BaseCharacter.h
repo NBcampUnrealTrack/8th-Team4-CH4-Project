@@ -37,6 +37,7 @@ struct FInputActionValue;
 
 class UCustomMovementComponent;
 class UDataTable;
+class UAnimMontage;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterDied,
 	ABaseCharacter*, DeadCharacter,
@@ -65,6 +66,14 @@ struct FCharacterSkinData
 	// 동물별 모델 크기 차이 보정용 메시 스케일
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
 	FVector MeshScale = FVector(1.f, 1.f, 1.f);
+
+	// 밀치기 몽타주. 동물마다 스켈레톤이 달라 하나로 공유할 수 없으므로 스킨별로 지정한다.
+	// 비워 두면 캐릭터 기본값(PushMontage / StumbleMontage)으로 폴백한다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	TObjectPtr<UAnimMontage> PushMontage = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	TObjectPtr<UAnimMontage> StumbleMontage = nullptr;
 };
 
 // 순찰자 발자국 기록 (기록 시각 + 위치)
@@ -191,6 +200,21 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Skin")
 	int32 GetSkinIndex() const { return SkinIndex; }
+
+	// ============================================================
+	// 밀치기 (총 미장착 상태의 좌클릭 — UGA_Push)
+	// ============================================================
+
+	// 서버: 이 캐릭터가 밀쳐졌을 때. 비틀거림 몽타주 + 넉백 + 낙사 킬 크레딧 기록.
+	void ReceivePush(ABaseCharacter* Pusher, const FVector& LaunchVelocity, float StumbleDuration);
+
+	// 미는 쪽 모션 (명중 여부와 무관하게 재생).
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayPushMontage();
+
+	// 밀린 쪽 모션.
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayStumbleMontage();
 
 	// ============================================================
 	// 무기
@@ -432,6 +456,37 @@ protected:
 	TArray<FActiveGameplayEffectHandle> AppliedEffectHandles;
 
 	bool bGASInitialized = false;
+
+	// ── 밀치기 ──
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Push")
+	TObjectPtr<UAnimMontage> PushMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Push")
+	TObjectPtr<UAnimMontage> StumbleMontage;
+
+	// 밀린 뒤 이 시간(초) 안에 낙사하면 밀친 사람을 킬러로 인정한다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Push")
+	float PushKillCreditWindow = 6.f;
+
+	// 넉백은 서버뿐 아니라 소유 클라에서도 실행해야 이동 예측이 어긋나지 않는다.
+	UFUNCTION(Client, Reliable)
+	void Client_LaunchFromPush(FVector LaunchVelocity, float StumbleDuration);
+
+	// 현재 스킨의 몽타주를 우선 사용하고, 없으면 캐릭터 기본 몽타주로 폴백한다.
+	UAnimMontage* ResolvePushMontage(bool bStumble) const;
+	void PlayMontageLocal(UAnimMontage* Montage);
+
+	// 비틀거리는 동안 이동 입력을 잠근다 (밀려 떨어지는 걸 공중조작으로 취소하지 못하게).
+	void ApplyLocalStumble(const FVector& LaunchVelocity, float StumbleDuration);
+	void EndStumble();
+
+	// 낙사 시 킬 크레딧을 받을 플레이어 (최근에 민 사람, 없으면 nullptr).
+	class AGODPlayerState* GetFallKillCredit() const;
+
+	FTimerHandle StumbleTimer;
+	FTimerHandle StumbleInputLockTimer;
+	TWeakObjectPtr<ABaseCharacter> LastPusher;
+	float LastPushedTime = -1000.f;
 
 	// 현재 장착 무기 (서버에서 스폰 후 설정, 클라에 복제)
 	UPROPERTY(Replicated)

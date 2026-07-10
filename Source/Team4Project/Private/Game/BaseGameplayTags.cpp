@@ -34,6 +34,7 @@ namespace Abilities
 	UE_DEFINE_GAMEPLAY_TAG(Invisible, "Ability.Invisible")
 	UE_DEFINE_GAMEPLAY_TAG(Equip, "Ability.Equip")
 	UE_DEFINE_GAMEPLAY_TAG(Detect, "Ability.Detect")
+	UE_DEFINE_GAMEPLAY_TAG(Push, "Ability.Push")
 }
 
 namespace State
@@ -48,6 +49,8 @@ namespace State
 	{
 		UE_DEFINE_GAMEPLAY_TAG(Snow, "State.Debuff.Snow")
 	}
+
+	UE_DEFINE_GAMEPLAY_TAG(Stumble, "State.Stumble")
 }
 
 namespace Cooldown
@@ -55,6 +58,7 @@ namespace Cooldown
 	UE_DEFINE_GAMEPLAY_TAG(Attack, "Cooldown.Attack")
 	UE_DEFINE_GAMEPLAY_TAG(Use, "Cooldown.Invisible")
 	UE_DEFINE_GAMEPLAY_TAG(Detect, "Cooldown.Detect")
+	UE_DEFINE_GAMEPLAY_TAG(Push, "Cooldown.Push")
 }
 
 namespace Event

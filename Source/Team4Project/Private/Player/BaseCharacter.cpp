@@ -52,6 +52,8 @@
 #include "UserSettings/EnhancedInputUserSettings.h"
 #include "InputActionValue.h"
 #include "Component/CustomMovementComponent.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Sound/GameSoundStatics.h"
 #include "Sound/GameSoundTypes.h"
 ABaseCharacter::ABaseCharacter(const FObjectInitializer& ObjectInitializer)
@@ -753,6 +755,126 @@ float ABaseCharacter::TakeDamage(float DamageAmount, const FDamageEvent& DamageE
 	return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 }
 
+// ============================================================
+// 밀치기 (총 미장착 좌클릭)
+// ============================================================
+UAnimMontage* ABaseCharacter::ResolvePushMontage(bool bStumble) const
+{
+	// 동물 스킨마다 스켈레톤이 다르므로 몽타주도 스킨별로 지정한다.
+	if (SkinOptions.IsValidIndex(SkinIndex))
+	{
+		const FCharacterSkinData& Skin = SkinOptions[SkinIndex];
+		if (UAnimMontage* SkinMontage = bStumble ? Skin.StumbleMontage : Skin.PushMontage)
+		{
+			return SkinMontage;
+		}
+	}
+
+	return bStumble ? StumbleMontage : PushMontage;
+}
+
+void ABaseCharacter::PlayMontageLocal(UAnimMontage* Montage)
+{
+	if (!Montage || GetNetMode() == NM_DedicatedServer) return;
+
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	UAnimInstance* AnimInstance = MeshComp ? MeshComp->GetAnimInstance() : nullptr;
+	if (!AnimInstance) return;
+
+	// 스킨마다 스켈레톤이 다르다. 맞지 않는 몽타주를 재생하면 포즈가 깨지므로 거른다.
+	const USkeletalMesh* CurrentMesh = MeshComp->GetSkeletalMeshAsset();
+	if (CurrentMesh && Montage->GetSkeleton() != CurrentMesh->GetSkeleton()) return;
+
+	AnimInstance->Montage_Play(Montage);
+}
+
+void ABaseCharacter::Multicast_PlayPushMontage_Implementation()
+{
+	PlayMontageLocal(ResolvePushMontage(/*bStumble=*/false));
+}
+
+void ABaseCharacter::Multicast_PlayStumbleMontage_Implementation()
+{
+	PlayMontageLocal(ResolvePushMontage(/*bStumble=*/true));
+}
+
+void ABaseCharacter::ReceivePush(ABaseCharacter* Pusher, const FVector& LaunchVelocity, float StumbleDuration)
+{
+	if (!HasAuthority() || bIsDead) return;
+
+	// 낙사 킬 크레딧용. 이 창(PushKillCreditWindow) 안에 떨어져 죽으면 밀친 사람이 킬러가 된다.
+	LastPusher = Pusher;
+	LastPushedTime = GetWorld()->GetTimeSeconds();
+
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->AddLooseGameplayTag(State::Stumble.GetTag());
+		GetWorldTimerManager().SetTimer(
+			StumbleTimer, this, &ABaseCharacter::EndStumble, StumbleDuration, false);
+	}
+
+	Multicast_PlayStumbleMontage();
+
+	// 넉백은 서버 시뮬과 소유 클라 양쪽에 적용해야 위치 보정으로 되돌아가지 않는다.
+	if (IsLocallyControlled())
+	{
+		ApplyLocalStumble(LaunchVelocity, StumbleDuration);
+	}
+	else
+	{
+		LaunchCharacter(LaunchVelocity, true, true);
+		Client_LaunchFromPush(LaunchVelocity, StumbleDuration);
+	}
+}
+
+void ABaseCharacter::Client_LaunchFromPush_Implementation(FVector LaunchVelocity, float StumbleDuration)
+{
+	ApplyLocalStumble(LaunchVelocity, StumbleDuration);
+}
+
+void ABaseCharacter::ApplyLocalStumble(const FVector& LaunchVelocity, float StumbleDuration)
+{
+	LaunchCharacter(LaunchVelocity, true, true);
+
+	// 비틀거리는 동안 이동 입력 잠금. 잠그지 않으면 공중조작으로 낙하를 그대로 되돌릴 수 있다.
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		// SetIgnoreMoveInput 은 누적 카운터다. 연속으로 밀리면 타이머만 갱신하고
+		// 잠금은 한 번만 걸어야 해제 시 카운터가 0으로 돌아온다.
+		if (!GetWorldTimerManager().IsTimerActive(StumbleInputLockTimer))
+		{
+			PC->SetIgnoreMoveInput(true);
+		}
+
+		// 캐릭터가 아니라 컨트롤러를 캡처한다. 밀려서 죽어 폰이 파괴돼도
+		// 관전 중인 컨트롤러의 입력 잠금은 반드시 풀어야 한다.
+		GetWorldTimerManager().SetTimer(
+			StumbleInputLockTimer,
+			[WeakPC = TWeakObjectPtr<APlayerController>(PC)]()
+			{
+				if (WeakPC.IsValid())
+				{
+					WeakPC->SetIgnoreMoveInput(false);
+				}
+			},
+			StumbleDuration, false);
+	}
+}
+
+void ABaseCharacter::EndStumble()
+{
+	if (!HasAuthority() || !AbilitySystemComponent) return;
+	AbilitySystemComponent->RemoveLooseGameplayTag(State::Stumble.GetTag());
+}
+
+AGODPlayerState* ABaseCharacter::GetFallKillCredit() const
+{
+	if (!LastPusher.IsValid()) return nullptr;
+	if (GetWorld()->GetTimeSeconds() - LastPushedTime > PushKillCreditWindow) return nullptr;
+
+	return LastPusher->GetPlayerState<AGODPlayerState>();
+}
+
 void ABaseCharacter::Die(AActor* Killer)
 {
 	if (!HasAuthority() || bIsDead) return;
@@ -1197,9 +1319,10 @@ void ABaseCharacter::CheckFallRescueOrDeath()
 	if (GetActorLocation().Z < ReferenceZ - FallDeathDepth)
 	{
 		// 승리조건 체크를 타려면 반드시 GameMode 경유 (Die() 직접 호출 금지).
+		// 최근에 밀린 거라면 밀친 사람이 킬러로 기록된다.
 		if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
 		{
-			GM->HandlePlayerDeath(nullptr, GetPlayerState<AGODPlayerState>());
+			GM->HandlePlayerDeath(GetFallKillCredit(), GetPlayerState<AGODPlayerState>());
 		}
 	}
 }
@@ -1258,7 +1381,7 @@ void ABaseCharacter::FellOutOfWorld(const UDamageType& dmgType)
 		{
 			if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
 			{
-				GM->HandlePlayerDeath(nullptr, GetPlayerState<AGODPlayerState>());
+				GM->HandlePlayerDeath(GetFallKillCredit(), GetPlayerState<AGODPlayerState>());
 				return;
 			}
 		}

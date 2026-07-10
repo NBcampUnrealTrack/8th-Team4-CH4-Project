@@ -36,6 +36,7 @@ namespace Abilities
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Invisible)
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Equip)
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Detect)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Push)
 }
 
 namespace State
@@ -50,6 +51,9 @@ namespace State
     {
     	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Snow)
     }
+
+    // 밀쳐져 비틀거리는 중. 이 동안 반격(밀치기) 불가.
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Stumble)
 }
 
 namespace Cooldown
@@ -57,6 +61,7 @@ namespace Cooldown
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Attack)
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Invisible)
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Detect)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Push)
 }
 
 namespace Event
