@@ -28,7 +28,7 @@ public:
 
 	// 주행 중 초당 압력 상승량 (기본). 석탄 연소 중이면 FurnaceRiseMultiplier 배로 오른다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pressure")
-	float PressureRiseRate = 1.f;
+	float PressureRiseRate = 0.333333f;
 
 	// 석탄 연소(가속) 중 압력 상승 배수.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pressure")
@@ -65,6 +65,10 @@ public:
 	// 폭발 후 압력 초기화 (BP나 GameMode에서 호출)
 	UFUNCTION(BlueprintCallable, Category = "Pressure")
 	void ResetAfterExplosion();
+
+	// 게임 시작 시 완전 초기화.
+	UFUNCTION(BlueprintCallable, Category = "Pressure")
+	void ResetForNewGame();
 
 	// 미니게임 실패 등으로 즉시 폭발을 강제 (기존 Tick 폭발과 동일한 파이프라인 사용)
 	UFUNCTION(BlueprintCallable, Category = "Pressure")

@@ -85,6 +85,9 @@ public:
 	// IInteractable
 	virtual void Interact_Implementation(ACharacter* Interactor) override;
 	virtual FText GetInteractPrompt_Implementation() const override;
+
+	// 게임 진행 중에만 석탄을 넣을 수 있다 (로비에서 미리 연료를 채우지 못하게).
+	bool IsUsableNow() const;
 	
 	UFUNCTION(BlueprintImplementableEvent, Category = "Coal|UI")
 	void OnFuelWidgetUpdate(float CurrentFuel, float MaxFuel, float FuelPercent);

@@ -234,11 +234,20 @@ UFurnanceComponent* ACoalFeeder::GetFurnace() const
 	return nullptr;
 }
 
+bool ACoalFeeder::IsUsableNow() const
+{
+	const AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr;
+	return GS && GS->CurrentPhase == EGamePhase::Playing;
+}
+
 void ACoalFeeder::Interact_Implementation(ACharacter* Interactor)
 {
 	// Interact 는 서버에서 호출된다(InteractComponent::Server_TryInteract).
 	UE_LOG(LogTemp, Warning, TEXT("[CoalFeeder] Interact 호출됨 (Authority=%d)"), HasAuthority());
 	if (!HasAuthority()) return;
+
+	// 로비에서 미리 화로를 채워 두면 시작하자마자 압력이 2배로 오른다.
+	if (!IsUsableNow()) return;
 
 	ABaseCharacter* BaseChar = Cast<ABaseCharacter>(Interactor);
 	if (!BaseChar)
@@ -312,6 +321,8 @@ void ACoalFeeder::Multicast_PlayFeedFX_Implementation()
 
 FText ACoalFeeder::GetInteractPrompt_Implementation() const
 {
+	if (!IsUsableNow()) return FText::GetEmpty();
+
 	// 화로가 가득이면 안내 (CurrentFuel 은 복제되어 클라에서도 읽힘)
 	if (UFurnanceComponent* Furnace = GetFurnace())
 	{

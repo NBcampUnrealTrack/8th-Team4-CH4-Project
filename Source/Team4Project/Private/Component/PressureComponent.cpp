@@ -72,6 +72,17 @@ void UPressureComponent::ResetAfterExplosion()
 	bWasWarning = false;
 }
 
+void UPressureComponent::ResetForNewGame()
+{
+	if (!GetOwner()->HasAuthority()) return;
+
+	bExploded = false;
+	CurrentPressure = 0.f;
+	bWasWarning = false;
+
+	OnPressureChanged.Broadcast(0.f);
+}
+
 void UPressureComponent::ForceExplode()
 {
 	if (!GetOwner()->HasAuthority() || bExploded) return;
