@@ -120,6 +120,11 @@ void UGODAbilitySlotWidget::RefreshCooldownUI()
 
 void UGODAbilitySlotWidget::OnSlotClicked()
 {
+	if (SlotConfig.InputHint.ToString().Equals(TEXT("Passive"), ESearchCase::IgnoreCase))
+	{
+		return;
+	}
+
 	TryActivateSlotAbility();
 }
 

@@ -26,6 +26,11 @@ void UGODMainHUDWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
+	// 💡 스킬 슬롯 초기 숨김 (새로운 변수명으로 변경)
+	if (Slot_Passive) Slot_Passive->SetVisibility(ESlateVisibility::Collapsed);
+	if (Slot_Active1) Slot_Active1->SetVisibility(ESlateVisibility::Collapsed);
+	if (Slot_Active2) Slot_Active2->SetVisibility(ESlateVisibility::Collapsed);
+
 	// 툴팁 패널 초기 숨김
 	if (Panel_RoleTooltip) Panel_RoleTooltip->SetVisibility(ESlateVisibility::Collapsed);
 	if (Panel_AmmoDisplay)  Panel_AmmoDisplay->SetVisibility(ESlateVisibility::Collapsed);
@@ -49,7 +54,7 @@ void UGODMainHUDWidget::NativeConstruct()
 		Btn_RoleIcon->OnHovered.AddDynamic(this, &UGODMainHUDWidget::OnRoleIconHovered);
 		Btn_RoleIcon->OnUnhovered.AddDynamic(this, &UGODMainHUDWidget::OnRoleIconUnhovered);
 	}
-	
+
 	if (PB_Pressure)
 	{
 		if (UMaterialInterface* FillMat = Cast<UMaterialInterface>(PB_Pressure->WidgetStyle.FillImage.GetResourceObject()))
@@ -134,18 +139,18 @@ void UGODMainHUDWidget::TryBindGameState()
 
 	CachedGameState = GS;
 
-	GS->OnRemainingTimeChanged.AddDynamic(this,       &UGODMainHUDWidget::OnRemainingTimeChanged);
+	GS->OnRemainingTimeChanged.AddDynamic(this, &UGODMainHUDWidget::OnRemainingTimeChanged);
 	GS->OnDistanceToDestinationChanged.AddDynamic(this, &UGODMainHUDWidget::OnDistanceChanged);
-	GS->OnPressureLevelChanged.AddDynamic(this,       &UGODMainHUDWidget::OnPressureLevelChanged);
-	GS->OnFuelLevelChanged.AddDynamic(this,           &UGODMainHUDWidget::OnFuelLevelChanged);
-	GS->OnGunsUnlocked.AddDynamic(this,               &UGODMainHUDWidget::OnGunsUnlocked);
-	GS->OnAnnouncement.AddDynamic(this,               &UGODMainHUDWidget::OnAnnouncement);
+	GS->OnPressureLevelChanged.AddDynamic(this, &UGODMainHUDWidget::OnPressureLevelChanged);
+	GS->OnFuelLevelChanged.AddDynamic(this, &UGODMainHUDWidget::OnFuelLevelChanged);
+	GS->OnGunsUnlocked.AddDynamic(this, &UGODMainHUDWidget::OnGunsUnlocked);
+	GS->OnAnnouncement.AddDynamic(this, &UGODMainHUDWidget::OnAnnouncement);
 
 	// 현재 값으로 즉시 갱신
-	CurrentTime     = GS->RemainingTime;
+	CurrentTime = GS->RemainingTime;
 	CurrentDistance = GS->DistanceToDestination;
 	CurrentPressure = GS->PressureLevel;
-	CurrentFuel     = GS->FuelLevel;
+	CurrentFuel = GS->FuelLevel;
 
 	UpdateTimeDisplay();
 	UpdateTrainProgress();
@@ -187,9 +192,10 @@ void UGODMainHUDWidget::InitializeForPawn(APawn* NewPawn)
 		ASC->GetGameplayAttributeValueChangeDelegate(UBaseAttributeSet::GetCurrentAmmoAttribute())
 			.AddLambda([this](const FOnAttributeChangeData&) { UpdateAmmoDisplay(); });
 
-		// 능력 슬롯에 ASC 전달
-		if (Slot_Ability1) Slot_Ability1->SetAbilitySystemComponent(ASC);
-		if (Slot_Ability2) Slot_Ability2->SetAbilitySystemComponent(ASC);
+		// 💡 능력 슬롯에 ASC 전달 (새로운 슬롯 변수명 3개로 업데이트)
+		if (Slot_Passive) Slot_Passive->SetAbilitySystemComponent(ASC);
+		if (Slot_Active1) Slot_Active1->SetAbilitySystemComponent(ASC);
+		if (Slot_Active2) Slot_Active2->SetAbilitySystemComponent(ASC);
 
 		UpdateAmmoDisplay();
 	}
@@ -459,12 +465,12 @@ void UGODMainHUDWidget::UpdateWarnings(float DeltaTime)
 		if (WarningBlinkTimer >= WarningBlinkInterval)
 		{
 			WarningBlinkTimer = 0.f;
-			bWarningVisible   = !bWarningVisible;
+			bWarningVisible = !bWarningVisible;
 		}
 	}
 	else
 	{
-		bWarningVisible   = false;
+		bWarningVisible = false;
 		WarningBlinkTimer = 0.f;
 	}
 
@@ -496,7 +502,7 @@ void UGODMainHUDWidget::UpdateAmmoDisplay()
 	if (bHasGun)
 	{
 		const int32 Current = FMath::FloorToInt(ASC->GetNumericAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute()));
-		const int32 Max     = FMath::FloorToInt(ASC->GetNumericAttribute(UBaseAttributeSet::GetMaxAmmoAttribute()));
+		const int32 Max = FMath::FloorToInt(ASC->GetNumericAttribute(UBaseAttributeSet::GetMaxAmmoAttribute()));
 		TB_AmmoCount->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"), Current, Max)));
 	}
 }
@@ -532,23 +538,43 @@ void UGODMainHUDWidget::SetupRoleHUD(const FGameplayTag& CharTag)
 	// 능력 슬롯 설정
 	UAbilitySystemComponent* ASC = CachedASC.Get();
 
-	auto ConfigureSlot = [&](UGODAbilitySlotWidget* SlotWidget, int32 Index)
+	// ─────────────────────────────────────────────────────────────────────────────
+	// 💡 [패시브 슬롯 처리] 에디터에서 패시브 아이콘을 등록했을 때만 왼쪽 슬롯을 켭니다.
+	// ─────────────────────────────────────────────────────────────────────────────
+	if (Setup && Setup->PassiveSlot.Icon != nullptr)
 	{
-		if (!SlotWidget) return;
-
-		if (Setup && Setup->AbilitySlots.IsValidIndex(Index))
+		if (Slot_Passive)
 		{
-			SlotWidget->SetupSlot(Setup->AbilitySlots[Index], ASC);
-			SlotWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+			Slot_Passive->SetupSlot(Setup->PassiveSlot, ASC);
+			Slot_Passive->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		}
-		else
-		{
-			SlotWidget->SetVisibility(ESlateVisibility::Collapsed);
-		}
-	};
+	}
+	else
+	{
+		if (Slot_Passive) Slot_Passive->SetVisibility(ESlateVisibility::Collapsed);
+	}
 
-	ConfigureSlot(Slot_Ability1, 0);
-	ConfigureSlot(Slot_Ability2, 1);
+	// ─────────────────────────────────────────────────────────────────────────────
+	// 💡 [액티브 슬롯 처리 람다 식]
+	// ─────────────────────────────────────────────────────────────────────────────
+	auto ConfigureActiveSlot = [&](UGODAbilitySlotWidget* SlotWidget, int32 Index)
+		{
+			if (!SlotWidget) return;
+
+			if (Setup && Setup->ActiveSlots.IsValidIndex(Index))
+			{
+				SlotWidget->SetupSlot(Setup->ActiveSlots[Index], ASC);
+				SlotWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+			}
+			else
+			{
+				SlotWidget->SetVisibility(ESlateVisibility::Collapsed);
+			}
+		};
+
+	// 💡 요청하신 정확한 화면 자리에 인덱스를 매핑합니다.
+	ConfigureActiveSlot(Slot_Active1, 0); // 0번 데이터(액티브1) ➡️ 우하단 슬롯(`Slot_Active1`) 배치
+	ConfigureActiveSlot(Slot_Active2, 1); // 1번 데이터(액티브2) ➡️ 우상단 슬롯(`Slot_Active2`) 배치
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
