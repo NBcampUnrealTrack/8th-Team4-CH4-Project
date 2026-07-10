@@ -25,6 +25,9 @@ void UPauseMenuWidget::NativeConstruct()
 	{
 		SettingsButton->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnSettingsClicked);
 	}
+
+	// 등장 애니메이션 재생 (WBP 에서 PlaySlideIn 구현 시). 미구현이면 no-op.
+	PlaySlideIn();
 }
 
 void UPauseMenuWidget::OnResumeClicked()

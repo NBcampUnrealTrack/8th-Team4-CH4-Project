@@ -156,6 +156,7 @@ void USettingsMenu::NativeDestruct()
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(RevertTimerHandle);
+		World->GetTimerManager().ClearTimer(CloseTimerHandle);
 	}
 	Super::NativeDestruct();
 }
@@ -765,11 +766,44 @@ void USettingsMenu::RevertToSnapshot()
 
 void USettingsMenu::CloseInternal()
 {
+	// 이미 닫는 중이면 무시 (닫기 버튼 연타 / 미저장 팝업 경유 중복 호출 방지).
+	if (bClosing)
+	{
+		return;
+	}
+	bClosing = true;
+
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(RevertTimerHandle);
 	}
+
+	// 닫는 동안 버튼 재클릭 차단 (애니 재생 중 입력 무시).
+	SetVisibility(ESlateVisibility::HitTestInvisible);
+
+	// 슬라이드 아웃 애니 재생 → 애니가 다 나온 뒤에 실제 제거(FinishClose).
 	PlaySlideOut();
+
+	if (UWorld* World = GetWorld(); World && SlideOutDuration > 0.f)
+	{
+		// WBP 애니 길이에 맞춰 SlideOutDuration 을 조정. (WBP 에서 애니 종료 시 FinishClose 를
+		// 직접 호출하면 타이머 없이도 정확 — 이 타이머는 안전 폴백 겸 기본 동작.)
+		World->GetTimerManager().SetTimer(
+			CloseTimerHandle, this, &USettingsMenu::FinishClose, SlideOutDuration, false);
+	}
+	else
+	{
+		// 월드가 없거나 애니 길이 0 이면 즉시 제거.
+		FinishClose();
+	}
+}
+
+void USettingsMenu::FinishClose()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(CloseTimerHandle);
+	}
 	RemoveFromParent();
 }
 
