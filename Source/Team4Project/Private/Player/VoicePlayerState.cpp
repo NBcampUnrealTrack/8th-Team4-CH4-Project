@@ -80,6 +80,25 @@ void AVoicePlayerState::ReregisterVoiceTalker()
 
 	// 2) 현재 살아있는 Talker 로 다시 등록.
 	VoipTalker->RegisterWithPlayerState(this);
+
+	// 3) travel 후엔 생사/Pawn 이 조용히 리셋(새 PlayerState/Pawn 기본값)돼 어떤 OnRep 도
+	//    안 불리므로, 여기서 Settings 를 현재 상태 기준으로 강제 re-baseline 한다.
+	//    (로비 복귀 시 전원 3D 감쇠로 되돌리는 결정적 트리거)
+	VoipTalker->ApplyVoicePolicy();
+}
+
+void AVoicePlayerState::OnRep_bIsAlive()
+{
+	// 발화 중인 Talker 전체 정책 재적용(생사 격리)
+	Super::OnRep_bIsAlive();
+
+	// 이 플레이어 자신의 Talker Settings baseline 갱신. 엔진은 '다음' 발화 세션 시작 시
+	// Settings.AttenuationSettings/ComponentToAttachTo 를 읽으므로, 지금 조용히 있어도
+	// 미리 맞춰둬야 부활 직후 첫 발화가 곧바로 올바른 2D/3D 로 시작된다.
+	if (IsValid(VoipTalker))
+	{
+		VoipTalker->ApplyVoicePolicy();
+	}
 }
 
 void AVoicePlayerState::OnSetUniqueId()

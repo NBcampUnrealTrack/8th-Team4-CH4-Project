@@ -928,6 +928,20 @@ void ABaseCharacter::Die(AActor* Killer)
 	}
 }
 
+void ABaseCharacter::ResetDeathState()
+{
+	if (!HasAuthority() || !bIsDead)
+	{
+		return;
+	}
+
+	bIsDead = false;
+
+	// 리슨 서버(호스트)는 OnRep이 안 오므로 직접 호출 → 보이스 정책 재적용.
+	// (클라이언트는 bIsDead 복제 도착 시 OnRep_IsDead 가 각자 갱신)
+	OnRep_IsDead();
+}
+
 void ABaseCharacter::Multicast_HandleDeath_Implementation()
 {
 	// 사망음 (전 클라, 이 위치). 무법자 죽은 척도 같은 행을 재생해 구분되지 않게 한다.

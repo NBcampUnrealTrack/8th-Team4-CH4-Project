@@ -24,8 +24,12 @@ public:
 	virtual void OnSetUniqueId() override;
 
 	virtual void GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const override;
-	
+
 	virtual void CopyProperties(APlayerState* PlayerState) override;
+
+	// 생사 변화 시 발화 중인 Talker 전체 정책 재적용(Super) + 이 플레이어 자신의 Talker
+	// Settings(2D/3D) baseline 도 즉시 갱신 → 조용히 있다가 부활해도 첫 발화가 3D 로 시작.
+	virtual void OnRep_bIsAlive() override;
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Voice")
