@@ -1,5 +1,6 @@
 ﻿#include "Player/GODPlayerState.h"
 #include "Player/VoiceChannelSubsystem.h"
+#include "Player/BaseCharacter.h"
 #include "Net/UnrealNetwork.h"
 #include "Game/ChatTypes.h"
 #include "Game/GODGameState.h"
@@ -84,6 +85,18 @@ void AGODPlayerState::SetIsAlive(bool bNewAlive)
 	}
 
 	bIsAlive = bNewAlive;
+
+	// 부활(재시작) 시 캐릭터의 사망 플래그도 함께 리셋한다.
+	// 보이스 사망 판정 = bIsAlive OR Character::IsDead() 이므로, 한쪽만 살아나면
+	// 보이스가 계속 '사망(2D/음소거)'으로 고착돼 재시작 후 감쇠가 안 돌아온다.
+	if (bNewAlive)
+	{
+		if (ABaseCharacter* Char = Cast<ABaseCharacter>(GetPawn()))
+		{
+			Char->ResetDeathState();
+		}
+	}
+
 	OnRep_bIsAlive(); // 리슨 서버(호스트)는 OnRep이 안 오므로 직접 호출
 }
 

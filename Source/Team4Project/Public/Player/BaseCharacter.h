@@ -119,6 +119,11 @@ public:
 
 	void Die(AActor* Killer);
 
+	// 부활/재시작 시 사망 플래그를 리셋한다(서버 전용, 복제됨).
+	// 보이스 사망 판정이 PlayerState::bIsAlive OR Character::IsDead() 라서,
+	// 재시작으로 bIsAlive 만 살아나고 이 플래그가 남으면 보이스가 계속 '사망(2D/음소거)'으로 고착된다.
+	void ResetDeathState();
+
 	virtual float TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
 		AController* EventInstigator, AActor* DamageCauser) override;
 

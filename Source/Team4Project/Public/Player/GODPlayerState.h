@@ -64,7 +64,7 @@ public:
 	void SetIsAlive(bool bNewAlive);
 
 	UFUNCTION()
-	void OnRep_bIsAlive();
+	virtual void OnRep_bIsAlive();
 
 	// [사용 안 함] 탄약은 UBaseAttributeSet::CurrentAmmo 어트리뷰트로 단일화됨.
 	// (발사 소모 = GA_FireGun, 리필 = GODGameMode::HandlePlayerDeath, 도둑질 = StealAmmo)

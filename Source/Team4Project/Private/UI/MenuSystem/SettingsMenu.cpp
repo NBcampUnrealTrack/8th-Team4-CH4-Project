@@ -626,6 +626,22 @@ void USettingsMenu::SetTab(ESettingsTab Tab)
 	{
 		SettingsSwitcher->SetActiveWidgetIndex((int32)Tab);
 	}
+	UpdateTabButtonColors();
+}
+
+void USettingsMenu::UpdateTabButtonColors()
+{
+	// 현재 활성 탭 버튼만 강조색, 나머지는 기본색으로.
+	auto Tint = [this](UButton* Btn, ESettingsTab BtnTab)
+	{
+		if (Btn)
+		{
+			Btn->SetBackgroundColor(CurrentTab == BtnTab ? TabActiveColor : TabInactiveColor);
+		}
+	};
+	Tint(AudioTabButton,    ESettingsTab::Audio);
+	Tint(GraphicsTabButton, ESettingsTab::Graphics);
+	Tint(ControlsTabButton, ESettingsTab::Controls);
 }
 
 // ============================================================

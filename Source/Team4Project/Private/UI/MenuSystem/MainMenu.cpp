@@ -6,7 +6,6 @@
 
 #include "Components/EditableTextBox.h"
 #include "Components/Button.h"
-#include "Components/CheckBox.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/TextBlock.h"
 #include "Engine/Engine.h"
@@ -71,13 +70,6 @@ bool UMainMenu::Initialize()
     if (CancelPasswordButton) CancelPasswordButton->OnClicked.AddDynamic(this, &UMainMenu::CancelJoinPasswordPressed);
     if (JoinPassword) JoinPassword->OnTextCommitted.AddDynamic(this, &UMainMenu::OnJoinPasswordCommitted);
     if (JoinPasswordPopup) JoinPasswordPopup->SetVisibility(ESlateVisibility::Collapsed);
-
-    // 비밀방 체크박스: 체크 시에만 비밀번호 입력창 활성화
-    if (PrivateRoomCheckBox)
-    {
-        PrivateRoomCheckBox->OnCheckStateChanged.AddDynamic(this, &UMainMenu::OnPrivateRoomChanged);
-        OnPrivateRoomChanged(PrivateRoomCheckBox->IsChecked()); // 초기 상태 반영
-    }
 
     // 스킨 선택 위젯은 Optional — WBP 에 추가된 경우에만 바인딩
     if (SkinButton) SkinButton->OnClicked.AddDynamic(this, &UMainMenu::OpenSkinMenu);
@@ -241,51 +233,16 @@ void UMainMenu::OpenHostMenu()
     BeginMenuTransition(EMenuState::Host);
 }
 
-void UMainMenu::OnPrivateRoomChanged(bool bIsChecked)
-{
-    if (ServerPassword)
-    {
-        // 비밀방 체크 시에만 비밀번호 입력칸이 나타난다 (해제 시 자리도 차지하지 않음)
-        ServerPassword->SetVisibility(bIsChecked
-            ? ESlateVisibility::Visible
-            : ESlateVisibility::Collapsed);
-
-        if (!bIsChecked)
-        {
-            ServerPassword->SetText(FText::GetEmpty()); // 공개방 전환 시 입력값 정리
-        }
-    }
-}
-
 void UMainMenu::HostServer()
 {
     if (MenuInterface == nullptr) return;
 
     FString ServerName = ServerHostName->GetText().ToString();
 
-    FString Password;
-    if (PrivateRoomCheckBox)
-    {
-        // 명시적 선택 모드: 체크 = 비밀방(비번 필수), 해제 = 공개방(입력값 무시)
-        if (PrivateRoomCheckBox->IsChecked())
-        {
-            Password = ServerPassword ? ServerPassword->GetText().ToString().TrimStartAndEnd() : FString();
-            if (Password.IsEmpty())
-            {
-                if (GEngine)
-                {
-                    GEngine->AddOnScreenDebugMessage(2, 3.f, FColor::Red,
-                        TEXT("비밀방은 비밀번호를 입력해야 합니다."));
-                }
-                return; // 방 생성 중단 — 메뉴 유지
-            }
-        }
-    }
-    else if (ServerPassword)
-    {
-        // 체크박스 없이 입력창만 있는 경우: 빈칸 = 공개방 규칙
-        Password = ServerPassword->GetText().ToString().TrimStartAndEnd();
-    }
+    // 비밀번호 입력창만으로 판별: 빈칸 = 공개방, 값이 있으면 그 값을 비밀번호로 하는 비밀방.
+    FString Password = ServerPassword
+        ? ServerPassword->GetText().ToString().TrimStartAndEnd()
+        : FString();
 
     MenuInterface->Host(ServerName, Password);
 }
