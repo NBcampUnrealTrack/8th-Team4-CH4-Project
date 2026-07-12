@@ -103,6 +103,16 @@ private:
 	UPROPERTY(meta = (BindWidgetOptional))
 	UButton* ControlsTabButton;
 
+	// 탭 버튼 색: 활성 탭만 강조색, 나머지는 기본색. WBP 클래스 디폴트에서 조정.
+	UPROPERTY(EditDefaultsOnly, Category = "Settings|Tabs")
+	FLinearColor TabActiveColor = FLinearColor(1.0f, 0.78f, 0.25f, 1.0f); // 예: 노란 강조
+
+	UPROPERTY(EditDefaultsOnly, Category = "Settings|Tabs")
+	FLinearColor TabInactiveColor = FLinearColor::White; // 틴트 없음 = 버튼 기본 스타일 색
+
+	// 활성 탭에 맞춰 탭 버튼 색을 갱신.
+	void UpdateTabButtonColors();
+
 	// ======================= 오디오 =======================
 	UPROPERTY(meta = (BindWidgetOptional))
 	USlider* MasterVolumeSlider;

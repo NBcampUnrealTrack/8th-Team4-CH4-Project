@@ -456,13 +456,23 @@ void UPlayerGameInstance::OnFindSessionComplete(bool Success)
 			Data.HostUsername = SearchResult.Session.OwningUserName;
 
 			FString ServerName;
-			if (SearchResult.Session.SessionSettings.Get(SERVER_NAME_SETTINGS_KEY, ServerName))
+			if (!SearchResult.Session.SessionSettings.Get(SERVER_NAME_SETTINGS_KEY, ServerName))
 			{
-				Data.Name = DecodeRoomName(ServerName);
+				// ServerName 키가 없는 세션 = 이 키를 안 올린 옛 빌드/유령 로비.
+				// 목록에 "Could not find name." 로 노출하지 않고 아예 건너뛴다.
+				UE_LOG(LogTemp, Warning, TEXT("방 이름 없는 세션 스킵(옛 빌드/유령): %s"),
+					*SearchResult.GetSessionIdStr());
+				continue;
 			}
-			else
+			Data.Name = DecodeRoomName(ServerName).TrimStartAndEnd();
+
+			// 이름이 비었거나(빈칸 호스팅) 옛 빌드가 저장한 폴백 문자열이면
+			// 호스트 이름 기반의 기본 방 이름으로 대체한다.
+			if (Data.Name.IsEmpty() || Data.Name == TEXT("Could not find name."))
 			{
-				Data.Name = "Could not find name.";
+				Data.Name = Data.HostUsername.IsEmpty()
+					? TEXT("이름 없는 방")
+					: FString::Printf(TEXT("%s의 방"), *Data.HostUsername);
 			}
 
 			// 비밀번호 방 여부 (목록 자물쇠 표시용) + 해시 (참여 팝업 클라 선검증용)
