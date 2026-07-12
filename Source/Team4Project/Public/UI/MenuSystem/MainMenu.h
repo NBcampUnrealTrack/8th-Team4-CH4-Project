@@ -104,13 +104,9 @@ private:
 
 	// ── 방 비밀번호 / 빠른 방찾기 (WBP 에 아직 없어도 되도록 Optional 바인딩) ──
 
-	// Host 메뉴: 공개방/비밀방 선택. 체크 시에만 ServerPassword 가 활성화되고,
-	// 체크했는데 비밀번호가 비어 있으면 방 생성이 차단된다.
-	// (이 체크박스 없이 ServerPassword 만 있으면 "빈칸 = 공개방" 규칙으로 동작)
-	UPROPERTY(meta = (BindWidgetOptional))
-	class UCheckBox* PrivateRoomCheckBox;
-
-	// Host 메뉴: 방 비밀번호 입력
+	// Host 메뉴: 방 비밀번호 입력.
+	// 빈칸이면 공개방, 값이 있으면 그 값을 비밀번호로 하는 비밀방으로 생성된다.
+	// (별도의 공개/비밀 체크박스 없이 이 입력창만으로 판별)
 	UPROPERTY(meta = (BindWidgetOptional))
 	class UEditableTextBox* ServerPassword;
 
@@ -226,10 +222,6 @@ private:
 
 	UFUNCTION()
 	void QuickJoinPressed();
-
-	// 비밀방 체크박스 토글 → 비밀번호 입력창 활성/비활성
-	UFUNCTION()
-	void OnPrivateRoomChanged(bool bIsChecked);
 
 	UFUNCTION()
 	void OpenHostMenu();
