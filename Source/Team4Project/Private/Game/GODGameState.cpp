@@ -131,6 +131,9 @@ void AGODGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AGODGameState, PressureLevel);
 	DOREPLIFETIME(AGODGameState, FuelLevel);
 	DOREPLIFETIME(AGODGameState, bGunsUnlocked);
+	DOREPLIFETIME(AGODGameState, QuestSpeedMultiplier);
+	DOREPLIFETIME(AGODGameState, QuestCompletedCitizens);
+	DOREPLIFETIME(AGODGameState, QuestTotalCitizens);
 	DOREPLIFETIME(AGODGameState, LobbyCountdown);
 	DOREPLIFETIME(AGODGameState, ChatHistory);
 }
@@ -148,6 +151,11 @@ void AGODGameState::OnRep_RemainingTime()
 void AGODGameState::OnRep_DistanceToDestination()
 {
 	OnDistanceToDestinationChanged.Broadcast(DistanceToDestination);
+}
+
+void AGODGameState::OnRep_QuestProgress()
+{
+	OnQuestProgressChanged.Broadcast(QuestSpeedMultiplier, QuestCompletedCitizens, QuestTotalCitizens);
 }
 
 void AGODGameState::OnRep_PressureLevel()

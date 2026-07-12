@@ -9,6 +9,7 @@
 #include "Component/PressureComponent.h"
 #include "InteractiveProp/GearSlot.h"
 #include "InteractiveProp/ItemBase.h"
+#include "Quest/QuestStation.h"
 #include "Player/Component/BaseAttributeSet.h"
 #include "AbilitySystemComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -104,6 +105,12 @@ void AGODGameMode::Logout(AController* Exiting)
 
 	if (!GODGS) return;
 
+	// 이탈자가 플레이어 목록에서 빠진 뒤에 다시 세야 분모가 맞는다.
+	if (GODGS->CurrentPhase == EGamePhase::Playing)
+	{
+		RecalculateQuestSpeedMultiplier();
+	}
+
 	// 카운트다운 중 이탈 → 인원 부족이므로 카운트다운 취소
 	if (GODGS->CurrentPhase == EGamePhase::Countdown)
 	{
@@ -180,6 +187,7 @@ void AGODGameMode::StartGame()
 	}
 
 	AssignRoles();
+	AssignQuests();
 
 	// 압력 폭발 시 마피아 승리 처리 연결 (중복 방지) + 열차 출발
 	if (AGODTrain* Train = FindTrainActor())
@@ -301,6 +309,132 @@ void AGODGameMode::AssignRoles()
 	}
 
 	SetupWatchmanTracking();
+}
+
+// ============================================================
+// 퀘스트
+// ============================================================
+
+void AGODGameMode::AssignQuests()
+{
+	// 레벨 배치 고정 액터. 한 번만 모은다.
+	TArray<AQuestStation*> Stations;
+	for (TActorIterator<AQuestStation> It(GetWorld()); It; ++It)
+	{
+		Stations.Add(*It);
+	}
+
+	if (Stations.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Quest] 레벨에 QuestStation 이 하나도 없다. 퀘스트 배정을 건너뛴다."));
+		return;
+	}
+
+	// 같은 스테이션이 두 사람에게 가지 않는다.
+	for (int32 i = Stations.Num() - 1; i > 0; --i)
+	{
+		Stations.Swap(i, FMath::RandRange(0, i));
+	}
+
+	TArray<APlayerController*> PlayerArray;
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (APlayerController* PC = It->Get()) PlayerArray.Add(PC);
+	}
+
+	const int32 Needed = PlayerArray.Num() * NumQuestsPerPlayer;
+	if (Stations.Num() < Needed)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[Quest] 스테이션 부족: %d개 배치, %d개 필요(%d명 × %d). 일부 스테이션이 중복 배정된다."),
+			Stations.Num(), Needed, PlayerArray.Num(), NumQuestsPerPlayer);
+	}
+
+	int32 Cursor = 0;
+	for (APlayerController* PC : PlayerArray)
+	{
+		AGODPlayerState* PS = PC ? PC->GetPlayerState<AGODPlayerState>() : nullptr;
+		if (!PS) continue;
+
+		PS->AssignedQuests.Reset();
+
+		for (int32 i = 0; i < NumQuestsPerPlayer; ++i)
+		{
+			FAssignedQuest Quest;
+			Quest.Station = Stations[Cursor % Stations.Num()];
+			Quest.bCompleted = false;
+			PS->AssignedQuests.Add(Quest);
+			++Cursor;
+		}
+
+		PS->OnRep_AssignedQuests(); // 리슨 호스트는 OnRep 이 안 온다
+	}
+
+	RecalculateQuestSpeedMultiplier();
+}
+
+void AGODGameMode::HandleQuestCompleted(AGODPlayerState* PS, AQuestStation* Station)
+{
+	if (!PS || !Station) return;
+
+	if (!PS->TryMarkQuestCompleted(Station)) return;
+
+	// 특수직(보안관/마피아/무법자)은 퀘스트 하나당 탄약 1발.
+	if (PS->MainRole != EMainRole::Citizen)
+	{
+		if (AController* PC = Cast<AController>(PS->GetOwner()))
+		{
+			if (ABaseCharacter* Char = Cast<ABaseCharacter>(PC->GetPawn()))
+			{
+				if (UAbilitySystemComponent* ASC = Char->GetAbilitySystemComponent())
+				{
+					ASC->ApplyModToAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute(),
+						EGameplayModOp::Additive, 1.f);
+				}
+			}
+		}
+	}
+
+	RecalculateQuestSpeedMultiplier();
+}
+
+void AGODGameMode::RecalculateQuestSpeedMultiplier()
+{
+	AGODGameState* GS = GetGameState<AGODGameState>();
+	if (!GS) return;
+
+	int32 Completed = 0;
+	int32 Effective = 0;
+
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* PC = It->Get();
+		AGODPlayerState* PS = PC ? PC->GetPlayerState<AGODPlayerState>() : nullptr;
+		if (!PS || !PS->ContributesToQuestSpeed()) continue;
+
+		const bool bDone = PS->AreAllQuestsCompleted();
+		if (bDone)
+		{
+			// 완료한 뒤 죽어도 기여는 남는다.
+			++Completed;
+			++Effective;
+		}
+		else if (PS->bIsAlive)
+		{
+			++Effective;
+		}
+		// 미완료 상태로 죽은 시민은 분모에서 빠진다
+	}
+
+	// 시민 전멸 시 분모가 0이 된다. 그땐 마지막 배율을 유지한다(어차피 마피아 승리조건이 먼저 성립).
+	if (Effective > 0)
+	{
+		GS->QuestSpeedMultiplier = 1.f + static_cast<float>(Completed) / static_cast<float>(Effective);
+	}
+
+	GS->QuestCompletedCitizens = Completed;
+	GS->QuestTotalCitizens = Effective;
+	GS->OnRep_QuestProgress();
 }
 
 FGameplayTag AGODGameMode::GetTagForRole(AGODPlayerState* PS) const
@@ -486,6 +620,9 @@ void AGODGameMode::HandlePlayerDeath(AGODPlayerState* KillerPS, AGODPlayerState*
 			}
 		}
 	}
+
+	// 미완료 시민이 죽으면 분모에서 빠져 배율이 오른다. 반드시 다시 계산해야 한다.
+	RecalculateQuestSpeedMultiplier();
 
 	CheckWinConditions();
 }

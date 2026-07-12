@@ -2,6 +2,8 @@
 #include "UI/HUD/GODMainHUDWidget.h"
 #include "UI/HUD/GearQTEWidget.h"
 #include "UI/HUD/PressureMinigameWidget.h"
+#include "UI/HUD/QuestMinigameWidget.h"
+#include "Quest/QuestStation.h"
 #include "Blueprint/UserWidget.h"
 
 void AGODHUD::BeginPlay()
@@ -94,4 +96,42 @@ void AGODHUD::HidePressureMinigame(bool bSuccess)
 
 	PressureMinigameWidget->OnMinigameFinished(bSuccess);
 	PressureMinigameWidget->SetVisibility(ESlateVisibility::Hidden);
+}
+
+void AGODHUD::ShowQuestMinigame(AQuestStation* Station)
+{
+	if (!Station) return;
+
+	const TSubclassOf<UQuestMinigameWidget> WidgetClass = Station->GetWidgetClass();
+	if (!WidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Quest] %s 의 DT 행에 WidgetClass 가 없어 팝업을 띄울 수 없다 (QuestId=%s)"),
+			*Station->GetName(), *Station->QuestId.ToString());
+		return;
+	}
+
+	// 퀘스트마다 위젯 클래스가 다르므로 재사용하지 않고 매번 만들고 버린다.
+	if (QuestMinigameWidget)
+	{
+		QuestMinigameWidget->RemoveFromParent();
+		QuestMinigameWidget = nullptr;
+	}
+
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC) return;
+
+	QuestMinigameWidget = CreateWidget<UQuestMinigameWidget>(PC, WidgetClass);
+	if (!QuestMinigameWidget) return;
+
+	QuestMinigameWidget->AddToViewport(10);
+	QuestMinigameWidget->SetStation(Station);
+}
+
+void AGODHUD::HideQuestMinigame(bool bSuccess)
+{
+	if (!QuestMinigameWidget) return;
+
+	QuestMinigameWidget->OnQuestFinished(bSuccess);
+	QuestMinigameWidget->RemoveFromParent();
+	QuestMinigameWidget = nullptr;
 }

@@ -13,6 +13,7 @@
 #include "InteractiveProp/DoorBase.h"
 #include "InteractiveProp/PressureValve.h"
 #include "InteractiveProp/GearSlot.h"
+#include "Quest/QuestStation.h"
 #include "Game/BaseGameplayTags.h"
 #include "GameplayEffect.h"
 #include "GameplayEffectTypes.h"
@@ -509,6 +510,7 @@ void ABaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ABaseCharacter, bIsDead);
+	DOREPLIFETIME(ABaseCharacter, bIsWorkingOnQuest);
 	DOREPLIFETIME(ABaseCharacter, CurrentWeapon);
 	DOREPLIFETIME(ABaseCharacter, CurrentHeldItem);
 	DOREPLIFETIME(ABaseCharacter, bMeshHidden);
@@ -753,6 +755,105 @@ float ABaseCharacter::TakeDamage(float DamageAmount, const FDamageEvent& DamageE
 	}
 
 	return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+}
+
+// ============================================================
+// 퀘스트
+// ============================================================
+void ABaseCharacter::SetActiveQuestStation(AQuestStation* InStation)
+{
+	if (!HasAuthority()) return;
+
+	ActiveQuestStation = InStation;
+
+	// 작업 자세는 전 클라에 보여야함
+	bIsWorkingOnQuest = (InStation != nullptr);
+	OnRep_IsWorkingOnQuest();
+}
+
+void ABaseCharacter::OnRep_IsWorkingOnQuest()
+{
+	// ABP 가 bIsWorkingOnQuest 를 직접 읽음
+}
+
+void ABaseCharacter::Client_StartQuestMinigame_Implementation(AQuestStation* Station)
+{
+	ActiveQuestStation = Station;
+	SetQuestUIOpen(true);
+
+	if (ABasePlayerController* PC = Cast<ABasePlayerController>(GetController()))
+	{
+		if (AGODHUD* HUD = Cast<AGODHUD>(PC->GetHUD()))
+		{
+			HUD->ShowQuestMinigame(Station);
+		}
+	}
+}
+
+void ABaseCharacter::Client_EndQuestMinigame_Implementation(bool bSuccess)
+{
+	ActiveQuestStation = nullptr;
+	SetQuestUIOpen(false);
+
+	if (ABasePlayerController* PC = Cast<ABasePlayerController>(GetController()))
+	{
+		if (AGODHUD* HUD = Cast<AGODHUD>(PC->GetHUD()))
+		{
+			HUD->HideQuestMinigame(bSuccess);
+		}
+	}
+}
+
+void ABaseCharacter::SetQuestUIOpen(bool bOpen)
+{
+	bQuestUIOpen = bOpen;
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC || !PC->IsLocalController()) return;
+
+	PC->SetShowMouseCursor(bOpen);
+
+	if (bOpen)
+	{
+		FInputModeGameAndUI Mode;
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::LockOnCapture);
+		PC->SetInputMode(Mode);
+	}
+	else
+	{
+		PC->SetInputMode(FInputModeGameOnly());
+	}
+}
+
+void ABaseCharacter::Server_CompleteQuest_Implementation()
+{
+	AQuestStation* Station = ActiveQuestStation.Get();
+	if (!Station || Station->GetQuestPlayer() != this || bIsDead) return;
+
+	if (!Station->HasMinDurationElapsed())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Quest] %s 가 최소 소요 시간 전에 완료를 보고해 거부됨 (%s)"),
+			*GetName(), *Station->QuestId.ToString());
+		return;
+	}
+
+	Station->ReleaseQuestPlayer();
+
+	// 배정 여부 판정과 보상은 게임모드
+	if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
+	{
+		GM->HandleQuestCompleted(GetPlayerState<AGODPlayerState>(), Station);
+	}
+
+	Client_EndQuestMinigame(true);
+}
+
+void ABaseCharacter::Server_CancelQuest_Implementation()
+{
+	if (AQuestStation* Station = ActiveQuestStation.Get())
+	{
+		Station->AbortQuest();
+	}
 }
 
 // ============================================================
@@ -1703,6 +1804,9 @@ void ABaseCharacter::Move(const FInputActionValue& Value)
 		return;
 	}
 
+	// 잠금 검사가 이동 처리 뒤에 있어서 아무 효과가 없었다. 반드시 먼저 걸러야 한다.
+	if (bQuestUIOpen) return;
+
 	if (CustomMovementComponent->IsClimbing())
 	{
 		HandleClimbMovementInput(Value);
@@ -1711,7 +1815,6 @@ void ABaseCharacter::Move(const FInputActionValue& Value)
 	{
 		HandleGroundMovementInput(Value);
 	}
-	if (bInputLockedByMinigame) return;
 }
 
 void ABaseCharacter::HandleGroundMovementInput(const FInputActionValue& Value)
@@ -1753,6 +1856,9 @@ void ABaseCharacter::HandleClimbMovementInput(const FInputActionValue& Value)
 
 void ABaseCharacter::Look(const FInputActionValue& Value)
 {
+	// 팝업이 열려 있는 동안엔 마우스가 커서로 쓰이므로 시점이 돌면 안 된다.
+	if (bQuestUIOpen) return;
+
 	FVector2D LookAxisVector = Value.Get<FVector2D>();
 
 	// 설정창 마우스 감도 / Y축 반전 반영.

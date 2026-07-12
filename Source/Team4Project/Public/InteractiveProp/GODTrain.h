@@ -108,38 +108,46 @@ public:
 	// ============================================================
 	// 에디터 설정
 	// ============================================================
-	// 제한 시간 10분(GODGameMode::TotalMatchTime) 기준 도착 시간:
-	// 만석(400) 5분 / 고연료(350) 5분43초 / 중간연료(300) 6분40초 / 저연료(250) 8분 /
-	// 연료 없이(200) 계속 기어가면 정확히 10분 → 아슬아슬하게 마피아 승
+	// 속도는 [연료 단계 속도] × [퀘스트 배율 1.0~2.0] 로 결정된다.
+	// 제한 시간 10분(600초) 안에 120000 을 주파하려면 평균 200cm/s 가 필요하다.
+	//
+	// 퀘스트 배율 1.0 (아무도 퀘스트를 안 함) 기준 600초 후 진행률:
+	//   연료 없이(110) 55% / 저연료(130) 65% / 중간(145) 72% / 고연료(155) 77% / 만석(165) 82%
+	//   → 연료만 관리해서는 절대 도착하지 못한다. 퀘스트가 필수.
+	//
+	// 퀘스트 배율 2.0 (시민 전원 완료) 기준:
+	//   연료 없이(220) 545초 도착 / 만석(330) 364초 도착
+	//   → 실제로는 배율이 후반에야 최대가 되므로 도착 시점은 배율의 시간 적분으로 결정된다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
 	float TotalDistance = 120000.f;
 
 	// 연료가 없어도 유지되는 최소 속도 (기차는 절대 멈추지 않음)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
-	float MinSpeed = 200.f;
+	float MinSpeed = 110.f;
 
 	// 연료 가득(Full) 상태 속도
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
-	float MaxSpeed = 400.f;
+	float MaxSpeed = 165.f;
 
 	// 연료 상태별 목표 속도. Empty=MinSpeed, Full=MaxSpeed, 중간 단계는 아래 값.
 	// Tick에서 SpeedInterpRate로 부드럽게 수렴하므로 단계가 튀지 않는다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
-	float LowFuelSpeed = 250.f;
+	float LowFuelSpeed = 130.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
-	float MediumFuelSpeed = 300.f;
+	float MediumFuelSpeed = 145.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
-	float HighFuelSpeed = 350.f;
+	float HighFuelSpeed = 155.f;
 
 	// 현재 속도가 목표 속도로 수렴하는 빠르기 (가/감속 부드러움)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Speed")
 	float SpeedInterpRate = 2.f;
 
-	// 압력 폭발 시 속도 페널티
+	// 압력 폭발 시 속도 페널티. 최고 속도(MaxSpeed)보다 크면 폭발 즉시 완전 정지가 되므로
+	// 속도 스케일을 낮출 때 함께 낮춰야 한다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
-	float ExplosionSpeedPenalty = 200.f;
+	float ExplosionSpeedPenalty = 80.f;
 
 	// 압력 80% 이상(고압 경고) 시 적용할 속도 배수. 목표 속도에 곱해진다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")

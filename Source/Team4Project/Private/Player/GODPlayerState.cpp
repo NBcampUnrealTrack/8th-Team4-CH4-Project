@@ -3,6 +3,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Game/ChatTypes.h"
 #include "Game/GODGameState.h"
+#include "Quest/QuestStation.h"
 
 
 AGODPlayerState::AGODPlayerState()
@@ -27,7 +28,52 @@ void AGODPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(AGODPlayerState, bIsAlive);
 	DOREPLIFETIME(AGODPlayerState, AmmoCount);
 	DOREPLIFETIME(AGODPlayerState, SootLevel);
-	
+
+	DOREPLIFETIME_CONDITION(AGODPlayerState, AssignedQuests, COND_OwnerOnly);
+}
+
+void AGODPlayerState::OnRep_AssignedQuests()
+{
+	OnAssignedQuestsChanged.Broadcast();
+}
+
+bool AGODPlayerState::TryMarkQuestCompleted(AQuestStation* Station)
+{
+	if (!HasAuthority() || !Station) return false;
+
+	for (FAssignedQuest& Quest : AssignedQuests)
+	{
+		if (Quest.Station != Station) continue;
+		if (Quest.bCompleted) return false; // 중복 완료 방지
+
+		Quest.bCompleted = true;
+		OnRep_AssignedQuests(); // 리슨 호스트는 OnRep 이 안 오므로 직접 호출
+		return true;
+	}
+
+	// 배정되지 않은 스테이션
+	return false;
+}
+
+bool AGODPlayerState::AreAllQuestsCompleted() const
+{
+	if (AssignedQuests.Num() == 0) return false;
+
+	for (const FAssignedQuest& Quest : AssignedQuests)
+	{
+		if (!Quest.bCompleted) return false;
+	}
+	return true;
+}
+
+int32 AGODPlayerState::GetCompletedQuestCount() const
+{
+	int32 Count = 0;
+	for (const FAssignedQuest& Quest : AssignedQuests)
+	{
+		if (Quest.bCompleted) ++Count;
+	}
+	return Count;
 }
 
 void AGODPlayerState::SetIsAlive(bool bNewAlive)

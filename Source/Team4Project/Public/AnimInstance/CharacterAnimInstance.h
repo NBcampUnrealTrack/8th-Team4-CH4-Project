@@ -53,4 +53,9 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Reference, meta = (AllowPrivateAccess = "true"))
 	bool bIsDead;
 	void GetIsDead();
+
+	// 퀘스트 미니게임 진행 중. 팝업은 본인만 보므로 남들에겐 이 자세가 유일한 "작업 중" 단서다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Reference, meta = (AllowPrivateAccess = "true"))
+	bool bIsWorkingOnQuest;
+	void GetIsWorkingOnQuest();
 };
