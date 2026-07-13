@@ -100,6 +100,13 @@ void AGODGameMode::Logout(AController* Exiting)
 			}
 		}
 	}
+	
+	if (Exiting)
+	{
+		ReleaseSkinVariant(Exiting->GetPlayerState<APlayerState>());
+	}
+
+	Super::Logout(Exiting);
 
 	Super::Logout(Exiting);
 
@@ -703,4 +710,53 @@ AGODTrain* AGODGameMode::FindTrainActor() const
 		return *It;
 	}
 	return nullptr;
+}
+
+
+int32 AGODGameMode::AssignSkinVariant(APlayerState* PS, int32 SkinIndex, int32 VariantCount)
+{
+	if (VariantCount <= 0) return INDEX_NONE;
+
+	// 직업 배정 리스폰 시 새 캐릭터가 다시 요청하므로, 기존 배정이 있으면 같은 색 유지
+	if (PS)
+	{
+		if (const FSkinVariantAssignment* Existing = SkinVariantAssignments.Find(PS))
+		{
+			if (Existing->SkinIndex == SkinIndex && Existing->VariantIndex < VariantCount)
+			{
+				return Existing->VariantIndex;
+			}
+		}
+	}
+	
+	// 이 스킨에서 아직 안 쓰인 변형 수집
+	TArray<int32> Free;
+	Free.Reserve(VariantCount);
+	for (int32 i = 0; i < VariantCount; ++i) Free.Add(i);
+	for (const auto& Pair : SkinVariantAssignments)
+	{
+		if (Pair.Key.IsValid() && Pair.Value.SkinIndex == SkinIndex)
+		{
+			Free.Remove(Pair.Value.VariantIndex);
+		}
+	}
+
+	// 남은 것 중 랜덤. 전부 소진 시(동일 스킨 인원 > 변형 수) 중복 허용 폴백
+	const int32 Variant = (Free.Num() > 0)
+			? Free[FMath::RandRange(0, Free.Num() - 1)]
+			: FMath::RandRange(0, VariantCount - 1);
+
+	if (PS)
+	{
+		SkinVariantAssignments.Add(PS, { SkinIndex, Variant });
+	}
+	return Variant;
+}
+
+void AGODGameMode::ReleaseSkinVariant(APlayerState* PS)
+{
+	if (PS)
+	{
+		SkinVariantAssignments.Remove(PS);
+	}
 }
