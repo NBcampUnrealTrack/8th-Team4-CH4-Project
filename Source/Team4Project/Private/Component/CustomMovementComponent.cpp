@@ -230,11 +230,20 @@ bool UCustomMovementComponent::CanClimbDownLedge()
 void UCustomMovementComponent::StartClimbing()
 {
 	SetMovementMode(MOVE_Custom, ECustomMovementMode::MOVE_Climb);
+
+	if (CharacterOwner && CharacterOwner->IsLocallyControlled() && !CharacterOwner->HasAuthority())
+	{
+		Server_StartClimbing();
+	}
 }
 
 void UCustomMovementComponent::StopClimbing()
 {
 	SetMovementMode(MOVE_Falling);
+	if (CharacterOwner && CharacterOwner->IsLocallyControlled() && !CharacterOwner->HasAuthority())
+	{
+		Server_StopClimbing();
+	}
 }
 
 void UCustomMovementComponent::PhysClimb(float deltaTime, int32 Iterations)
@@ -459,6 +468,18 @@ void UCustomMovementComponent::PlayClimbMontage(UAnimMontage* MontageToPlay)
 	}
 
 	OwningPlayerAnimInstance->Montage_Play(MontageToPlay);
+
+	if (CharacterOwner)
+	{
+		if (CharacterOwner->HasAuthority())
+		{
+			Multicast_PlayClimbMontage(MontageToPlay);
+		}
+		else if (CharacterOwner->IsLocallyControlled())
+		{
+			Server_PlayClimbMontage(MontageToPlay);
+		}
+	}
 }
 
 void UCustomMovementComponent::OnClimbMontageEnded(UAnimMontage* Montage, bool bInterrupted)
@@ -479,4 +500,33 @@ FVector UCustomMovementComponent::GetUnrotatedClimbVelocity() const
 {
 	return UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), Velocity);
 }
+#pragma endregion
+
+#pragma region Network
+void UCustomMovementComponent::Multicast_PlayClimbMontage_Implementation(UAnimMontage* MontageToPlay)
+{
+	if (CharacterOwner && !CharacterOwner->IsLocallyControlled())
+	{
+		if (OwningPlayerAnimInstance && !OwningPlayerAnimInstance->IsAnyMontagePlaying())
+		{
+			OwningPlayerAnimInstance->Montage_Play(MontageToPlay);
+		}
+	}
+}
+
+void UCustomMovementComponent::Server_PlayClimbMontage_Implementation(UAnimMontage* MontageToPlay)
+{
+	Multicast_PlayClimbMontage(MontageToPlay);
+}
+
+void UCustomMovementComponent::Server_StopClimbing_Implementation()
+{
+	SetMovementMode(MOVE_Falling);
+}
+
+void UCustomMovementComponent::Server_StartClimbing_Implementation()
+{
+	SetMovementMode(MOVE_Custom, ECustomMovementMode::MOVE_Climb);
+}
+
 #pragma endregion

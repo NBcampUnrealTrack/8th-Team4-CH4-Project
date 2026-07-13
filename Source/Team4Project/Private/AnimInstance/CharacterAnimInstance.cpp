@@ -22,10 +22,21 @@ void UCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
 	Super::NativeUpdateAnimation(DeltaSeconds);
 
+	//초기화 시점 캐릭터 못찾았을 경우 대비
+	if (!ClimbingSystemCharacter)
+	{
+		ClimbingSystemCharacter = Cast<ABaseCharacter>(TryGetPawnOwner());
+		if (ClimbingSystemCharacter)
+		{
+			CustomMovementComponent = ClimbingSystemCharacter->GetCustomMovementComponent();
+		}
+	}
+
 	if (!ClimbingSystemCharacter || !CustomMovementComponent)
 	{
 		return;
 	}
+
 	GetGroundSpeed();
 	GetAirSpeed();
 	GetShouldMove();
@@ -38,7 +49,7 @@ void UCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 void UCharacterAnimInstance::GetGroundSpeed()
 {
-	GroundSpeed = UKismetMathLibrary::VSizeXY(ClimbingSystemCharacter->GetVelocity());
+	GroundSpeed = ClimbingSystemCharacter->GetVelocity().Size2D();
 }
 
 void UCharacterAnimInstance::GetAirSpeed()
@@ -48,7 +59,7 @@ void UCharacterAnimInstance::GetAirSpeed()
 
 void UCharacterAnimInstance::GetShouldMove()
 {
-	bShouldMove = (CustomMovementComponent->GetCurrentAcceleration().Size() > 0 &&
+	bShouldMove = (CustomMovementComponent->GetCurrentAcceleration().IsNearlyZero() &&
 		GroundSpeed > 5.f &&
 		!bIsFalling);
 }
