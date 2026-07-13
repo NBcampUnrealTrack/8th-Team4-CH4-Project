@@ -240,16 +240,12 @@ void ABaseCharacter::Server_SetSkin_Implementation(int32 InSkinIndex)
 
 	SkinIndex = InSkinIndex;
 	
-	// [테스트용] 변형 텍스처 중 그냥 랜덤 배정 (중복 허용, 풀 관리 없음)
-	const int32 VariantCount = SkinOptions[InSkinIndex].VariantTextures.Num();
-	SkinVariantIndex = (VariantCount > 0) ? FMath::RandRange(0, VariantCount - 1) : INDEX_NONE;
-	
-	/*// GameMode 풀에서 색상 변형 배정 (리스폰 시 같은 플레이어는 같은 색 유지
+	// GameMode 풀에서 색상 변형 배정 (리스폰 시 같은 플레이어는 같은 색 유지
 	if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
 	{
 		SkinVariantIndex = GM->AssignSkinVariant(
 				GetPlayerState(), InSkinIndex, SkinOptions[InSkinIndex].VariantTextures.Num());
-	}*/
+	}
 	ApplySkin(); // 리슨 서버(호스트) 화면 반영 — 클라는 OnRep 에서 반영
 }
 

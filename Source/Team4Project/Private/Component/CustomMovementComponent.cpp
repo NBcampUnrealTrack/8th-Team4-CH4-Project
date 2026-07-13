@@ -25,14 +25,12 @@ void UCustomMovementComponent::OnMovementModeChanged(EMovementMode PreviousMovem
 {
 	if (IsClimbing())
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("IsClimbing!!"));
 		bOrientRotationToMovement = false;
 		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(26.f);
 	}
 
 	if (PreviousMovementMode == MOVE_Custom && PreviousCustomMode == ECustomMovementMode::MOVE_Climb)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Climbing ended!!"));
 		bOrientRotationToMovement = true;
 		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(48.f);
 
@@ -223,7 +221,6 @@ bool UCustomMovementComponent::CanClimbDownLedge()
 
 	if (WalkableSurfaceHit.bBlockingHit && !LedgeTraceHit.bBlockingHit)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("can climb ledge"));
 		return true;
 	}
 
@@ -324,7 +321,6 @@ bool UCustomMovementComponent::CheckShouldStopClimbing()
 {
 	if (ClimbableSurfacesTracedResults.IsEmpty())
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("no surface Climbing ended!!"));
 		return true;
 	}
 
@@ -333,7 +329,6 @@ bool UCustomMovementComponent::CheckShouldStopClimbing()
 
 	if (DegreeDiff <= 40.f)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("degree 60!! climb end!!"));
 		return true;
 	}
 
@@ -362,8 +357,6 @@ bool UCustomMovementComponent::CheckHasReachedFloor()
 			GetUnrotatedClimbVelocity().Z < -10.f;
 		if (bFloorReached)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Floor reached!!"));
-
 			return true;
 		}
 	}
@@ -385,7 +378,6 @@ bool UCustomMovementComponent::CheckHasReachedLedge()
 
 		if (WalkableSurfaceHitResult.bBlockingHit && GetUnrotatedClimbVelocity().Z > 10.f)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 3, FColor::Red, TEXT("ReachedLedge"));
 			return true;
 		}
 	}
@@ -448,7 +440,7 @@ FHitResult UCustomMovementComponent::TraceFromEyeHeight(float TraceDistance, flo
 	const FVector Start = ComponentLocation + EyeHeightOffset;
 	const FVector End = Start + UpdatedComponent->GetForwardVector() * TraceDistance;
 
-	return DoLineTraceSingleByObject(Start, End,true);
+	return DoLineTraceSingleByObject(Start, End);
 }
 
 void UCustomMovementComponent::PlayClimbMontage(UAnimMontage* MontageToPlay)
