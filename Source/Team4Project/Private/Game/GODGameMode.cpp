@@ -114,8 +114,6 @@ void AGODGameMode::Logout(AController* Exiting)
 
 	Super::Logout(Exiting);
 
-	Super::Logout(Exiting);
-
 	if (!GODGS) return;
 
 	// 이탈자가 플레이어 목록에서 빠진 뒤에 다시 세야 분모가 맞는다.
@@ -181,7 +179,6 @@ void AGODGameMode::StartGame()
 
 	GODGS->CurrentPhase = EGamePhase::Playing;
 	GODGS->RemainingTime = TotalMatchTime;
-	GODGS->bGunsUnlocked = false;
 	GODGS->LobbyCountdown = 0;
 	GODGS->PressureLevel = 0.f;
 	GODGS->MeetingRemainingTime = 0;
@@ -284,17 +281,26 @@ void AGODGameMode::AssignRoles()
 			: ECitizenClass::None;
 		PS->SetIsAlive(true);
 
+		// 무법자(이중스파이): 위장할 시민 직업을 랜덤으로 하나 받는다.
+		// CharacterTag 가 이 직업이 되므로 스킬/패시브/HUD 가 전부 진짜 시민처럼 동작한다.
+		// (실제 시민과 직업이 겹칠 수 있다 — 추리 요소)
+		if (PS->MainRole == EMainRole::Outlaw)
+		{
+			static const ECitizenClass DisguisePool[] = {
+				ECitizenClass::Mechanic, ECitizenClass::Watchman,
+				ECitizenClass::Stoker,   ECitizenClass::Porter
+			};
+			PS->CitizenClass = DisguisePool[FMath::RandRange(0, 3)];
+		}
+
+		// 라운드 재시작 대비: 전향 상태 초기화.
+		PS->bTurnedToMafia = false;
+
 		// 로비 캐릭터를 그대로 유지하고 태그만 부여 (열차 위 위치 보존).
 		FGameplayTag AssignedTag = GetTagForRole(PS);
 		if (ABaseCharacter* ExistingPawn = Cast<ABaseCharacter>(PC->GetPawn()))
 		{
 			ExistingPawn->SetCharacterTag(AssignedTag);
-
-			// 기획: 게임 시작 시 전원 탄약 1발 지급. (탄약 단일 소스 = CurrentAmmo 어트리뷰트)
-			if (UAbilitySystemComponent* ASC = ExistingPawn->GetAbilitySystemComponent())
-			{
-				ASC->SetNumericAttributeBase(UBaseAttributeSet::GetCurrentAmmoAttribute(), 1.f);
-			}
 		}
 
 		// 역할 배정 디버그 출력
@@ -304,7 +310,7 @@ void AGODGameMode::AssignRoles()
 		{
 			case EMainRole::Mafia:   RoleStr = TEXT("Mafia");   break;
 			case EMainRole::Sheriff: RoleStr = TEXT("Sheriff"); break;
-			case EMainRole::Outlaw:  RoleStr = TEXT("Outlaw");  break;
+			case EMainRole::Outlaw:  RoleStr = TEXT("Outlaw(DoubleAgent)"); break;
 			case EMainRole::Citizen:
 				switch (PS->CitizenClass)
 				{
@@ -399,21 +405,8 @@ void AGODGameMode::HandleQuestCompleted(AGODPlayerState* PS, AQuestStation* Stat
 
 	if (!PS->TryMarkQuestCompleted(Station)) return;
 
-	// 특수직(보안관/마피아/무법자)은 퀘스트 하나당 탄약 1발.
-	if (PS->MainRole != EMainRole::Citizen)
-	{
-		if (AController* PC = Cast<AController>(PS->GetOwner()))
-		{
-			if (ABaseCharacter* Char = Cast<ABaseCharacter>(PC->GetPawn()))
-			{
-				if (UAbilitySystemComponent* ASC = Char->GetAbilitySystemComponent())
-				{
-					ASC->ApplyModToAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute(),
-						EGameplayModOp::Additive, 1.f);
-				}
-			}
-		}
-	}
+	// 특수직(보안관/마피아/밀수꾼)의 퀘스트는 위장용 — 완료해도 보상/기여 없음.
+	// (배정 자체를 빼면 좌상단 목록이 비어 어깨너머로 역할이 탄로난다)
 
 	RecalculateQuestSpeedMultiplier();
 }
@@ -465,7 +458,15 @@ FGameplayTag AGODGameMode::GetTagForRole(AGODPlayerState* PS) const
 	{
 		case EMainRole::Mafia:   return Character::Special::Mafia.GetTag();
 		case EMainRole::Sheriff: return Character::Special::Sheriff.GetTag();
-		case EMainRole::Outlaw:  return Character::Special::Outlaw.GetTag();
+
+		// 무법자(이중스파이): 전향 전에는 위장 시민 직업 태그 — 스킬/HUD 가 진짜 시민처럼 동작.
+		// 전향 후에는 무법자 태그 (TurnOutlawToMafia 가 SetCharacterTag 로 교체).
+		case EMainRole::Outlaw:
+			if (PS->bTurnedToMafia)
+			{
+				return Character::Special::Outlaw.GetTag();
+			}
+			// fallthrough 대신 위장 직업으로 진행
 		case EMainRole::Citizen:
 			switch (PS->CitizenClass)
 			{
@@ -576,10 +577,11 @@ void AGODGameMode::UpdateGameTimer()
 	GODGS->OnRep_RemainingTime(); // 리슨 서버 클라이언트 즉시 알림
 	TimeElapsed++;
 
-	if (TimeElapsed >= GunUnlockDelay && !GODGS->bGunsUnlocked)
+	// 무법자(이중스파이) 전향. 회의 중에는 위 early-return 으로 시계가 멈추므로 그만큼 밀린다.
+	// TurnOutlawToMafia 는 전향 완료 후 no-op 이라 매초 호출해도 안전하다.
+	if (TimeElapsed >= OutlawTurnDelaySeconds)
 	{
-		GODGS->bGunsUnlocked = true;
-		GODGS->OnRep_bGunsUnlocked(); // 리슨 서버(호스트)에도 "총기 제한 해제" 알림 발화
+		TurnOutlawToMafia();
 	}
 
 	// 매초 감소하므로 정확히 한 번만 걸린다.
@@ -631,28 +633,7 @@ void AGODGameMode::HandlePlayerDeath(AGODPlayerState* KillerPS, AGODPlayerState*
 		}
 	}
 
-	// 관전 모드 전환은 Die() 내부에서 처리한다(총격 등 모든 사망 경로 공통).
-
-	// 탄약 소모는 GA_FireGun 이 발사 시점에 CurrentAmmo 어트리뷰트로 처리한다.
-	// 여기서는 기획의 리필 규칙만: 특수 직군이 다른 특수 직군 사살 시 1발 리필 (시민 사살은 리필 없음).
-	if (KillerPS && KillerPS->MainRole != EMainRole::Citizen && VictimPS->MainRole != EMainRole::Citizen)
-	{
-		if (AController* KillerPC = Cast<AController>(KillerPS->GetOwner()))
-		{
-			if (ABaseCharacter* KillerChar = Cast<ABaseCharacter>(KillerPC->GetPawn()))
-			{
-				if (UAbilitySystemComponent* ASC = KillerChar->GetAbilitySystemComponent())
-				{
-					// MaxAmmo 는 PreAttributeChange 에서 클램프된다.
-					ASC->ApplyModToAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute(),
-						EGameplayModOp::Additive, 1.f);
-
-					// 리필 규칙 발동 = 장전 사운드 (킬러 위치, 전 클라).
-					KillerChar->Multicast_PlayCharacterSound(SoundRows::GunReload);
-				}
-			}
-		}
-	}
+	// 관전 모드 전환은 Die() 내부에서 처리한다(낙사 등 모든 사망 경로 공통).
 
 	// 미완료 시민이 죽으면 분모에서 빠져 배율이 오른다. 반드시 다시 계산해야 한다.
 	RecalculateQuestSpeedMultiplier();
@@ -662,9 +643,10 @@ void AGODGameMode::HandlePlayerDeath(AGODPlayerState* KillerPS, AGODPlayerState*
 
 void AGODGameMode::CheckWinConditions()
 {
-	int32 AliveSheriffs = 0;
-	int32 AliveOutlaws  = 0;
-	int32 AliveMafias   = 0;
+	// 사망 시스템 제거(2026-07-13) 후 이 함수는 사실상 "마피아 전원 이탈 → 시민 승리"
+	// 처리용으로만 남아 있다 (Logout 에서 호출). 본 승부는 UpdateGameTimer 의
+	// 도착(CitizensWon) / 시간초과(MafiaWon) 와 압력 폭발·탈선(MafiaWon)으로 갈린다.
+	int32 AliveMafias = 0;
 
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
@@ -672,24 +654,12 @@ void AGODGameMode::CheckWinConditions()
 		{
 			if (AGODPlayerState* PS = PC->GetPlayerState<AGODPlayerState>())
 			{
-				if (!PS->bIsAlive) continue;
-				if (PS->MainRole == EMainRole::Sheriff)      AliveSheriffs++;
-				else if (PS->MainRole == EMainRole::Outlaw)  AliveOutlaws++;
-				else if (PS->MainRole == EMainRole::Mafia)   AliveMafias++;
+				if (PS->bIsAlive && PS->MainRole == EMainRole::Mafia) AliveMafias++;
 			}
 		}
 	}
 
-	// 모든 특수직 전멸(동시 사망 포함) → 시민 승리를 가장 먼저 처리
-	if (AliveSheriffs == 0 && AliveMafias == 0 && AliveOutlaws == 0)
-	{
-		EndGame(EGamePhase::CitizensWon);
-	}
-	else if (AliveSheriffs == 0 && AliveMafias == 0 && AliveOutlaws > 0)
-	{
-		EndGame(EGamePhase::OutlawWon);
-	}
-	else if (AliveOutlaws == 0 && AliveMafias == 0)
+	if (AliveMafias == 0)
 	{
 		EndGame(EGamePhase::CitizensWon);
 	}
@@ -787,8 +757,7 @@ bool AGODGameMode::TryStartMeeting()
 	// 전원 ASC 에 State.Meeting 부여 → 살해/능력 GA 차단.
 	SetMeetingTagOnAllCharacters(true);
 
-	// 살아있는 전원(죽은 척 제외 — 위장 유지가 우선)을 회의실 좌석으로 소환.
-	// 시체는 죽은 자리에 그대로 둔다 (마피아의 시체 은폐 유지).
+	// 살아있는 전원을 회의실 좌석으로 소환. 시체는 죽은 자리에 그대로 둔다.
 	if (AMeetingRoom* Room = FindMeetingRoom())
 	{
 		int32 SeatIndex = 0;
@@ -797,7 +766,7 @@ bool AGODGameMode::TryStartMeeting()
 			APlayerController* PC = It->Get();
 			AGODPlayerState* PS = PC ? PC->GetPlayerState<AGODPlayerState>() : nullptr;
 			ABaseCharacter* Char = PC ? Cast<ABaseCharacter>(PC->GetPawn()) : nullptr;
-			if (!PS || !PS->bIsAlive || !Char || Char->IsDead() || Char->IsFakeDead()) continue;
+			if (!PS || !PS->bIsAlive || !Char || Char->IsDead()) continue;
 
 			Room->TeleportToSeat(Char, SeatIndex++);
 		}
@@ -911,6 +880,40 @@ AMeetingRoom* AGODGameMode::FindMeetingRoom() const
 		return *It;
 	}
 	return nullptr;
+}
+
+// ============================================================
+// 무법자 (이중스파이) 전향
+// ============================================================
+
+void AGODGameMode::TurnOutlawToMafia()
+{
+	AGODGameState* GODGS = GetGameState<AGODGameState>();
+	if (!GODGS || GODGS->CurrentPhase != EGamePhase::Playing) return;
+
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* PC = It->Get();
+		AGODPlayerState* PS = PC ? PC->GetPlayerState<AGODPlayerState>() : nullptr;
+		if (!PS || PS->MainRole != EMainRole::Outlaw || PS->bTurnedToMafia) continue;
+
+		PS->bTurnedToMafia = true;
+		PS->OnRep_bTurnedToMafia(); // 리슨 호스트는 OnRep 이 안 온다 — HUD 전향 연출 발화
+
+		// 위장 시민 스킬 회수 + 무법자 세팅 적용.
+		// SetCharacterTag 가 이전 역할의 어빌리티/이펙트를 정리하고 새 데이터로우를 재적용하며,
+		// ASC 루즈 태그가 Character.Special.Outlaw 로 바뀌어 GA_Push 의 넉백 2배가 활성화된다.
+		if (ABaseCharacter* Char = Cast<ABaseCharacter>(PC->GetPawn()))
+		{
+			Char->SetCharacterTag(Character::Special::Outlaw.GetTag());
+
+			// 전향음은 본인에게만 (타인에게 들리면 정체 노출).
+			Char->Client_PlayCharacterSound(SoundRows::OutlawTurned);
+		}
+
+		UE_LOG(LogTemp, Log, TEXT("[Outlaw] %s 이(가) 마피아 사이드로 전향했다. (%d초)"),
+			*PS->GetPlayerName(), TimeElapsed);
+	}
 }
 
 AGODTrain* AGODGameMode::FindTrainActor() const

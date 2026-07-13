@@ -11,7 +11,6 @@ AGODPlayerState::AGODPlayerState()
 {
 	bIsReady = false;
 	bIsAlive = true;
-	AmmoCount = 1; // 모든 플레이어는 1발로 시작
 	SootLevel = 0.0f;
 	MainRole = EMainRole::Citizen;
 	CitizenClass = ECitizenClass::None;
@@ -27,15 +26,24 @@ void AGODPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME_CONDITION(AGODPlayerState, MainRole, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(AGODPlayerState, CitizenClass, COND_OwnerOnly);
 	DOREPLIFETIME(AGODPlayerState, bIsAlive);
-	DOREPLIFETIME(AGODPlayerState, AmmoCount);
 	DOREPLIFETIME(AGODPlayerState, SootLevel);
 
 	DOREPLIFETIME_CONDITION(AGODPlayerState, AssignedQuests, COND_OwnerOnly);
+	// 전향 여부는 소유자에게만 — 다른 클라가 값을 읽어 무법자를 유추하지 못하게.
+	DOREPLIFETIME_CONDITION(AGODPlayerState, bTurnedToMafia, COND_OwnerOnly);
 }
 
 void AGODPlayerState::OnRep_AssignedQuests()
 {
 	OnAssignedQuestsChanged.Broadcast();
+}
+
+void AGODPlayerState::OnRep_bTurnedToMafia()
+{
+	if (bTurnedToMafia)
+	{
+		OnTurnedToMafia.Broadcast();
+	}
 }
 
 bool AGODPlayerState::TryMarkQuestCompleted(AQuestStation* Station)

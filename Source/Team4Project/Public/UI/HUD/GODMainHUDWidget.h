@@ -179,30 +179,10 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UGODAbilitySlotWidget> Slot_Active2;
 
-	// 우 하단 — 탄약 (총 장착 시 표시)
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UWidget> Panel_AmmoDisplay;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UTextBlock> TB_AmmoCount;
-
 	// 중앙 하단 — 인터랙트 프롬프트 ("[F] 열기" 등).
 	// WBP에 이 이름의 TextBlock을 배치하면 자동 연결된다 (Optional이라 없어도 컴파일됨).
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TB_InteractPrompt;
-
-	// 중앙 — 3분 발포 잠금 해제 알림 ("총기 제한 해제").
-	// WBP에 이 이름의 TextBlock을 배치하면 해제 시점에 잠깐 표시된다 (Optional).
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> TB_GunsUnlockedNotice;
-
-	// 알림 표시 유지 시간(초)
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Warning")
-	float GunsUnlockedNoticeDuration = 4.f;
-
-	// 발포 잠금 해제 시 WBP 확장 포인트 (사운드/애니메이션 등 BP 연출용)
-	UFUNCTION(BlueprintImplementableEvent, Category = "HUD|Warning")
-	void BP_OnGunsUnlocked();
 
 	// 중앙 상단 — 알림 방송 배너 (기어 파손, 압력 경고, 연료 부족 등).
 	// WBP에 이 이름의 TextBlock을 배치하면 자동 연결된다 (Optional이라 없어도 컴파일됨).
@@ -260,8 +240,6 @@ private:
 	bool bWarningVisible = true;
 	float WarningBlinkTimer = 0.f;
 
-	bool bGunEquipped = false;
-
 	// 현재 폰 변경 감지용
 	UPROPERTY()
 	TWeakObjectPtr<APawn> LastKnownPawn;
@@ -292,13 +270,6 @@ private:
 	UFUNCTION()
 	void OnCharacterTagChanged(const FGameplayTag& NewTag);
 
-	// GODGameState::OnGunsUnlocked 콜백 — "총기 제한 해제" 알림 표시
-	UFUNCTION()
-	void OnGunsUnlocked();
-
-	void HideGunsUnlockedNotice();
-	FTimerHandle GunsNoticeTimer;
-
 	// GODGameState::OnAnnouncement 콜백 — 배너 표시
 	UFUNCTION()
 	void OnAnnouncement(const FText& Message, EAnnouncementType Type);
@@ -323,7 +294,6 @@ private:
 	void UpdatePressureDisplay();
 	void UpdateFuelDisplay();
 	void UpdateWarnings(float DeltaTime);
-	void UpdateAmmoDisplay();
 	//void UpdateCrosshair();
 
 	void SetupRoleHUD(const FGameplayTag& CharTag);

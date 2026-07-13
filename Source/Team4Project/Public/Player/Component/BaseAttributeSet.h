@@ -26,14 +26,6 @@ public:
 	virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
 	
-	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_CurrentAmmo, Category = "Ammo")
-	FGameplayAttributeData CurrentAmmo;
-	ATTRIBUTE_ACCESSORS(UBaseAttributeSet, CurrentAmmo)
-	
-	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_MaxAmmo, Category = "Ammo")
-	FGameplayAttributeData MaxAmmo;
-	ATTRIBUTE_ACCESSORS(UBaseAttributeSet, MaxAmmo)
-	
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Weight, Category = "Weight")
 	FGameplayAttributeData Weight;
 	ATTRIBUTE_ACCESSORS(UBaseAttributeSet, Weight)
@@ -43,12 +35,6 @@ public:
 	ATTRIBUTE_ACCESSORS(UBaseAttributeSet, Speed)
 
 protected:
-	UFUNCTION()
-	void OnRep_CurrentAmmo(const FGameplayAttributeData& OldValue);
-
-	UFUNCTION()
-	void OnRep_MaxAmmo(const FGameplayAttributeData& OldValue);
-
 	UFUNCTION()
 	void OnRep_Weight(const FGameplayAttributeData& OldValue);
 	

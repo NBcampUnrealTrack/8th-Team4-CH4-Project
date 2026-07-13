@@ -3,7 +3,6 @@
 
 #include "Player/Ability/GA_MafiaDetect.h"
 #include "Player/BaseCharacter.h"
-#include "Player/Weapon/BaseWeapon.h"
 #include "Game/BaseGameplayTags.h"
 #include "Sound/GameSoundTypes.h"
 #include "DrawDebugHelpers.h"
@@ -43,18 +42,13 @@ void UGA_MafiaDetect::ActivateAbility(
 
 	if (Character->HasAuthority())
 	{
-		ABaseWeapon* Weapon = Character->GetCurrentWeapon();
-
+		// 총 제거 후 시선(눈높이) 기준으로 조준 트레이스.
 		const FRotator AimRot = Character->GetBaseAimRotation();
-		const FVector Start = Weapon ? Weapon->GetMuzzleLocation() : Character->GetActorLocation();
+		const FVector Start = Character->GetPawnViewLocation();
 		const FVector End = Start + AimRot.Vector() * Range;
 
 		FCollisionQueryParams Params;
 		Params.AddIgnoredActor(Character);
-		if (Weapon)
-		{
-			Params.AddIgnoredActor(Weapon);
-		}
 
 		FHitResult Hit;
 		const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Pawn, Params);

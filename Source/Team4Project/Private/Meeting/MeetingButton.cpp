@@ -28,7 +28,7 @@ void AMeetingButton::Interact_Implementation(ACharacter* Interactor)
 	if (!HasAuthority()) return;
 
 	ABaseCharacter* BaseChar = Cast<ABaseCharacter>(Interactor);
-	if (!BaseChar || BaseChar->IsDead() || BaseChar->IsFakeDead()) return;
+	if (!BaseChar || BaseChar->IsDead()) return;
 
 	// 조건 판정과 실행은 전부 서버 GameMode. 결정: 누른 사람은 비공개 — 이름을 넘기지 않는다.
 	if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())

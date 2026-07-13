@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -7,12 +7,7 @@
 #include "GA_Push.generated.h"
 
 /**
- * 밀치기 어빌리티 (공통). 총을 장착하지 않은 상태의 좌클릭.
- *
- * 애셋 태그에 Ability.Attack 을 함께 달아 두었으므로, 좌클릭(IA_Attack)이 이미 호출하는
- * TryActivateAbilitiesByTag(Ability.Attack) 하나로 총기 발사와 자동으로 갈린다:
- *   - 총 장착 중  → GA_FireGun 만 발동 (GA_Push 는 State.Equip.Gun 이 Blocked)
- *   - 총 미장착   → GA_Push 만 발동   (GA_FireGun 은 State.Equip.Gun 이 Required)
+ * 밀치기 어빌리티 (공통). 좌클릭(IA_Attack)의 TryActivateAbilitiesByTag(Ability.Attack)로 발동.
  *
  * 맞은 상대는 비틀거림 몽타주 + 넉백을 받고, 그 동안 이동 입력이 잠긴다.
  * 넉백에 밀려 열차 밖으로 떨어지면 기존 낙사 로직이 사망 처리하며,
@@ -52,6 +47,10 @@ protected:
 	// 밀린 쪽이 비틀거리며 이동 입력을 잃는 시간 (초)
 	UPROPERTY(EditDefaultsOnly, Category = "Push")
 	float StumbleDuration = 1.2f;
+
+	// 전향한 무법자(이중스파이)의 넉백 배수 — 슈퍼 넉백.
+	UPROPERTY(EditDefaultsOnly, Category = "Push")
+	float TurnedOutlawKnockbackMultiplier = 2.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Push")
 	bool bDrawDebug = false;
