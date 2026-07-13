@@ -32,10 +32,10 @@ void AGODGameState::BeginPlay()
 
 void AGODGameState::SoundMonitorTick()
 {
-	// 페이즈 전환 사운드 (출발 / 승리 / 패배)
+	// 페이즈 전환 사운드 (출발 / 승리 / 패배 / 소집)
 	if (CurrentPhase != LastSoundPhase)
 	{
-		PlayPhaseSound(CurrentPhase);
+		PlayPhaseSound(CurrentPhase, LastSoundPhase);
 		LastSoundPhase = CurrentPhase;
 	}
 
@@ -78,12 +78,20 @@ float AGODGameState::GetPressureWarningInterval() const
 	return FMath::Lerp(PressureWarningIntervalMax, PressureWarningIntervalMin, Alpha);
 }
 
-void AGODGameState::PlayPhaseSound(EGamePhase NewPhase)
+void AGODGameState::PlayPhaseSound(EGamePhase NewPhase, EGamePhase OldPhase)
 {
 	switch (NewPhase)
 	{
 	case EGamePhase::Playing:
-		UGameSoundStatics::PlaySound2DFromTable(this, GameSoundTable, SoundRows::GameStart);
+		// 회의 종료 복귀(Meeting→Playing)에는 출발 경적을 다시 울리지 않는다.
+		if (OldPhase != EGamePhase::Meeting)
+		{
+			UGameSoundStatics::PlaySound2DFromTable(this, GameSoundTable, SoundRows::GameStart);
+		}
+		break;
+
+	case EGamePhase::Meeting:
+		UGameSoundStatics::PlaySound2DFromTable(this, GameSoundTable, SoundRows::MeetingCall);
 		break;
 
 	case EGamePhase::CitizensWon:
@@ -135,6 +143,8 @@ void AGODGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AGODGameState, QuestCompletedCitizens);
 	DOREPLIFETIME(AGODGameState, QuestTotalCitizens);
 	DOREPLIFETIME(AGODGameState, LobbyCountdown);
+	DOREPLIFETIME(AGODGameState, MeetingRemainingTime);
+	DOREPLIFETIME(AGODGameState, bMeetingBellReady);
 	DOREPLIFETIME(AGODGameState, ChatHistory);
 }
 
@@ -146,6 +156,11 @@ void AGODGameState::OnRep_GamePhase()
 void AGODGameState::OnRep_RemainingTime()
 {
 	OnRemainingTimeChanged.Broadcast(RemainingTime);
+}
+
+void AGODGameState::OnRep_MeetingRemainingTime()
+{
+	OnMeetingTimeChanged.Broadcast(MeetingRemainingTime);
 }
 
 void AGODGameState::OnRep_DistanceToDestination()
@@ -193,7 +208,12 @@ void AGODGameState::AddChatMessage(const FChatMessage& Msg)
 void AGODGameState::Announce(const FText& Message, EAnnouncementType Type)
 {
 	// 라운드 초기화(ForceReassemble 등)나 로비 중의 상태 변화가 방송되지 않도록 페이즈로 막는다.
-	if (!HasAuthority() || CurrentPhase != EGamePhase::Playing) return;
+	// 긴급 회의 중에는 소집/종료 알림이 나가야 하므로 Meeting 도 허용한다.
+	if (!HasAuthority() ||
+		(CurrentPhase != EGamePhase::Playing && CurrentPhase != EGamePhase::Meeting))
+	{
+		return;
+	}
 
 	Multicast_Announce(Message, Type);
 }

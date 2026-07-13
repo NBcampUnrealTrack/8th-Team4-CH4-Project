@@ -10,6 +10,8 @@
 #include "InteractiveProp/GearSlot.h"
 #include "InteractiveProp/ItemBase.h"
 #include "Quest/QuestStation.h"
+#include "Meeting/MeetingRoom.h"
+#include "Component/FurnanceComponent.h"
 #include "Player/Component/BaseAttributeSet.h"
 #include "AbilitySystemComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -85,8 +87,12 @@ void AGODGameMode::Logout(AController* Exiting)
 {
 	AGODGameState* GODGS = GetGameState<AGODGameState>();
 
-	// Playing 중 이탈: 사망 처리 + 들고 있던 아이템 드롭. (Super 이후엔 폰/PS 접근이 불안정하므로 먼저 처리)
-	if (GODGS && GODGS->CurrentPhase == EGamePhase::Playing && Exiting)
+	// 라운드(Playing/Meeting) 중 이탈: 사망 처리 + 들고 있던 아이템 드롭.
+	// (Super 이후엔 폰/PS 접근이 불안정하므로 먼저 처리)
+	const bool bInRound = GODGS &&
+		(GODGS->CurrentPhase == EGamePhase::Playing || GODGS->CurrentPhase == EGamePhase::Meeting);
+
+	if (bInRound && Exiting)
 	{
 		if (AGODPlayerState* PS = Exiting->GetPlayerState<AGODPlayerState>())
 		{
@@ -106,7 +112,7 @@ void AGODGameMode::Logout(AController* Exiting)
 	if (!GODGS) return;
 
 	// 이탈자가 플레이어 목록에서 빠진 뒤에 다시 세야 분모가 맞는다.
-	if (GODGS->CurrentPhase == EGamePhase::Playing)
+	if (bInRound)
 	{
 		RecalculateQuestSpeedMultiplier();
 	}
@@ -120,7 +126,7 @@ void AGODGameMode::Logout(AController* Exiting)
 		GODGS->OnRep_GamePhase();
 	}
 	// 게임 중 이탈 → 특수 직군(마피아 등)이 나가면 게임이 안 끝나던 문제. 승리 조건 재검사.
-	else if (GODGS->CurrentPhase == EGamePhase::Playing)
+	else if (bInRound)
 	{
 		CheckWinConditions();
 	}
@@ -171,7 +177,10 @@ void AGODGameMode::StartGame()
 	GODGS->bGunsUnlocked = false;
 	GODGS->LobbyCountdown = 0;
 	GODGS->PressureLevel = 0.f;
+	GODGS->MeetingRemainingTime = 0;
+	GODGS->bMeetingBellReady = false;
 	TimeElapsed = 0;
+	LastMeetingEndTime = -1.0;
 	GODGS->OnRep_GamePhase();     // 리슨 서버(호스트)에도 Playing 페이즈 전환 브로드캐스트 (출발 연출 등)
 	GODGS->OnRep_RemainingTime(); // 리슨 서버 클라이언트 즉시 알림
 
@@ -192,6 +201,10 @@ void AGODGameMode::StartGame()
 	// 압력 폭발 시 마피아 승리 처리 연결 (중복 방지) + 열차 출발
 	if (AGODTrain* Train = FindTrainActor())
 	{
+		// 이전 라운드가 회의 중에 끝났다면 freeze 가 남아 있을 수 있다.
+		if (Train->Pressure) Train->Pressure->bFrozen = false;
+		if (Train->Furnace)  Train->Furnace->bFrozen  = false;
+
 		if (Train->Pressure)
 		{
 			// 로비에서 밸브를 조작하다 폭발시켰다면 압력이 100 + bExploded 인 채로 넘어온다.
@@ -546,6 +559,12 @@ void AGODGameMode::UpdateGameTimer()
 	AGODGameState* GODGS = GetGameState<AGODGameState>();
 	if (!GODGS) return;
 
+	// 긴급 회의 중에는 매치 시계 전체 정지 (남은 시간·총기 해제·시간 경고 모두 멈춤).
+	if (GODGS->CurrentPhase != EGamePhase::Playing) return;
+
+	// 소집 벨 사용 가능 여부를 매초 갱신 (클라 프롬프트는 이 복제값을 읽는다).
+	GODGS->bMeetingBellReady = CanStartMeeting();
+
 	GODGS->RemainingTime--;
 	GODGS->OnRep_RemainingTime(); // 리슨 서버 클라이언트 즉시 알림
 	TimeElapsed++;
@@ -585,6 +604,13 @@ AActor* AGODGameMode::ChoosePlayerStart_Implementation(AController* Player)
 void AGODGameMode::HandlePlayerDeath(AGODPlayerState* KillerPS, AGODPlayerState* VictimPS)
 {
 	if (!VictimPS || !VictimPS->bIsAlive) return;
+
+	// 회의 중 살해 금지 — GA 는 State.Meeting 태그로 막지만, GA 를 거치지 않는
+	// 경로(낙사 등)까지 막는 서버 권위 방어선.
+	if (const AGODGameState* GS = GetGameState<AGODGameState>())
+	{
+		if (GS->CurrentPhase == EGamePhase::Meeting) return;
+	}
 
 	VictimPS->SetIsAlive(false);
 
@@ -674,12 +700,18 @@ void AGODGameMode::TriggerDerailment()
 void AGODGameMode::EndGame(EGamePhase WinningPhase)
 {
 	AGODGameState* GODGS = GetGameState<AGODGameState>();
-	if (!GODGS || GODGS->CurrentPhase != EGamePhase::Playing) return;
+	// 회의 중 이탈 등으로 승리 조건이 충족될 수 있으므로 Meeting 에서도 종료 가능해야 한다.
+	if (!GODGS ||
+		(GODGS->CurrentPhase != EGamePhase::Playing && GODGS->CurrentPhase != EGamePhase::Meeting))
+	{
+		return;
+	}
 
 	GODGS->CurrentPhase = WinningPhase;
 	GODGS->OnRep_GamePhase();
 
 	GetWorld()->GetTimerManager().ClearTimer(GameTimerHandle);
+	GetWorld()->GetTimerManager().ClearTimer(MeetingTimerHandle);
 
 	GetWorld()->GetTimerManager().SetTimer(
 		MenuReturnTimerHandle, this, &AGODGameMode::ReturnToMainMenu, EndGameDelay, /*bLoop=*/false);
@@ -694,6 +726,184 @@ void AGODGameMode::HandlePressureExplosion()
 {
 	// 압력 100% 달성 → 열차 탈선 + 마피아 승리
 	TriggerDerailment();
+}
+
+// ============================================================
+// 긴급 소집 (Meeting)
+// ============================================================
+
+bool AGODGameMode::CanStartMeeting() const
+{
+	const AGODGameState* GODGS = GetGameState<AGODGameState>();
+	if (!GODGS || GODGS->CurrentPhase != EGamePhase::Playing) return false;
+
+	// 게임 시작 1분 후부터. (TimeElapsed 는 회의 중 멈추지만, 회의 중엔 어차피 벨 사용 불가)
+	if (TimeElapsed < MeetingUnlockDelay) return false;
+
+	// 직전 회의 종료 후 쿨다운.
+	if (LastMeetingEndTime >= 0.0 &&
+		GetWorld()->GetTimeSeconds() - LastMeetingEndTime < MeetingCooldownAfterEnd)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+bool AGODGameMode::TryStartMeeting()
+{
+	AGODGameState* GODGS = GetGameState<AGODGameState>();
+	if (!GODGS || !CanStartMeeting()) return false;
+
+	// 진행 중이던 퀘스트 미니게임은 전부 중단 (소환 전에 클라 팝업 정리).
+	for (TActorIterator<AQuestStation> It(GetWorld()); It; ++It)
+	{
+		(*It)->AbortQuest();
+	}
+
+	// 시뮬레이션 정지. freeze 를 먼저 걸고 정차한다 —
+	// 정차(bTrainRunning=false)만 하면 압력이 자연 감소(PressureDecayRate)하기 때문.
+	if (AGODTrain* Train = FindTrainActor())
+	{
+		if (Train->Pressure) Train->Pressure->bFrozen = true;
+		if (Train->Furnace)  Train->Furnace->bFrozen  = true;
+		bTrainWasRunningBeforeMeeting = Train->bIsRunning;
+		Train->StopRunning();
+	}
+
+	GODGS->CurrentPhase = EGamePhase::Meeting;
+	GODGS->MeetingRemainingTime = MeetingDuration;
+	GODGS->bMeetingBellReady = false;
+	GODGS->OnRep_GamePhase();            // 리슨 호스트는 OnRep 이 안 온다
+	GODGS->OnRep_MeetingRemainingTime();
+
+	// 전원 ASC 에 State.Meeting 부여 → 살해/능력 GA 차단.
+	SetMeetingTagOnAllCharacters(true);
+
+	// 살아있는 전원(죽은 척 제외 — 위장 유지가 우선)을 회의실 좌석으로 소환.
+	// 시체는 죽은 자리에 그대로 둔다 (마피아의 시체 은폐 유지).
+	if (AMeetingRoom* Room = FindMeetingRoom())
+	{
+		int32 SeatIndex = 0;
+		for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+		{
+			APlayerController* PC = It->Get();
+			AGODPlayerState* PS = PC ? PC->GetPlayerState<AGODPlayerState>() : nullptr;
+			ABaseCharacter* Char = PC ? Cast<ABaseCharacter>(PC->GetPawn()) : nullptr;
+			if (!PS || !PS->bIsAlive || !Char || Char->IsDead() || Char->IsFakeDead()) continue;
+
+			Room->TeleportToSeat(Char, SeatIndex++);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Meeting] 레벨에 MeetingRoom 이 없다. 소환 없이 회의만 시작한다."));
+	}
+
+	// 결정: 누른 사람 비공개 — 알림에 이름을 넣지 않는다.
+	GODGS->Announce(NSLOCTEXT("Announce", "MeetingStart", "긴급 소집 — 전원 회의실로"),
+		EAnnouncementType::Critical);
+
+	GetWorld()->GetTimerManager().SetTimer(
+		MeetingTimerHandle, this, &AGODGameMode::UpdateMeetingTimer, 1.0f, /*bLoop=*/true);
+	return true;
+}
+
+void AGODGameMode::UpdateMeetingTimer()
+{
+	AGODGameState* GODGS = GetGameState<AGODGameState>();
+	if (!GODGS || GODGS->CurrentPhase != EGamePhase::Meeting)
+	{
+		GetWorld()->GetTimerManager().ClearTimer(MeetingTimerHandle);
+		return;
+	}
+
+	GODGS->MeetingRemainingTime--;
+	GODGS->OnRep_MeetingRemainingTime();
+
+	if (GODGS->MeetingRemainingTime <= 0)
+	{
+		EndMeeting();
+	}
+}
+
+void AGODGameMode::EndMeeting()
+{
+	GetWorld()->GetTimerManager().ClearTimer(MeetingTimerHandle);
+
+	AGODGameState* GODGS = GetGameState<AGODGameState>();
+	if (!GODGS || GODGS->CurrentPhase != EGamePhase::Meeting) return;
+
+	SetMeetingTagOnAllCharacters(false);
+
+	if (AGODTrain* Train = FindTrainActor())
+	{
+		if (Train->Pressure) Train->Pressure->bFrozen = false;
+		if (Train->Furnace)  Train->Furnace->bFrozen  = false;
+
+		// 회의 전에 달리고 있었을 때만 재출발. (기어 전멸 정지 중이었다면 그 상태 유지)
+		if (bTrainWasRunningBeforeMeeting)
+		{
+			Train->StartRunning();
+		}
+	}
+
+	GODGS->CurrentPhase = EGamePhase::Playing;
+	GODGS->MeetingRemainingTime = 0;
+	GODGS->OnRep_GamePhase();
+	GODGS->OnRep_MeetingRemainingTime();
+
+	LastMeetingEndTime = GetWorld()->GetTimeSeconds();
+
+	GODGS->Announce(NSLOCTEXT("Announce", "MeetingEnd", "회의 종료 — 운행 재개"),
+		EAnnouncementType::Info);
+
+	// 회의 중 이탈로 승리 조건이 이미 충족됐을 수 있다.
+	CheckWinConditions();
+}
+
+void AGODGameMode::SetMeetingTagOnAllCharacters(bool bEnable)
+{
+	const FGameplayTag MeetingTag = State::Meeting.GetTag();
+
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* PC = It->Get();
+		ABaseCharacter* Char = PC ? Cast<ABaseCharacter>(PC->GetPawn()) : nullptr;
+		UAbilitySystemComponent* ASC = Char ? Char->GetAbilitySystemComponent() : nullptr;
+		if (!ASC) continue;
+
+		if (bEnable)
+		{
+			// 서버 태그 + 클라 복제 — 클라의 예측 활성화도 같은 태그로 막힌다.
+			ASC->AddLooseGameplayTag(MeetingTag);
+			ASC->AddReplicatedLooseGameplayTag(MeetingTag);
+		}
+		else
+		{
+			ASC->RemoveLooseGameplayTag(MeetingTag);
+			ASC->RemoveReplicatedLooseGameplayTag(MeetingTag);
+		}
+	}
+}
+
+void AGODGameMode::RescueToMeeting(ABaseCharacter* Character)
+{
+	if (!Character) return;
+
+	if (AMeetingRoom* Room = FindMeetingRoom())
+	{
+		Room->TeleportToSeat(Character, 0);
+	}
+}
+
+AMeetingRoom* AGODGameMode::FindMeetingRoom() const
+{
+	for (TActorIterator<AMeetingRoom> It(GetWorld()); It; ++It)
+	{
+		return *It;
+	}
+	return nullptr;
 }
 
 AGODTrain* AGODGameMode::FindTrainActor() const

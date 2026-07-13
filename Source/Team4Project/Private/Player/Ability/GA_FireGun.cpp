@@ -28,6 +28,9 @@ UGA_FireGun::UGA_FireGun()
 	// 투명화(Ability.Invisible) 중에는 발사 불가. 투명화가 풀리면 태그가 사라져 다시 발사 가능.
 	ActivationBlockedTags.AddTag(Abilities::Invisible.GetTag());
 
+	// 긴급 회의 중 사용 불가.
+	ActivationBlockedTags.AddTag(State::Meeting.GetTag());
+
 	// 쿨다운/비용 GE 는 BP 에서 CooldownGameplayEffectClass / CostGameplayEffectClass 에 지정한다.
 }
 

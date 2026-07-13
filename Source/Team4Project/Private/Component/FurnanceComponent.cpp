@@ -43,7 +43,7 @@ void UFurnanceComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (!GetOwner()->HasAuthority() || !bIsBurning) return;
+	if (!GetOwner()->HasAuthority() || !bIsBurning || bFrozen) return;
 
 	// 연료 소모는 매 Tick(부드러운 속도 반영). UI 브로드캐스트는 타이머가 담당.
 	CurrentFuel = FMath::Max(0.f, CurrentFuel - FuelBurnRate * DeltaTime);

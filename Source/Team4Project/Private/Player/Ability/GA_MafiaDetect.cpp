@@ -4,6 +4,7 @@
 #include "Player/Ability/GA_MafiaDetect.h"
 #include "Player/BaseCharacter.h"
 #include "Player/Weapon/BaseWeapon.h"
+#include "Game/BaseGameplayTags.h"
 #include "Sound/GameSoundTypes.h"
 #include "DrawDebugHelpers.h"
 
@@ -12,6 +13,9 @@ UGA_MafiaDetect::UGA_MafiaDetect()
 	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 	// 권위적 명중 판정을 위해 서버 실행.
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
+
+	// 긴급 회의 중 사용 불가.
+	ActivationBlockedTags.AddTag(State::Meeting.GetTag());
 }
 
 void UGA_MafiaDetect::ActivateAbility(

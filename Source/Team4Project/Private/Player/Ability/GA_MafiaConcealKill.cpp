@@ -16,6 +16,9 @@ UGA_MafiaConcealKill::UGA_MafiaConcealKill()
 	Trigger.TriggerTag = Event::Kill.GetTag();
 	Trigger.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
 	AbilityTriggers.Add(Trigger);
+
+	// 긴급 회의 중 사용 불가.
+	ActivationBlockedTags.AddTag(State::Meeting.GetTag());
 }
 
 void UGA_MafiaConcealKill::ActivateAbility(

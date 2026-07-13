@@ -54,6 +54,9 @@ namespace State
 
     // 밀쳐져 비틀거리는 중. 이 동안 반격(밀치기) 불가.
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Stumble)
+
+    // 긴급 회의 중. 회의 시작 시 전원 ASC 에 부여 → 살해/능력 GA 전부 차단.
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Meeting)
 }
 
 namespace Cooldown

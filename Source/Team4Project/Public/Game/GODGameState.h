@@ -14,7 +14,8 @@ enum class EGamePhase : uint8
 	Playing           UMETA(DisplayName = "진행 중"),
 	CitizensWon       UMETA(DisplayName = "보안관/시민 승리"),
 	OutlawWon         UMETA(DisplayName = "무법자 승리"),
-	MafiaWon          UMETA(DisplayName = "마피아 승리")
+	MafiaWon          UMETA(DisplayName = "마피아 승리"),
+	Meeting           UMETA(DisplayName = "긴급 회의")
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnChatMessageReceived, const FChatMessage&, Message);
@@ -26,6 +27,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrainFuelLevelChanged, float, New
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGunsUnlocked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnQuestProgressChanged, float, SpeedMultiplier, int32, CompletedCitizens, int32, TotalCitizens);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAnnouncement, const FText&, Message, EAnnouncementType, Type);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMeetingTimeChanged, int32, RemainingSeconds);
 
 class UDataTable;
 
@@ -89,6 +91,24 @@ public:
 	 */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Game State")
 	int32 LobbyCountdown;
+
+	/** 긴급 회의 남은 시간 (초). Meeting 페이즈 동안만 유효. HUD 회의 타이머 표시용. */
+	UPROPERTY(ReplicatedUsing = OnRep_MeetingRemainingTime, BlueprintReadOnly, Category = "Game State|Meeting")
+	int32 MeetingRemainingTime = 0;
+
+	/**
+	 * 지금 소집 벨을 누를 수 있는가 (서버 GameMode 가 매초 갱신).
+	 * 조건(시작 1분 후 + 직전 회의 1분 쿨다운)은 서버에만 있으므로, 벨 프롬프트는 이 복제값을 읽는다.
+	 */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Game State|Meeting")
+	bool bMeetingBellReady = false;
+
+	/** 회의 남은 시간 변경 시 브로드캐스트 (1초마다). HUD 회의 타이머 위젯에서 바인딩. */
+	UPROPERTY(BlueprintAssignable, Category = "Game State|Events")
+	FOnMeetingTimeChanged OnMeetingTimeChanged;
+
+	UFUNCTION()
+	void OnRep_MeetingRemainingTime();
 
 	/**
 	 * 페이즈 변경 시 서버와 클라이언트 모두에서 브로드캐스트.
@@ -202,7 +222,8 @@ protected:
 	 * 압력/연료는 매 틱 갱신이라 OnRep 기반 트리거는 스팸이 되기 때문.
 	 */
 	void SoundMonitorTick();
-	void PlayPhaseSound(EGamePhase NewPhase);
+	// OldPhase 가 필요한 이유: 회의 종료(Meeting→Playing)에 출발 경적이 다시 울리면 안 된다.
+	void PlayPhaseSound(EGamePhase NewPhase, EGamePhase OldPhase);
 
 	/** 현재 압력에 따른 비프 간격. 폭발 임계값에 가까울수록 짧아진다. */
 	float GetPressureWarningInterval() const;

@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Player/Ability/GA_StopFakeDeath.h"
 #include "Player/BaseCharacter.h"
@@ -9,6 +9,8 @@ UGA_StopFakeDeath::UGA_StopFakeDeath()
 	InstancingPolicy  = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
 	ActivationRequiredTags.AddTag(Character::Special::Outlaw.GetTag());
+	// 긴급 회의 중 사용 불가
+	ActivationBlockedTags.AddTag(State::Meeting.GetTag());
 }
 
 void UGA_StopFakeDeath::ActivateAbility(
