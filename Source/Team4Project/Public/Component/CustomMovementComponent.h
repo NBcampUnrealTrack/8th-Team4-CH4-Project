@@ -136,4 +136,22 @@ public:
 	bool IsClimbing() const;
 	FORCEINLINE FVector GetClimbableSurfaceNormal() const { return CurrentClimbableSurfaceNormal; }
 	FVector GetUnrotatedClimbVelocity() const;
+
+#pragma region Network
+	// 멀티플레이어 통신용 RPC 함수
+
+	// 1. 상태 동기화 (클라이언트 -> 서버)
+	UFUNCTION(Server, Reliable)
+	void Server_StartClimbing();
+
+	UFUNCTION(Server, Reliable)
+	void Server_StopClimbing();
+
+	// 2. 애니메이션 동기화 (클라이언트 -> 서버 -> 모든 사람)
+	UFUNCTION(Server, Reliable)
+	void Server_PlayClimbMontage(UAnimMontage* MontageToPlay);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayClimbMontage(UAnimMontage* MontageToPlay);
+#pragma endregion
 };
