@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
@@ -7,8 +7,10 @@
 class UGODMainHUDWidget;
 class UGearQTEWidget;
 class UPressureMinigameWidget;
+class UQuestMinigameWidget;
 class AGearSlot;
 class APressureValve;
+class AQuestStation;
 
 UCLASS()
 class TEAM4PROJECT_API AGODHUD : public AHUD
@@ -57,4 +59,11 @@ public:
 
 	void ShowPressureMinigame(APressureValve* Valve);
 	void HidePressureMinigame(bool bSuccess);
+
+	// 퀘스트 팝업. 위젯 클래스는 HUD 가 아니라 스테이션의 DT 행에서 온다
+	UPROPERTY(BlueprintReadOnly, Category = "HUD|Quest")
+	TObjectPtr<UQuestMinigameWidget> QuestMinigameWidget;
+
+	void ShowQuestMinigame(AQuestStation* Station);
+	void HideQuestMinigame(bool bSuccess);
 };

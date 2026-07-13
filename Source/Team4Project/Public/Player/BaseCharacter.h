@@ -207,6 +207,38 @@ public:
 	int32 GetSkinIndex() const { return SkinIndex; }
 
 	// ============================================================
+	// 퀘스트
+	// ============================================================
+
+	// 서버에서 스테이션이 대입한다.
+	void SetActiveQuestStation(class AQuestStation* InStation);
+
+	UFUNCTION(BlueprintPure, Category = "Quest")
+	class AQuestStation* GetActiveQuestStation() const { return ActiveQuestStation.Get(); }
+
+	UFUNCTION(Server, Reliable)
+	void Server_CompleteQuest();
+
+	UFUNCTION(Server, Reliable)
+	void Server_CancelQuest();
+
+	UFUNCTION(Client, Reliable)
+	void Client_StartQuestMinigame(class AQuestStation* Station);
+
+	UFUNCTION(Client, Reliable)
+	void Client_EndQuestMinigame(bool bSuccess);
+
+	// 퀘스트 작업 중 자세
+	UPROPERTY(ReplicatedUsing = OnRep_IsWorkingOnQuest, BlueprintReadOnly, Category = "Quest")
+	bool bIsWorkingOnQuest = false;
+
+	UFUNCTION()
+	void OnRep_IsWorkingOnQuest();
+
+	// 퀘스트 팝업이 열려 있는 동안 이동/시점 입력을 막는다 (로컬).
+	bool IsQuestUIOpen() const { return bQuestUIOpen; }
+
+	// ============================================================
 	// 밀치기 (총 미장착 상태의 좌클릭 — UGA_Push)
 	// ============================================================
 
@@ -461,6 +493,14 @@ protected:
 	TArray<FActiveGameplayEffectHandle> AppliedEffectHandles;
 
 	bool bGASInitialized = false;
+
+	// ── 퀘스트 ──
+	TWeakObjectPtr<class AQuestStation> ActiveQuestStation;
+
+	// 팝업이 열려 있는 동안만 true (로컬 전용). 마우스 커서 + 입력 잠금 복원에 쓴다.
+	bool bQuestUIOpen = false;
+
+	void SetQuestUIOpen(bool bOpen);
 
 	// ── 밀치기 ──
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Push")

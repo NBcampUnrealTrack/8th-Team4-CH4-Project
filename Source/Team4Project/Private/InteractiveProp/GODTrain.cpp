@@ -191,6 +191,13 @@ void AGODTrain::Tick(float DeltaTime)
 			// (연료↑ → 가속, 연료 0이어도 MinSpeed 유지)
 			// 고압 경고 중이면 그 위에 배수 페널티를 곱한다.
 			float TargetSpeed = ComputeTargetSpeed();
+
+			// 퀘스트 진행 배율(1.0~2.0). 연료 단계 속도 위에 곱해진다.
+			if (const AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+			{
+				TargetSpeed *= GS->QuestSpeedMultiplier;
+			}
+
 			if (bHighPressure)
 			{
 				TargetSpeed *= HighPressureSpeedMultiplier;

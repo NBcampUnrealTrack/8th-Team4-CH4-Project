@@ -8,6 +8,7 @@
 
 class ABaseCharacter;
 class AGODPlayerState;
+class AQuestStation;
 
 UCLASS()
 class TEAM4PROJECT_API AGODGameMode : public AGameModeBase
@@ -39,6 +40,20 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Game Logic")
 	void HandlePlayerDeath(class AGODPlayerState* KillerPS, class AGODPlayerState* VictimPS);
+
+	// ============================================================
+	// 퀘스트
+	// ============================================================
+
+	/** 완료 보고 처리. 배정된 스테이션일 때만 진행도 반영 + 특수직 탄약 보상. */
+	void HandleQuestCompleted(AGODPlayerState* PS, AQuestStation* Station);
+
+	/** 시민 완료 인원 / 유효 시민 수로 GameState 의 속도 배율을 다시 계산한다. */
+	void RecalculateQuestSpeedMultiplier();
+
+	/** 플레이어당 배정할 퀘스트 개수. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Quest")
+	int32 NumQuestsPerPlayer = 3;
 
 	/** 탈선 유발 — GODTrain 정지 후 MafiaWon 처리 */
 	UFUNCTION(BlueprintCallable, Category = "Game Logic")
@@ -103,6 +118,10 @@ private:
 	void UpdateCountdown();
 	void UpdateGameTimer();
 	void AssignRoles();
+
+	/** 레벨의 QuestStation 을 모아 플레이어마다 겹치지 않게 랜덤 배정한다. */
+	void AssignQuests();
+
 	void CheckWinConditions();
 	void EndGame(EGamePhase WinningPhase);
 

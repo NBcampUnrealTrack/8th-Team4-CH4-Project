@@ -2,7 +2,12 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
+#include "Quest/QuestTypes.h"
 #include "GODPlayerState.generated.h"
+
+class AQuestStation;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnAssignedQuestsChanged);
 
 // 최대 글자수
 static constexpr int32 MaxChatLength = 100;
@@ -72,5 +77,31 @@ public:
 	
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SendChat(const FString& Message);
-	
+
+	// ============================================================
+	// 퀘스트
+	// ============================================================
+
+	// 이 플레이어에게 배정된 퀘스트 (스테이션 인스턴스 단위).
+	UPROPERTY(ReplicatedUsing = OnRep_AssignedQuests, BlueprintReadOnly, Category = "Quest")
+	TArray<FAssignedQuest> AssignedQuests;
+
+	UFUNCTION()
+	void OnRep_AssignedQuests();
+
+	// 배정 목록이 바뀔 때(초기 배정 / 완료) 발화. 좌상단 목록 위젯이 바인딩한다.
+	UPROPERTY(BlueprintAssignable, Category = "Quest")
+	FOnAssignedQuestsChanged OnAssignedQuestsChanged;
+
+	// 서버 전용. 해당 스테이션이 배정돼 있고 아직 미완료면 완료로 표시하고 true 를 반환한다.
+	bool TryMarkQuestCompleted(AQuestStation* Station);
+
+	UFUNCTION(BlueprintPure, Category = "Quest")
+	bool AreAllQuestsCompleted() const;
+
+	UFUNCTION(BlueprintPure, Category = "Quest")
+	int32 GetCompletedQuestCount() const;
+
+	// 속도 배율에 기여하는가 (시민만). 보안관/마피아/무법자는 탄약으로 보상받는다.
+	bool ContributesToQuestSpeed() const { return MainRole == EMainRole::Citizen; }
 };

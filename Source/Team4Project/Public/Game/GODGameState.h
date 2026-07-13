@@ -24,6 +24,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDistanceChanged, float, NewDistan
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPressureLevelChanged, float, NewPressure);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrainFuelLevelChanged, float, NewFuel);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGunsUnlocked);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnQuestProgressChanged, float, SpeedMultiplier, int32, CompletedCitizens, int32, TotalCitizens);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAnnouncement, const FText&, Message, EAnnouncementType, Type);
 
 class UDataTable;
@@ -59,6 +60,28 @@ public:
 	/** 게임 시작 3분 후 true 로 전환 (발포 잠금 해제) */
 	UPROPERTY(ReplicatedUsing = OnRep_bGunsUnlocked, BlueprintReadOnly, Category = "Game State")
 	bool bGunsUnlocked;
+
+	/**
+	 * 퀘스트 진행에 따른 열차 속도 배율 (1.0 ~ 2.0).
+	 * = 1.0 + (퀘스트를 전부 끝낸 시민 수) / (유효 시민 수).
+	 * 유효 시민 = 살아있는 시민 + 이미 완료하고 죽은 시민. 미완료 상태로 죽으면 분모에서 빠지므로
+	 * 이 값은 절대 감소하지 않는다 (마피아는 킬로 속도를 늦출 수 없다).
+	 */
+	UPROPERTY(ReplicatedUsing = OnRep_QuestProgress, BlueprintReadOnly, Category = "Quest")
+	float QuestSpeedMultiplier = 1.f;
+
+	/** 전체 진행 바 표시용. 마피아에게도 보인다(압박 장치). */
+	UPROPERTY(ReplicatedUsing = OnRep_QuestProgress, BlueprintReadOnly, Category = "Quest")
+	int32 QuestCompletedCitizens = 0;
+
+	UPROPERTY(ReplicatedUsing = OnRep_QuestProgress, BlueprintReadOnly, Category = "Quest")
+	int32 QuestTotalCitizens = 0;
+
+	UPROPERTY(BlueprintAssignable, Category = "Quest")
+	FOnQuestProgressChanged OnQuestProgressChanged;
+
+	UFUNCTION()
+	void OnRep_QuestProgress();
 
 	/**
 	 * 인원 충족 후 출발까지 남은 카운트다운 (초).

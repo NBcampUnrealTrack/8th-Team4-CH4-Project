@@ -33,6 +33,7 @@ void UCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	GetIsClimbing();
 	GetClimbVelocity();
 	GetIsDead();
+	GetIsWorkingOnQuest();
 }
 
 void UCharacterAnimInstance::GetGroundSpeed()
@@ -70,4 +71,9 @@ void UCharacterAnimInstance::GetClimbVelocity()
 void UCharacterAnimInstance::GetIsDead()
 {
 	bIsDead = ClimbingSystemCharacter->IsDead();
+}
+
+void UCharacterAnimInstance::GetIsWorkingOnQuest()
+{
+	bIsWorkingOnQuest = ClimbingSystemCharacter->bIsWorkingOnQuest;
 }
