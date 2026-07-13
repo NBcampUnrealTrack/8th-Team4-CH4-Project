@@ -8,6 +8,7 @@
 class AQuestStation;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnAssignedQuestsChanged);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTurnedToMafia);
 
 // 최대 글자수
 static constexpr int32 MaxChatLength = 100;
@@ -66,11 +67,6 @@ public:
 	UFUNCTION()
 	virtual void OnRep_bIsAlive();
 
-	// [사용 안 함] 탄약은 UBaseAttributeSet::CurrentAmmo 어트리뷰트로 단일화됨.
-	// (발사 소모 = GA_FireGun, 리필 = GODGameMode::HandlePlayerDeath, 도둑질 = StealAmmo)
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "State")
-	int32 AmmoCount;
-
 	// 오염도 (0.0 ~ 1.0)
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "State")
 	float SootLevel;
@@ -102,6 +98,25 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Quest")
 	int32 GetCompletedQuestCount() const;
 
-	// 속도 배율에 기여하는가 (시민만). 보안관/마피아/무법자는 탄약으로 보상받는다.
+	// 속도 배율에 기여하는가 (시민만). 특수직의 퀘스트는 위장용이라 기여/보상 없음.
 	bool ContributesToQuestSpeed() const { return MainRole == EMainRole::Citizen; }
+
+	// ============================================================
+	// 무법자 (이중스파이)
+	// ============================================================
+
+	/**
+	 * 5분 전향 여부. 게임 시작 후 OutlawTurnDelaySeconds 에 GameMode 가 true 로 전환.
+	 * 승리 사이드 판정에 사용: 전향 전 = 시민 사이드, 전향 후 = 마피아 사이드.
+	 * 역할 노출 방지를 위해 소유자에게만 복제.
+	 */
+	UPROPERTY(ReplicatedUsing = OnRep_bTurnedToMafia, BlueprintReadOnly, Category = "Outlaw")
+	bool bTurnedToMafia = false;
+
+	UFUNCTION()
+	void OnRep_bTurnedToMafia();
+
+	// 전향 시 발화 (서버/소유 클라). HUD 전향 연출("마피아에 합류")이 바인딩한다.
+	UPROPERTY(BlueprintAssignable, Category = "Outlaw")
+	FOnTurnedToMafia OnTurnedToMafia;
 };

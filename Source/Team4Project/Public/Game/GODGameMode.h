@@ -100,6 +100,14 @@ public:
 	int32 MeetingCooldownAfterEnd = 60;
 
 	// ============================================================
+	// 무법자 (이중스파이) 전향
+	// ============================================================
+
+	/** 게임 시작 후 무법자가 마피아 사이드로 전향하기까지의 시간 (초). 회의 중에는 시계가 멈춘다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Outlaw")
+	int32 OutlawTurnDelaySeconds = 300;
+
+	// ============================================================
 	// 설정
 	// ============================================================
 	/** 게임 시작에 필요한 플레이어 수 (기본 8인, 세션 정원과 동일하게 유지) */
@@ -113,10 +121,6 @@ public:
 	/** 게임 종료 UI 표시 후 메인 메뉴 복귀까지 대기 시간 (초) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic")
 	float EndGameDelay = 5.f;
-
-	/** 게임 시작 후 발포 잠금이 해제되기까지의 시간 (초) */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic")
-	int32 GunUnlockDelay = 60;
 
 	/** 남은 시간이 이 값에 도달하면 "시간 임박" 방송 (초) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic")
@@ -165,6 +169,9 @@ private:
 	void UpdateMeetingTimer();
 	void SetMeetingTagOnAllCharacters(bool bEnable);
 	class AMeetingRoom* FindMeetingRoom() const;
+
+	/** 5분 도달 시 무법자를 마피아 사이드로 전향 (위장 시민 스킬 회수 + 무법자 태그 적용). */
+	void TurnOutlawToMafia();
 
 	void UpdateCountdown();
 	void UpdateGameTimer();

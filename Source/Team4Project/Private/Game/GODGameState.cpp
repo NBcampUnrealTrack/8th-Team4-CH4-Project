@@ -12,7 +12,6 @@ AGODGameState::AGODGameState()
 	CurrentPhase = EGamePhase::WaitingForPlayers;
 	RemainingTime = 600;
 	DistanceToDestination = 120000.0f; // 열차 BeginPlay에서 GODTrain::TotalDistance 로 덮어씀. 동일값 유지.
-	bGunsUnlocked = false;
 	LobbyCountdown = 0;
 }
 
@@ -119,11 +118,13 @@ bool AGODGameState::IsLocalPlayerWinner(EGamePhase WinPhase) const
 	switch (WinPhase)
 	{
 	case EGamePhase::CitizensWon:
-		return PS->MainRole == EMainRole::Citizen || PS->MainRole == EMainRole::Sheriff;
+		// 무법자는 전향 전(초반 5분)까지만 시민 사이드.
+		return PS->MainRole == EMainRole::Citizen || PS->MainRole == EMainRole::Sheriff
+			|| (PS->MainRole == EMainRole::Outlaw && !PS->bTurnedToMafia);
 	case EGamePhase::MafiaWon:
-		return PS->MainRole == EMainRole::Mafia;
-	case EGamePhase::OutlawWon:
-		return PS->MainRole == EMainRole::Outlaw;
+		// 전향한 무법자는 마피아 사이드로 함께 승리.
+		return PS->MainRole == EMainRole::Mafia
+			|| (PS->MainRole == EMainRole::Outlaw && PS->bTurnedToMafia);
 	default:
 		return false;
 	}
@@ -138,7 +139,6 @@ void AGODGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AGODGameState, DistanceToDestination);
 	DOREPLIFETIME(AGODGameState, PressureLevel);
 	DOREPLIFETIME(AGODGameState, FuelLevel);
-	DOREPLIFETIME(AGODGameState, bGunsUnlocked);
 	DOREPLIFETIME(AGODGameState, QuestSpeedMultiplier);
 	DOREPLIFETIME(AGODGameState, QuestCompletedCitizens);
 	DOREPLIFETIME(AGODGameState, QuestTotalCitizens);
@@ -181,14 +181,6 @@ void AGODGameState::OnRep_PressureLevel()
 void AGODGameState::OnRep_FuelLevel()
 {
 	OnFuelLevelChanged.Broadcast(FuelLevel);
-}
-
-void AGODGameState::OnRep_bGunsUnlocked()
-{
-	if (bGunsUnlocked)
-	{
-		OnGunsUnlocked.Broadcast();
-	}
 }
 
 void AGODGameState::AddChatMessage(const FChatMessage& Msg)

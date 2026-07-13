@@ -41,7 +41,6 @@ namespace State
 {
 	namespace Weapon
 	{
-		UE_DEFINE_GAMEPLAY_TAG(EquipGun,  "State.Equip.Gun")
 		UE_DEFINE_GAMEPLAY_TAG(EquipCoal, "State.Equip.Coal")
 		UE_DEFINE_GAMEPLAY_TAG(EquipGear, "State.Equip.Gear")
 	}
@@ -56,38 +55,7 @@ namespace State
 
 namespace Cooldown
 {
-	UE_DEFINE_GAMEPLAY_TAG(Attack, "Cooldown.Attack")
 	UE_DEFINE_GAMEPLAY_TAG(Use, "Cooldown.Invisible")
 	UE_DEFINE_GAMEPLAY_TAG(Detect, "Cooldown.Detect")
 	UE_DEFINE_GAMEPLAY_TAG(Push, "Cooldown.Push")
-}
-
-namespace Event
-{
-	UE_DEFINE_GAMEPLAY_TAG(Kill, "Event.Kill")
-}
-
-namespace Items
-{
-	namespace Equipment
-	{
-		namespace Weapons
-		{
-			UE_DEFINE_GAMEPLAY_TAG(Gun,   "Items.Equipment.Weapons.Gun")
-			UE_DEFINE_GAMEPLAY_TAG(Knife, "Items.Equipment.Weapons.Knife")
-		}
-	}
-
-	namespace Consumables
-	{
-		namespace Potions
-		{
-
-		}
-	}
-
-	namespace Craftables
-	{
-
-	}
 }

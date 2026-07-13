@@ -19,11 +19,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FGameplayTag CharacterTag;
 
-	// 직업별 기본 속성 세팅 GE (MaxAmmo 등 직업마다 다른 값). 기본 장탄수 1.
+	// 직업별 기본 속성 세팅 GE (Speed 등 직업마다 다른 값).
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TSubclassOf<class UGameplayEffect> DefaultAttributeGE;
 
-	// 모든 직업 공통 부여 어빌리티 (예: 총기 발사)
+	// 모든 직업 공통 부여 어빌리티 (예: 밀치기)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TArray<TSubclassOf<class UGameplayAbility>> CommonAbilities;
 

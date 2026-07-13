@@ -43,7 +43,6 @@ namespace State
 {
     namespace Weapon
     {
-        UE_DECLARE_GAMEPLAY_TAG_EXTERN(EquipGun)
         UE_DECLARE_GAMEPLAY_TAG_EXTERN(EquipCoal)
         UE_DECLARE_GAMEPLAY_TAG_EXTERN(EquipGear)
     }
@@ -61,40 +60,7 @@ namespace State
 
 namespace Cooldown
 {
-    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Attack)
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Invisible)
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Detect)
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Push)
-}
-
-namespace Event
-{
-    // 처치 이벤트. 사망 시 킬러 ASC 로 전송 → 마피아 시체 은폐 등 패시브 어빌리티 트리거.
-    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Kill)
-}
-
-namespace Items
-{
-    namespace Equipment
-    {
-        namespace Weapons
-        {
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(Gun)
-            UE_DECLARE_GAMEPLAY_TAG_EXTERN(Knife)
- 
-        }
-    }
-
-    namespace Consumables
-    {
-        namespace Potions
-        {
-            
-        }
-    }
-
-    namespace Craftables
-    {
-
-    }
 }

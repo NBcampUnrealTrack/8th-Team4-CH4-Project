@@ -7,13 +7,13 @@
 #include "Player/BasePlayerController.h"
 #include "Player/Component/BaseAbilitySystemComponent.h"
 #include "Player/Component/BaseAttributeSet.h"
-#include "Player/Weapon/BaseWeapon.h"
 #include "Component/InteractComponent.h"
 #include "InteractiveProp/ItemBase.h"
 #include "InteractiveProp/DoorBase.h"
 #include "InteractiveProp/PressureValve.h"
 #include "InteractiveProp/GearSlot.h"
 #include "Quest/QuestStation.h"
+#include "Meeting/MeetingRoom.h"
 #include "Game/BaseGameplayTags.h"
 #include "GameplayEffect.h"
 #include "GameplayEffectTypes.h"
@@ -81,7 +81,7 @@ ABaseCharacter::ABaseCharacter(const FObjectInitializer& ObjectInitializer)
 	LanternLight->SetRelativeLocation(FVector(40.f, 0.f, 50.f));
 	LanternLight->SetRelativeRotation(FRotator::ZeroRotator);
 	LanternLight->SetVisibility(false);
-	LanternLight->Intensity     = 3000.f;
+	LanternLight->Intensity = 3000.f;
 	LanternLight->OuterConeAngle = 35.f;
 
 	GetCapsuleComponent()->InitCapsuleSize(30.f, 48.f);
@@ -92,8 +92,8 @@ ABaseCharacter::ABaseCharacter(const FObjectInitializer& ObjectInitializer)
 
 	CustomMovementComponent = Cast<UCustomMovementComponent>(GetCharacterMovement());
 
-	GetCharacterMovement()->bOrientRotationToMovement = true; 
-	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f); 
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
 
 	GetCharacterMovement()->JumpZVelocity = 700.f;
 	GetCharacterMovement()->AirControl = 0.35f;
@@ -105,13 +105,13 @@ ABaseCharacter::ABaseCharacter(const FObjectInitializer& ObjectInitializer)
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
 	CameraBoom->TargetArmLength = 400.0f;
-	CameraBoom->bUsePawnControlRotation = true; 
+	CameraBoom->bUsePawnControlRotation = true;
 
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
-	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName); 
-	FollowCamera->bUsePawnControlRotation = false; 
-	
-	
+	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+	FollowCamera->bUsePawnControlRotation = false;
+
+
 	// 움직이는 기차 위에서 점프해도 발판(기차)에 계속 붙어 함께 이동 → 제자리 착지.
 	// 공중에서도 기차 트랜스폼 델타로 수평 이동+회전을 따라가므로 커브 점프도 안전.
 	// (StayBasedInAirHeight=1000 아래에서 유효. 그 위로 높이 뛰면 베이스를 놓고
@@ -137,12 +137,8 @@ void ABaseCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 아웃로 가짜 시체 복귀에 필요한 초기 메시 트랜스폼 저장.
 	if (GetMesh())
 	{
-		DefaultMeshRelativeLocation = GetMesh()->GetRelativeLocation();
-		DefaultMeshRelativeRotation = GetMesh()->GetRelativeRotation();
-
 		// 툰 포스트프로세스(PP_ToonShader)용 캐릭터 마스크.
 		// CustomStencil=1 인 픽셀만 셀 셰이딩/외곽선을 받고, 배경은 색보정만 받는다.
 		GetMesh()->SetRenderCustomDepth(true);
@@ -239,12 +235,12 @@ void ABaseCharacter::Server_SetSkin_Implementation(int32 InSkinIndex)
 	if (!SkinOptions.IsValidIndex(InSkinIndex)) return;
 
 	SkinIndex = InSkinIndex;
-	
+
 	// GameMode 풀에서 색상 변형 배정 (리스폰 시 같은 플레이어는 같은 색 유지
 	if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
 	{
 		SkinVariantIndex = GM->AssignSkinVariant(
-				GetPlayerState(), InSkinIndex, SkinOptions[InSkinIndex].VariantTextures.Num());
+			GetPlayerState(), InSkinIndex, SkinOptions[InSkinIndex].VariantTextures.Num());
 	}
 	ApplySkin(); // 리슨 서버(호스트) 화면 반영 — 클라는 OnRep 에서 반영
 }
@@ -275,7 +271,7 @@ void ABaseCharacter::ApplySkin()
 	{
 		MeshComp->SetAnimInstanceClass(Skin.AnimClass);
 	}
-	
+
 	if (Skin.VariantTextures.IsValidIndex(SkinVariantIndex) && Skin.VariantTextures[SkinVariantIndex])
 	{
 		if (UMaterialInstanceDynamic* MID = MeshComp->CreateDynamicMaterialInstance(0))
@@ -283,7 +279,7 @@ void ABaseCharacter::ApplySkin()
 			MID->SetTextureParameterValue(TEXT("BaseColorTexture"), Skin.VariantTextures[SkinVariantIndex]);
 		}
 	}
-	
+
 }
 
 void ABaseCharacter::InitializeAbilityActorInfo()
@@ -534,20 +530,18 @@ void ABaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ABaseCharacter, bIsDead);
 	DOREPLIFETIME(ABaseCharacter, bIsWorkingOnQuest);
-	DOREPLIFETIME(ABaseCharacter, CurrentWeapon);
 	DOREPLIFETIME(ABaseCharacter, CurrentHeldItem);
 	DOREPLIFETIME(ABaseCharacter, bMeshHidden);
 	DOREPLIFETIME(ABaseCharacter, SkinIndex);
 	DOREPLIFETIME(ABaseCharacter, SkinVariantIndex);
 	// 직업 태그는 소유 클라에만 복제(다른 플레이어에게 역할 노출 방지).
 	DOREPLIFETIME_CONDITION(ABaseCharacter, CharacterTag, COND_OwnerOnly);
-	
+
 	DOREPLIFETIME(ABaseCharacter, CurrentCoal);
 
 	// 역할별 상태
 	DOREPLIFETIME(ABaseCharacter, bIsInVent);
 	DOREPLIFETIME(ABaseCharacter, bIsInvisible);
-	DOREPLIFETIME(ABaseCharacter, bIsFakeDead);
 	// 랜턴은 본인 화면에만 보이므로 소유 클라에만 복제 (다른 클라가 값을 읽어 역할 유추하는 것도 차단).
 	DOREPLIFETIME_CONDITION(ABaseCharacter, bLanternOn, COND_OwnerOnly);
 }
@@ -575,20 +569,6 @@ void ABaseCharacter::SetInvisibleForDuration(float Duration)
 	}
 }
 
-void ABaseCharacter::HideCorpseForDuration(float Duration)
-{
-	if (!HasAuthority()) return;
-
-	bMeshHidden = true;
-	ApplyMeshVisibility();
-
-	GetWorldTimerManager().ClearTimer(CorpseHideTimerHandle);
-	if (Duration > 0.f)
-	{
-		GetWorldTimerManager().SetTimer(CorpseHideTimerHandle, this, &ABaseCharacter::RevealMesh, Duration, false);
-	}
-}
-
 void ABaseCharacter::RevealMesh()
 {
 	if (!HasAuthority()) return;
@@ -611,10 +591,6 @@ void ABaseCharacter::ApplyMeshVisibility()
 		{
 			GetMesh()->SetVisibility(false);
 		}
-		if (CurrentWeapon)
-		{
-			CurrentWeapon->SetActorHiddenInGame(true);
-		}
 		if (CurrentHeldItem)
 		{
 			CurrentHeldItem->SetActorHiddenInGame(true);
@@ -633,10 +609,6 @@ void ABaseCharacter::ApplyMeshVisibility()
 	if (USkeletalMeshComponent* SkelMesh = GetMesh())
 	{
 		SkelMesh->SetVisibility(!bMeshHidden, true);
-	}
-	if (CurrentWeapon)
-	{
-		CurrentWeapon->SetActorHiddenInGame(bMeshHidden);
 	}
 	if (CurrentHeldItem)
 	{
@@ -712,29 +684,15 @@ void ABaseCharacter::Landed(const FHitResult& Hit)
 }
 
 // ============================================================
-// 장착 슬롯 (총/물리 아이템 공용, 한 번에 하나만)
+// 장착 슬롯 (물리 아이템, 한 번에 하나만)
 // ============================================================
 
 void ABaseCharacter::ClearEquipSlot()
 {
 	if (!HasAuthority()) return;
 
-	// 1) 총이 장착돼 있으면 해제 (무기 파괴 + 태그 제거)
-	const FGameplayTag GunTag = State::Weapon::EquipGun.GetTag();
-	if (AbilitySystemComponent && AbilitySystemComponent->HasMatchingGameplayTag(GunTag))
-	{
-		if (CurrentWeapon)
-		{
-			CurrentWeapon->Destroy();
-		}
-		CurrentWeapon = nullptr;
-
-		AbilitySystemComponent->RemoveLooseGameplayTag(GunTag);
-		AbilitySystemComponent->RemoveReplicatedLooseGameplayTag(GunTag);
-	}
-
-	// 2) 물리 아이템을 들고 있으면 떨군다.
-	//    Server_Drop 이 자체적으로 장착 태그/CurrentHeldItem 까지 정리한다.
+	// 물리 아이템을 들고 있으면 떨군다.
+	// Server_Drop 이 자체적으로 장착 태그/CurrentHeldItem 까지 정리한다.
 	if (IsValid(CurrentHeldItem))
 	{
 		CurrentHeldItem->Server_Drop();
@@ -1030,19 +988,6 @@ void ABaseCharacter::Die(AActor* Killer)
 
 	OnCharacterDied.Broadcast(this, Killer);
 
-	// 킬러에게 처치 이벤트 전송 → 마피아 시체 은폐 등 패시브 어빌리티 트리거(피해자 = 이 캐릭터).
-	if (ABaseCharacter* KillerChar = Cast<ABaseCharacter>(Killer))
-	{
-		if (UAbilitySystemComponent* KillerASC = KillerChar->GetAbilitySystemComponent())
-		{
-			FGameplayEventData Payload;
-			Payload.EventTag = Event::Kill.GetTag();
-			Payload.Instigator = KillerChar;
-			Payload.Target = this;
-			KillerASC->HandleGameplayEvent(Event::Kill.GetTag(), &Payload);
-		}
-	}
-
 	Multicast_HandleDeath();
 
 	// 어떤 경로로 죽든(총격 등 Die 직접 호출 포함) 즉시 관전 모드로 전환한다.
@@ -1137,12 +1082,12 @@ void ABaseCharacter::AttachRagdollToBase(UPrimitiveComponent* Base, bool bInAir)
 		TWeakObjectPtr<ABaseCharacter> WeakThis(this);
 		TWeakObjectPtr<UPrimitiveComponent> WeakBase(Base);
 		FTimerDelegate Del = FTimerDelegate::CreateLambda([WeakThis, WeakBase]()
-		{
-			if (WeakThis.IsValid() && WeakBase.IsValid())
 			{
-				WeakThis->AttachCorpseToBase(WeakBase.Get());
-			}
-		});
+				if (WeakThis.IsValid() && WeakBase.IsValid())
+				{
+					WeakThis->AttachCorpseToBase(WeakBase.Get());
+				}
+			});
 		GetWorldTimerManager().SetTimer(CorpseAttachTimer, Del, CorpseSettleTime, /*bLoop=*/false);
 	}
 }
@@ -1173,26 +1118,26 @@ void ABaseCharacter::WaitForCorpseToLand(UPrimitiveComponent* Base)
 	const float StartTime = GetWorld()->GetTimeSeconds();
 
 	FTimerDelegate Del = FTimerDelegate::CreateLambda([WeakThis, WeakBase, StartTime]()
-	{
-		if (!WeakThis.IsValid()) return;
-		ABaseCharacter* Self = WeakThis.Get();
-
-		const float Elapsed = Self->GetWorld()->GetTimeSeconds() - StartTime;
-
-		// 래그돌 속도가 거의 0이면 착지로 판정. (첫 0.3초는 낙하 시작 직후라 제외)
-		// 제한 시간을 넘기면 그 자리에서라도 부착해 열차 콜리전에 튕기는 것을 막는다.
-		USkeletalMeshComponent* M = Self->GetMesh();
-		const bool bSettled = (Elapsed > 0.3f) && M && M->GetComponentVelocity().Size() < 50.f;
-
-		if (bSettled || Elapsed > Self->CorpseFallAttachTimeout)
 		{
-			Self->GetWorldTimerManager().ClearTimer(Self->CorpseAttachTimer);
-			if (WeakBase.IsValid())
+			if (!WeakThis.IsValid()) return;
+			ABaseCharacter* Self = WeakThis.Get();
+
+			const float Elapsed = Self->GetWorld()->GetTimeSeconds() - StartTime;
+
+			// 래그돌 속도가 거의 0이면 착지로 판정. (첫 0.3초는 낙하 시작 직후라 제외)
+			// 제한 시간을 넘기면 그 자리에서라도 부착해 열차 콜리전에 튕기는 것을 막는다.
+			USkeletalMeshComponent* M = Self->GetMesh();
+			const bool bSettled = (Elapsed > 0.3f) && M && M->GetComponentVelocity().Size() < 50.f;
+
+			if (bSettled || Elapsed > Self->CorpseFallAttachTimeout)
 			{
-				Self->AttachCorpseToBase(WeakBase.Get());
+				Self->GetWorldTimerManager().ClearTimer(Self->CorpseAttachTimer);
+				if (WeakBase.IsValid())
+				{
+					Self->AttachCorpseToBase(WeakBase.Get());
+				}
 			}
-		}
-	});
+		});
 
 	GetWorldTimerManager().SetTimer(CorpseAttachTimer, Del, 0.15f, /*bLoop=*/true);
 }
@@ -1218,23 +1163,19 @@ void ABaseCharacter::OnRep_IsDead()
 
 void ABaseCharacter::Interact_Implementation(ACharacter* Interactor)
 {
-	if (!HasAuthority() || !Interactor) return;
+	// 죽은 캐릭터는 상호작용 대상이 아니다 (탄약 빼앗기는 총 시스템과 함께 제거됨).
+	if (!HasAuthority() || !Interactor || bIsDead) return;
 
 	FGameplayEventData EventData;
 	EventData.OptionalObject = this;
 
-	const FGameplayTag TriggerTag = bIsDead
-		? FGameplayTag::RequestGameplayTag(TEXT("Ability.Trigger.StealAmmo"))
-		: FGameplayTag::RequestGameplayTag(TEXT("Ability.Trigger.SearchTarget"));
-
-	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(Interactor, TriggerTag, EventData);
+	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
+		Interactor, FGameplayTag::RequestGameplayTag(TEXT("Ability.Trigger.SearchTarget")), EventData);
 }
 
 FText ABaseCharacter::GetInteractPrompt_Implementation() const
 {
-	return bIsDead
-		? FText::FromString(TEXT("탄약 빼앗기"))
-		: FText::FromString(TEXT("수색"));
+	return bIsDead ? FText::GetEmpty() : FText::FromString(TEXT("수색"));
 }
 
 void ABaseCharacter::SetCoalEquipped(bool bEquip)
@@ -1283,13 +1224,7 @@ void ABaseCharacter::ActivateRoleTimers()
 {
 	if (!CharacterTag.IsValid()) return;
 
-	if (CharacterTag == Character::Special::Sheriff.GetTag())
-	{
-		GetWorldTimerManager().SetTimer(
-			BodyDetectionTimer, this, &ABaseCharacter::CheckForHiddenBodies,
-			BodyDetectionInterval, /*bLoop=*/true);
-	}
-	else if (CharacterTag == Character::Crew::Watchman.GetTag())
+	if (CharacterTag == Character::Crew::Watchman.GetTag())
 	{
 		GetWorldTimerManager().SetTimer(
 			FootprintRecordTimer, this, &ABaseCharacter::RecordFootprintPositions,
@@ -1299,7 +1234,6 @@ void ABaseCharacter::ActivateRoleTimers()
 
 void ABaseCharacter::DeactivateRoleTimers()
 {
-	GetWorldTimerManager().ClearTimer(BodyDetectionTimer);
 	GetWorldTimerManager().ClearTimer(FootprintRecordTimer);
 }
 
@@ -1368,48 +1302,6 @@ void ABaseCharacter::UseWireCutter(AActor* GearActor)
 		Slot->BreakGear();
 }
 
-void ABaseCharacter::Multicast_HideBody_Implementation(ABaseCharacter* DeadCharacter)
-{
-	if (!IsValid(DeadCharacter)) return;
-	if (DeadCharacter->GetMesh()) DeadCharacter->GetMesh()->SetVisibility(false);
-	if (HasAuthority()) DeadCharacter->Tags.AddUnique(TEXT("Body.Hidden"));
-}
-
-void ABaseCharacter::Multicast_ShowBody_Implementation(ABaseCharacter* DeadCharacter)
-{
-	if (!IsValid(DeadCharacter)) return;
-	if (DeadCharacter->GetMesh()) DeadCharacter->GetMesh()->SetVisibility(true);
-	if (HasAuthority()) DeadCharacter->Tags.Remove(TEXT("Body.Hidden"));
-}
-
-// ============================================================
-// 역할별 능력 — Sheriff
-// ============================================================
-
-void ABaseCharacter::CheckForHiddenBodies()
-{
-	TArray<AActor*> Overlapping;
-	UKismetSystemLibrary::SphereOverlapActors(
-		GetWorld(),
-		GetActorLocation(),
-		BodyDetectionRadius,
-		TArray<TEnumAsByte<EObjectTypeQuery>>{
-			UEngineTypes::ConvertToObjectType(ECC_Pawn),
-			UEngineTypes::ConvertToObjectType(ECC_PhysicsBody)
-		},
-		ABaseCharacter::StaticClass(),
-		TArray<AActor*>{ this },
-		Overlapping
-	);
-
-	for (AActor* Actor : Overlapping)
-	{
-		ABaseCharacter* DeadChar = Cast<ABaseCharacter>(Actor);
-		if (DeadChar && DeadChar->IsDead() && DeadChar->ActorHasTag(TEXT("Body.Hidden")))
-			OnHiddenBodyDetected(DeadChar);
-	}
-}
-
 // ============================================================
 // 낙하 처리 (로비=복귀 / 진행 중=사망)
 // ============================================================
@@ -1437,7 +1329,7 @@ void ABaseCharacter::CheckFallRescueOrDeath()
 	if (!GS) return;
 
 	if (GS->CurrentPhase == EGamePhase::WaitingForPlayers ||
-	    GS->CurrentPhase == EGamePhase::Countdown)
+		GS->CurrentPhase == EGamePhase::Countdown)
 	{
 		// 로비 동안 열차는 스타트 지점에 정차해 있으므로 PlayerStart 높이를 기준으로 낙하를 판정.
 		if (IsValid(CachedPlayerStart) &&
@@ -1472,11 +1364,15 @@ void ABaseCharacter::CheckFallRescueOrDeath()
 
 	if (GetActorLocation().Z < ReferenceZ - FallDeathDepth)
 	{
-		// 승리조건 체크를 타려면 반드시 GameMode 경유 (Die() 직접 호출 금지).
-		// 최근에 밀린 거라면 밀친 사람이 킬러로 기록된다.
-		if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
+		// 사망 시스템 제거(2026-07-13): 낙하는 사망이 아니라 FallRespawnDelay 뒤 열차 복귀.
+		if (!GetWorldTimerManager().IsTimerActive(TrainRescueTimer))
 		{
-			GM->HandlePlayerDeath(GetFallKillCredit(), GetPlayerState<AGODPlayerState>());
+			GetWorldTimerManager().SetTimer(
+				TrainRescueTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
+					{
+						RescueToTrain();
+					}),
+				FallRespawnDelay, /*bLoop=*/false);
 		}
 	}
 }
@@ -1516,6 +1412,42 @@ bool ABaseCharacter::RescueToStart()
 	return true;
 }
 
+bool ABaseCharacter::RescueToTrain()
+{
+	GetWorldTimerManager().ClearTimer(TrainRescueTimer);
+
+	if (!HasAuthority() || bIsDead) return false;
+
+	// 회의실(열차 자식)이 있으면 그 좌석으로 — 확실한 실내 지점이라 안전하다.
+	for (TActorIterator<AMeetingRoom> It(GetWorld()); It; ++It)
+	{
+		(*It)->TeleportToSeat(this, FMath::RandRange(0, 7));
+		return true;
+	}
+
+	// 폴백: 열차 액터 기준 오프셋. (회의실을 배치하면 이 경로는 안 탄다)
+	if (IsValid(CachedTrain))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[Rescue] MeetingRoom 이 없어 열차 기준 오프셋으로 복귀한다. 회의실 배치 권장."));
+
+		if (GetCharacterMovement())
+		{
+			GetCharacterMovement()->StopMovementImmediately();
+		}
+
+		const FVector Loc = CachedTrain->GetActorLocation() + TrainRespawnOffset;
+		if (!TeleportTo(Loc, GetActorRotation()))
+		{
+			SetActorLocation(Loc, false, nullptr, ETeleportType::TeleportPhysics);
+		}
+		return true;
+	}
+
+	// 열차도 없으면(비정상 상황) 스타트 지점으로라도.
+	return RescueToStart();
+}
+
 void ABaseCharacter::FellOutOfWorld(const UDamageType& dmgType)
 {
 	const AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr;
@@ -1524,13 +1456,13 @@ void ABaseCharacter::FellOutOfWorld(const UDamageType& dmgType)
 	{
 		// 로비 페이즈면 파괴하지 않고 열차(스타트 지점)로 복귀.
 		const bool bLobbyPhase = GS->CurrentPhase == EGamePhase::WaitingForPlayers ||
-		                         GS->CurrentPhase == EGamePhase::Countdown;
+			GS->CurrentPhase == EGamePhase::Countdown;
 		if (bLobbyPhase && RescueToStart())
 		{
 			return;
 		}
 
-		// 회의 중에는 사망 대신 회의실로 복귀.
+		// 회의 중에는 회의실로 복귀.
 		if (GS->CurrentPhase == EGamePhase::Meeting)
 		{
 			if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
@@ -1540,14 +1472,10 @@ void ABaseCharacter::FellOutOfWorld(const UDamageType& dmgType)
 			}
 		}
 
-		// 진행 중이면 폰을 그냥 파괴하지 않고 사망 경로를 태운다. (관전 전환 + 승리조건 체크)
-		if (GS->CurrentPhase == EGamePhase::Playing)
+		// 진행 중: 사망 시스템 제거(2026-07-13) — KillZ 까지 떨어졌으면 즉시 열차로 복귀.
+		if (GS->CurrentPhase == EGamePhase::Playing && RescueToTrain())
 		{
-			if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
-			{
-				GM->HandlePlayerDeath(GetFallKillCredit(), GetPlayerState<AGODPlayerState>());
-				return;
-			}
+			return;
 		}
 	}
 
@@ -1562,124 +1490,6 @@ void ABaseCharacter::UnlockDoor(AActor* DoorActor)
 		Door->SetLocked(false);
 }
 
-// ============================================================
-// 역할별 능력 — Outlaw
-// ============================================================
-
-void ABaseCharacter::StartFakeDeath()
-{
-	if (!HasAuthority() || bIsFakeDead || bIsDead) return;
-	bIsFakeDead = true;
-	ApplyFakeDeathPhysics(true);
-}
-
-void ABaseCharacter::StopFakeDeath()
-{
-	if (!HasAuthority() || !bIsFakeDead) return;
-	bIsFakeDead = false;
-	ApplyFakeDeathPhysics(false);
-}
-
-void ABaseCharacter::OnRep_IsFakeDead()
-{
-	ApplyFakeDeathPhysics(bIsFakeDead);
-}
-
-void ABaseCharacter::ApplyFakeDeathPhysics(bool bActivate)
-{
-	if (bActivate)
-	{
-		// 밟고 있던 발판과 공중 여부를 움직임 비활성화 전에 기억한다. (DisableMovement 가 베이스를 지운다)
-		UPrimitiveComponent* FakeDeathBase = nullptr;
-		bool bFakeDiedInAir = false;
-		if (GetCharacterMovement())
-		{
-			FakeDeathBase = GetCharacterMovement()->GetMovementBase();
-			bFakeDiedInAir = GetCharacterMovement()->IsFalling();
-			GetCharacterMovement()->StopMovementImmediately();
-			GetCharacterMovement()->DisableMovement();
-		}
-
-		if (GetCapsuleComponent()) GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		if (GetMesh())
-		{
-			GetMesh()->SetSimulatePhysics(true);
-			GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
-		}
-		if (APlayerController* PC = Cast<APlayerController>(GetController()))
-		{
-			DisableInput(PC);
-			// 가짜 시체 중에도 해제 버튼(HUD)을 클릭할 수 있게 커서를 켠다.
-			// (DisableInput 은 UMG 클릭을 막지 않고, Alt 키 입력만 막는다)
-			if (ABasePlayerController* BPC = Cast<ABasePlayerController>(PC))
-			{
-				BPC->SetHUDCursorMode(true);
-			}
-		}
-
-		// 진짜 사망과 동일하게 열차에 부착한다. 안 붙이면 움직임이 꺼진 액터(캡슐+카메라)가
-		// 월드 좌표에 남고 열차만 달려나가, 카메라가 몸에서 떨어진 것처럼 보인다.
-		AttachRagdollToBase(FakeDeathBase, bFakeDiedInAir);
-	}
-	else
-	{
-		// 부착 대기 타이머가 남아 있으면 일어난 뒤에 뒤늦게 부착되므로 먼저 취소한다.
-		GetWorldTimerManager().ClearTimer(CorpseAttachTimer);
-
-		// 래그돌이 쓰러진 위치(골반)로 캡슐을 옮긴 뒤 일어난다.
-		// 안 그러면 죽은 척을 시작한 지점에 그대로 서게 된다.
-		if (USkeletalMeshComponent* M = GetMesh())
-		{
-			const FName PelvisBone = (M->GetBoneIndex(RagdollPelvisBone) != INDEX_NONE)
-				? RagdollPelvisBone : M->GetBoneName(0);
-			const FVector PelvisLocation = M->GetBoneLocation(PelvisBone);
-			const float HalfHeight = GetCapsuleComponent()
-				? GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 0.f;
-
-			M->SetSimulatePhysics(false);
-			M->SetCollisionProfileName(TEXT("CharacterMesh"));
-
-			// 열차에 붙어 있던 상태를 풀고, 캡슐을 시체 위치로 맞춘다. (서버 권위, 위치는 복제된다)
-			DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
-			if (HasAuthority())
-			{
-				SetActorLocation(PelvisLocation + FVector(0.f, 0.f, HalfHeight), /*bSweep=*/false,
-					nullptr, ETeleportType::TeleportPhysics);
-			}
-
-			M->AttachToComponent(GetCapsuleComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-			M->SetRelativeLocationAndRotation(DefaultMeshRelativeLocation, DefaultMeshRelativeRotation);
-		}
-
-		if (GetCapsuleComponent()) GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		if (GetCharacterMovement()) GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-		if (APlayerController* PC = Cast<APlayerController>(GetController()))
-		{
-			EnableInput(PC);
-			if (ABasePlayerController* BPC = Cast<ABasePlayerController>(PC))
-			{
-				BPC->SetHUDCursorMode(false);
-			}
-		}
-	}
-}
-
-void ABaseCharacter::StealAmmo(ABaseCharacter* DeadCharacter)
-{
-	if (!HasAuthority() || !IsValid(DeadCharacter) || !DeadCharacter->IsDead()) return;
-
-	// 탄약 단일 소스 = CurrentAmmo 어트리뷰트 (GA_FireGun 소모와 동일 소스 — PS.AmmoCount 사용 안 함).
-	UAbilitySystemComponent* MyASC   = GetAbilitySystemComponent();
-	UAbilitySystemComponent* DeadASC = DeadCharacter->GetAbilitySystemComponent();
-	if (!MyASC || !DeadASC) return;
-
-	const float DeadAmmo = DeadASC->GetNumericAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute());
-	if (DeadAmmo <= 0.f) return;
-
-	// 내 MaxAmmo 는 PreAttributeChange 에서 클램프된다.
-	MyASC->ApplyModToAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute(), EGameplayModOp::Additive, DeadAmmo);
-	DeadASC->SetNumericAttributeBase(UBaseAttributeSet::GetCurrentAmmoAttribute(), 0.f);
-}
 
 // ============================================================
 // 역할별 능력 — Mechanic
@@ -1716,8 +1526,8 @@ void ABaseCharacter::SetTrackedPlayers(ABaseCharacter* P1, ABaseCharacter* P2,
 {
 	TrackedPlayer1 = P1;
 	TrackedPlayer2 = P2;
-	TrackColor1    = C1;
-	TrackColor2    = C2;
+	TrackColor1 = C1;
+	TrackColor2 = C2;
 
 	Footprints1.Reset();
 	Footprints2.Reset();
@@ -1741,7 +1551,7 @@ void ABaseCharacter::RecordFootprintPositions()
 	if (TrackedPlayer1.IsValid() && !TrackedPlayer1->IsDead())
 	{
 		FFootprintRecord R;
-		R.Location  = TrackedPlayer1->GetActorLocation();
+		R.Location = TrackedPlayer1->GetActorLocation();
 		R.Timestamp = Now;
 		Footprints1.Add(R);
 	}
@@ -1749,7 +1559,7 @@ void ABaseCharacter::RecordFootprintPositions()
 	if (TrackedPlayer2.IsValid() && !TrackedPlayer2->IsDead())
 	{
 		FFootprintRecord R;
-		R.Location  = TrackedPlayer2->GetActorLocation();
+		R.Location = TrackedPlayer2->GetActorLocation();
 		R.Timestamp = Now;
 		Footprints2.Add(R);
 	}
@@ -1843,7 +1653,7 @@ void ABaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ABaseCharacter::Look);
-	
+
 		EnhancedInputComponent->BindAction(ClimbAction, ETriggerEvent::Started, this, &ABaseCharacter::OnClimbActionStarted);
 	}
 

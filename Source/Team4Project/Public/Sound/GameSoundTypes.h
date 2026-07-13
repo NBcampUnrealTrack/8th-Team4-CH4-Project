@@ -45,10 +45,6 @@ namespace SoundRows
 	inline const FName FootstepJump(TEXT("Footstep.Jump"));
 	inline const FName FootstepLand(TEXT("Footstep.Land"));
 	inline const FName FootstepClimb(TEXT("Footstep.Climb"));
-	inline const FName GunFire(TEXT("Gun.Fire"));
-	inline const FName GunReload(TEXT("Gun.Reload"));
-	inline const FName GunEquip(TEXT("Gun.Equip"));
-	inline const FName GunUnequip(TEXT("Gun.Unequip"));
 	inline const FName DoorOpen(TEXT("Door.Open"));
 	inline const FName DoorClose(TEXT("Door.Close"));
 	inline const FName ItemPickup(TEXT("Item.Pickup"));
@@ -61,10 +57,10 @@ namespace SoundRows
 	inline const FName AbilityMasterKey(TEXT("Ability.MasterKey"));
 	inline const FName AbilityWireCutter(TEXT("Ability.WireCutter"));
 	inline const FName AbilityDetect(TEXT("Ability.Detect"));
-	inline const FName AbilityConceal(TEXT("Ability.Conceal"));
 	inline const FName AbilityInvisible(TEXT("Ability.Invisible"));
 	inline const FName AbilityUnlockDoor(TEXT("Ability.UnlockDoor"));
-	inline const FName AbilityStealAmmo(TEXT("Ability.StealAmmo"));
+	// 무법자(이중스파이): 전향음 (본인 로컬 — 타인에게 들리면 정체 노출)
+	inline const FName OutlawTurned(TEXT("Outlaw.Turned"));
 	inline const FName AbilityLantern(TEXT("Ability.Lantern"));
 	inline const FName AbilityFootprintVision(TEXT("Ability.FootprintVision"));
 	inline const FName AbilityForceValve(TEXT("Ability.ForceValve"));
@@ -96,7 +92,6 @@ namespace SoundRows
 	inline const FName GameStart(TEXT("Game.Start"));
 	inline const FName GameVictory(TEXT("Game.Victory"));
 	inline const FName GameDefeat(TEXT("Game.Defeat"));
-	inline const FName GameGunsUnlocked(TEXT("Game.GunsUnlocked"));
 	inline const FName WarningPressure(TEXT("Warning.Pressure"));
 	inline const FName WarningFuelLow(TEXT("Warning.FuelLow"));
 	inline const FName TrainRunning(TEXT("Train.Running")); // 루프

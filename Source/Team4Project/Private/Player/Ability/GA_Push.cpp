@@ -18,8 +18,6 @@ UGA_Push::UGA_Push()
 	Tags.AddTag(Abilities::Push.GetTag());
 	SetAssetTags(Tags);
 
-	// 총을 들고 있으면 발사(GA_FireGun)만 나가야 하므로 밀치기는 차단.
-	ActivationBlockedTags.AddTag(State::Weapon::EquipGun.GetTag());
 	// 투명화 중에는 위치가 드러나므로 불가.
 	ActivationBlockedTags.AddTag(Abilities::Invisible.GetTag());
 	// 밀려서 비틀거리는 동안에는 반격 불가.
@@ -81,7 +79,20 @@ void UGA_Push::ActivateAbility(
 				LaunchDir = Character->GetActorForwardVector().GetSafeNormal2D();
 			}
 
-			const FVector LaunchVelocity = LaunchDir * PushStrength + FVector::UpVector * PushUpStrength;
+			// 전향한 무법자(이중스파이)는 슈퍼 넉백 — 전향 시 SetCharacterTag 로
+			// ASC 에 Character.Special.Outlaw 루즈 태그가 들어오므로 그걸로 판정한다.
+			// (위장 중에는 시민 직업 태그라 배수가 붙지 않는다)
+			float Multiplier = 1.f;
+			if (UAbilitySystemComponent* ASC = Character->GetAbilitySystemComponent())
+			{
+				if (ASC->HasMatchingGameplayTag(Character::Special::Outlaw.GetTag()))
+				{
+					Multiplier = TurnedOutlawKnockbackMultiplier;
+				}
+			}
+
+			const FVector LaunchVelocity =
+				LaunchDir * PushStrength * Multiplier + FVector::UpVector * PushUpStrength * Multiplier;
 			Target->ReceivePush(Character, LaunchVelocity, StumbleDuration);
 		}
 	}

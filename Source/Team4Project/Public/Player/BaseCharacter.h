@@ -17,7 +17,6 @@ class UBaseAbilitySystemComponent;
 class UBaseAttributeSet;
 class UGameplayAbility;
 class UGameplayEffect;
-class ABaseWeapon;
 class AItemBase;
 class UInteractComponent;
 class UNiagaraSystem;
@@ -162,11 +161,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Stats|Speed")
 	void AddWeight(float Delta);
 
-	// 일정 시간 동안 메시(+무기/아이템)를 숨겼다가 복구 (투명화). 서버에서 호출.
+	// 일정 시간 동안 메시(+아이템)를 숨겼다가 복구 (투명화). 서버에서 호출.
 	void SetInvisibleForDuration(float Duration);
-
-	// 일정 시간 동안 시체(메시)를 숨겼다가 복구 (마피아 시체 은폐). 서버에서 호출.
-	void HideCorpseForDuration(float Duration);
 
 	// 이 캐릭터 위치에 나이아가라 이펙트를 재생(전 클라). 마피아 감별 표식 등에 사용.
 	UFUNCTION(NetMulticast, Unreliable)
@@ -243,7 +239,7 @@ public:
 	bool IsQuestUIOpen() const { return bQuestUIOpen; }
 
 	// ============================================================
-	// 밀치기 (총 미장착 상태의 좌클릭 — UGA_Push)
+	// 밀치기 (좌클릭 — UGA_Push)
 	// ============================================================
 
 	// 서버: 이 캐릭터가 밀쳐졌을 때. 비틀거림 몽타주 + 넉백 + 낙사 킬 크레딧 기록.
@@ -258,16 +254,10 @@ public:
 	void Multicast_PlayStumbleMontage();
 
 	// ============================================================
-	// 무기
+	// 아이템
 	// ============================================================
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Weapon")
-	ABaseWeapon* GetCurrentWeapon() const { return CurrentWeapon; }
-
-	// 장착한 무기 설정 (서버에서 EquipGun 어빌리티가 호출)
-	void SetCurrentWeapon(ABaseWeapon* InWeapon) { CurrentWeapon = InWeapon; }
-
-	// 현재 손에 든 물리 아이템(석탄/기어 등). 무기는 CurrentWeapon 으로 별도 관리.
+	// 현재 손에 든 물리 아이템(석탄/기어/귀중품 등).
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Item")
 	AItemBase* GetCurrentHeldItem() const { return CurrentHeldItem; }
 
@@ -313,7 +303,7 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_EndPressureMinigame(bool bSuccess);
 
-	// IInteractable — 죽은 캐릭터: 탄약 빼앗기 / 살아있는 캐릭터: 수색
+	// IInteractable — 살아있는 캐릭터: 수색 (죽은 캐릭터는 상호작용 없음)
 	virtual void Interact_Implementation(ACharacter* Interactor) override;
 	virtual FText GetInteractPrompt_Implementation() const override;
 	// 캐릭터에 붙는 위젯(이름표/표식 등). BP 에서 위젯 클래스·위치 지정.
@@ -344,35 +334,14 @@ public:
 	void UseMasterKey(AActor* DoorActor);
 	void UseWireCutter(AActor* GearActor);
 
-	UFUNCTION(NetMulticast, Reliable)
-	void Multicast_HideBody(ABaseCharacter* DeadCharacter);
-
-	UFUNCTION(NetMulticast, Reliable)
-	void Multicast_ShowBody(ABaseCharacter* DeadCharacter);
-
 	// ============================================================
 	// 역할별 능력 — Sheriff
 	// ============================================================
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Sheriff")
-	void OnHiddenBodyDetected(ABaseCharacter* HiddenBody);
-
-	UFUNCTION(BlueprintImplementableEvent, Category = "Sheriff")
 	void OnSearchResult(bool bHasMafiaAbility, ABaseCharacter* Target);
 
 	void UnlockDoor(AActor* DoorActor);
-
-	// ============================================================
-	// 역할별 능력 — Outlaw
-	// ============================================================
-
-	void StartFakeDeath();
-	void StopFakeDeath();
-
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Outlaw")
-	bool IsFakeDead() const { return bIsFakeDead; }
-
-	void StealAmmo(ABaseCharacter* DeadCharacter);
 
 	// ============================================================
 	// 역할별 능력 — Mechanic
@@ -435,7 +404,7 @@ protected:
 	void OnRep_CharacterTag();
 
 	// CharacterTag 를 ASC 의 루즈 태그로 동기화. 역할 능력들의 ActivationRequiredTags
-	// (Character.Special.Outlaw 등)는 ASC "보유 태그"를 검사하므로 이게 없으면 발동이 항상 거부된다.
+	// (Character.Special.Mafia 등)는 ASC "보유 태그"를 검사하므로 이게 없으면 발동이 항상 거부된다.
 	// 서버(SetCharacterTag)와 소유 클라(OnRep)에서만 넣는다 — 타 클라에 넣으면 역할이 노출된다.
 	void RefreshRoleLooseTag();
 	FGameplayTag AppliedRoleLooseTag;
@@ -545,10 +514,6 @@ protected:
 	TWeakObjectPtr<ABaseCharacter> LastPusher;
 	float LastPushedTime = -1000.f;
 
-	// 현재 장착 무기 (서버에서 스폰 후 설정, 클라에 복제)
-	UPROPERTY(Replicated)
-	TObjectPtr<ABaseWeapon> CurrentWeapon;
-
 	// 현재 손에 든 물리 아이템 (서버에서 픽업 시 설정, 클라에 복제)
 	UPROPERTY(Replicated)
 	TObjectPtr<AItemBase> CurrentHeldItem;
@@ -563,10 +528,6 @@ protected:
 	float CorpseSettleTime = 0.f;
 
 	void AttachRagdollToBase(UPrimitiveComponent* Base, bool bInAir);
-
-	// 죽은 척 해제 시 캡슐을 맞출 기준 본. 스켈레톤에 없으면 루트 본으로 폴백한다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Death")
-	FName RagdollPelvisBone = TEXT("pelvis");
 
 	// 시체를 지정 발판에 부착(kinematic 고정) → 발판을 따라 함께 이동.
 	void AttachCorpseToBase(UPrimitiveComponent* Base);
@@ -587,14 +548,14 @@ protected:
 	UFUNCTION()
 	void OnRep_IsDead();
 
-	// 투명화/시체 은폐 공용: 메시 숨김 상태(서버에서 토글, 클라에 복제).
+	// 투명화용: 메시 숨김 상태(서버에서 토글, 클라에 복제).
 	UPROPERTY(ReplicatedUsing = OnRep_MeshHidden)
 	bool bMeshHidden = false;
 
 	UFUNCTION()
 	void OnRep_MeshHidden();
 
-	// bMeshHidden 값을 실제 메시/무기/아이템 가시성에 반영.
+	// bMeshHidden 값을 실제 메시/아이템 가시성에 반영.
 	// 서브클래스(마피아)가 bIsInvisible 등 추가 조건을 합성할 수 있도록 virtual.
 	virtual void ApplyMeshVisibility();
 
@@ -602,7 +563,6 @@ protected:
 	void RevealMesh();
 
 	FTimerHandle InvisibleTimerHandle;
-	FTimerHandle CorpseHideTimerHandle;
 	
 	//손쪽 소켓
 	
@@ -633,13 +593,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Watchman")
 	float RecordInterval = 0.5f;
 
-	// ── Sheriff 설정 ──
-	UPROPERTY(EditDefaultsOnly, Category = "Sheriff")
-	float BodyDetectionRadius = 1000.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Sheriff")
-	float BodyDetectionInterval = 1.0f;
-
 	// ── Mechanic 설정 ──
 	UPROPERTY(EditDefaultsOnly, Category = "Mechanic")
 	float RepairSpeedMultiplier = 1.0f;
@@ -664,15 +617,6 @@ private:
 	UFUNCTION() void OnRep_IsInvisible();
 	void ApplyVentMovement(bool bEntering);
 
-	// ── Outlaw 내부 상태 ──
-	UPROPERTY(ReplicatedUsing = OnRep_IsFakeDead)
-	bool bIsFakeDead = false;
-
-	UFUNCTION() void OnRep_IsFakeDead();
-	void ApplyFakeDeathPhysics(bool bActivate);
-	FVector DefaultMeshRelativeLocation = FVector::ZeroVector;
-	FRotator DefaultMeshRelativeRotation = FRotator::ZeroRotator;
-
 	// ── Watchman 내부 상태 ──
 	UPROPERTY(ReplicatedUsing = OnRep_LanternOn)
 	bool bLanternOn = false;
@@ -696,10 +640,6 @@ private:
 	                              const TArray<FVector>& Positions2, FLinearColor InColor2);
 	void SpawnFootprintDecals(const TArray<FVector>& Positions, FLinearColor Color);
 
-	// ── Sheriff 내부 상태 ──
-	FTimerHandle BodyDetectionTimer;
-	void CheckForHiddenBodies();
-
 	// ── 낙하 처리 (로비=복귀 / 진행 중=사망) ──
 public:
 	// 월드 KillZ 아래로 떨어졌을 때: 로비 페이즈면 파괴하지 않고 열차(스타트 지점)로 복귀.
@@ -710,9 +650,18 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rescue")
 	float LobbyFallRescueDepth = 2000.f;
 
-	// 진행 중에 열차보다 이만큼 낮아지면 사망 처리한다 (cm).
+	// 진행 중에 열차보다 이만큼 낮아지면 "떨어진" 것으로 판정한다 (cm).
+	// 사망 시스템 제거(2026-07-13) 후에는 사망 대신 FallRespawnDelay 뒤 열차로 복귀한다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rescue")
 	float FallDeathDepth = 2000.f;
+
+	// 낙하 판정 후 열차로 복귀하기까지의 대기 시간 (초).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rescue")
+	float FallRespawnDelay = 2.f;
+
+	// 회의실(MeetingRoom)이 없을 때 열차 액터 기준 복귀 오프셋 (cm).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rescue")
+	FVector TrainRespawnOffset = FVector(0.f, 0.f, 300.f);
 
 private:
 	FTimerHandle FallRescueTimer;
@@ -733,6 +682,11 @@ private:
 
 	// 스타트 지점(PlayerStart)으로 텔레포트. 성공 여부 반환. (서버 전용)
 	bool RescueToStart();
+
+	// 주행 중 낙하 복귀: 회의실 좌석(열차 자식) 우선, 없으면 열차 기준 오프셋. (서버 전용)
+	// 주의: 로비 복귀(RescueToStart)의 PlayerStart 는 출발 지점 고정이라 주행 중에는 못 쓴다.
+	bool RescueToTrain();
+	FTimerHandle TrainRescueTimer;
 
 	// 낙하 판정의 기준 높이. 주행 중 열차는 스플라인을 따라 고도가 바뀌므로 열차를 우선 사용한다.
 	bool GetFallReferenceZ(float& OutZ) const;

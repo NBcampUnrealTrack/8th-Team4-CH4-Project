@@ -33,7 +33,6 @@ void UGODMainHUDWidget::NativeConstruct()
 
 	// 툴팁 패널 초기 숨김
 	if (Panel_RoleTooltip) Panel_RoleTooltip->SetVisibility(ESlateVisibility::Collapsed);
-	if (Panel_AmmoDisplay)  Panel_AmmoDisplay->SetVisibility(ESlateVisibility::Collapsed);
 
 	// 경고 문구 초기 숨김
 	if (TB_PressureWarning) TB_PressureWarning->SetVisibility(ESlateVisibility::Hidden);
@@ -41,9 +40,6 @@ void UGODMainHUDWidget::NativeConstruct()
 
 	// 인터랙트 프롬프트 초기 숨김 (대상 생기면 OnInteractTargetChanged가 켠다)
 	if (TB_InteractPrompt)  TB_InteractPrompt->SetVisibility(ESlateVisibility::Collapsed);
-
-	// 총기 해제 알림 초기 숨김
-	if (TB_GunsUnlockedNotice) TB_GunsUnlockedNotice->SetVisibility(ESlateVisibility::Collapsed);
 
 	// 알림 방송 배너 초기 숨김
 	if (TB_Announcement) TB_Announcement->SetVisibility(ESlateVisibility::Collapsed);
@@ -99,7 +95,6 @@ void UGODMainHUDWidget::NativeDestruct()
 		GS->OnDistanceToDestinationChanged.RemoveAll(this);
 		GS->OnPressureLevelChanged.RemoveAll(this);
 		GS->OnFuelLevelChanged.RemoveAll(this);
-		GS->OnGunsUnlocked.RemoveAll(this);
 		GS->OnAnnouncement.RemoveAll(this);
 	}
 
@@ -107,13 +102,6 @@ void UGODMainHUDWidget::NativeDestruct()
 	if (ABaseCharacter* Char = CachedCharacter.Get())
 	{
 		Char->OnCharacterTagChanged.RemoveAll(this);
-	}
-
-	// ASC 어트리뷰트 델리게이트 언바인딩
-	if (UAbilitySystemComponent* ASC = CachedASC.Get())
-	{
-		ASC->GetGameplayAttributeValueChangeDelegate(
-			UBaseAttributeSet::GetCurrentAmmoAttribute()).RemoveAll(this);
 	}
 
 	// 인터랙트 델리게이트 언바인딩
@@ -143,7 +131,6 @@ void UGODMainHUDWidget::TryBindGameState()
 	GS->OnDistanceToDestinationChanged.AddDynamic(this, &UGODMainHUDWidget::OnDistanceChanged);
 	GS->OnPressureLevelChanged.AddDynamic(this, &UGODMainHUDWidget::OnPressureLevelChanged);
 	GS->OnFuelLevelChanged.AddDynamic(this, &UGODMainHUDWidget::OnFuelLevelChanged);
-	GS->OnGunsUnlocked.AddDynamic(this, &UGODMainHUDWidget::OnGunsUnlocked);
 	GS->OnAnnouncement.AddDynamic(this, &UGODMainHUDWidget::OnAnnouncement);
 
 	// 현재 값으로 즉시 갱신
@@ -179,25 +166,12 @@ void UGODMainHUDWidget::InitializeForPawn(APawn* NewPawn)
 	UAbilitySystemComponent* ASC = Cast<UAbilitySystemComponent>(Char->GetAbilitySystemComponent());
 	if (ASC && CachedASC.Get() != ASC)
 	{
-		// 이전 ASC 언바인딩
-		if (UAbilitySystemComponent* OldASC = CachedASC.Get())
-		{
-			OldASC->GetGameplayAttributeValueChangeDelegate(
-				UBaseAttributeSet::GetCurrentAmmoAttribute()).RemoveAll(this);
-		}
-
 		CachedASC = ASC;
-
-		// 탄약 변화 바인딩
-		ASC->GetGameplayAttributeValueChangeDelegate(UBaseAttributeSet::GetCurrentAmmoAttribute())
-			.AddLambda([this](const FOnAttributeChangeData&) { UpdateAmmoDisplay(); });
 
 		// 💡 능력 슬롯에 ASC 전달 (새로운 슬롯 변수명 3개로 업데이트)
 		if (Slot_Passive) Slot_Passive->SetAbilitySystemComponent(ASC);
 		if (Slot_Active1) Slot_Active1->SetAbilitySystemComponent(ASC);
 		if (Slot_Active2) Slot_Active2->SetAbilitySystemComponent(ASC);
-
-		UpdateAmmoDisplay();
 	}
 
 	// 역할 태그로 HUD 세팅
@@ -229,38 +203,6 @@ void UGODMainHUDWidget::OnCharacterTagChanged(const FGameplayTag& NewTag)
 	if (NewTag.IsValid())
 	{
 		SetupRoleHUD(NewTag);
-	}
-}
-
-void UGODMainHUDWidget::OnGunsUnlocked()
-{
-	// 알림음 (게임 사운드 DT 의 Game.GunsUnlocked 행 — GameState 에서 읽음)
-	if (const AGODGameState* GS = CachedGameState.Get())
-	{
-		UGameSoundStatics::PlaySound2DFromTable(this, GS->GameSoundTable, SoundRows::GameGunsUnlocked);
-	}
-
-	// "총기 제한 해제" 알림 — 일정 시간 표시 후 자동 숨김. BP 연출 확장 포인트도 호출.
-	if (TB_GunsUnlockedNotice)
-	{
-		TB_GunsUnlockedNotice->SetText(NSLOCTEXT("HUD", "GunsUnlocked", "총기 제한 해제"));
-		TB_GunsUnlockedNotice->SetVisibility(ESlateVisibility::HitTestInvisible);
-
-		if (UWorld* World = GetWorld())
-		{
-			World->GetTimerManager().SetTimer(GunsNoticeTimer, this,
-				&UGODMainHUDWidget::HideGunsUnlockedNotice, GunsUnlockedNoticeDuration, /*bLoop=*/false);
-		}
-	}
-
-	BP_OnGunsUnlocked();
-}
-
-void UGODMainHUDWidget::HideGunsUnlockedNotice()
-{
-	if (TB_GunsUnlockedNotice)
-	{
-		TB_GunsUnlockedNotice->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 
@@ -486,24 +428,6 @@ void UGODMainHUDWidget::UpdateWarnings(float DeltaTime)
 	if (TB_FuelWarning)
 	{
 		TB_FuelWarning->SetVisibility(bWarningFuelActive ? VisWhenActive : ESlateVisibility::Hidden);
-	}
-}
-
-void UGODMainHUDWidget::UpdateAmmoDisplay()
-{
-	UAbilitySystemComponent* ASC = CachedASC.Get();
-	if (!ASC || !Panel_AmmoDisplay || !TB_AmmoCount) return;
-
-	ABaseCharacter* Char = CachedCharacter.Get();
-	const bool bHasGun = Char && Char->GetCurrentWeapon() != nullptr;
-
-	Panel_AmmoDisplay->SetVisibility(bHasGun ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-
-	if (bHasGun)
-	{
-		const int32 Current = FMath::FloorToInt(ASC->GetNumericAttribute(UBaseAttributeSet::GetCurrentAmmoAttribute()));
-		const int32 Max = FMath::FloorToInt(ASC->GetNumericAttribute(UBaseAttributeSet::GetMaxAmmoAttribute()));
-		TB_AmmoCount->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"), Current, Max)));
 	}
 }
 

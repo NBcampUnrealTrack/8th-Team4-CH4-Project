@@ -32,10 +32,6 @@ public:
 
 namespace VFXRows
 {
-	// ── 캐릭터 VFX DT (DT_CharacterVFX) ──
-	inline const FName GunFire(TEXT("Gun.Fire"));
-	inline const FName GunImpact(TEXT("Gun.Impact"));
-
 	// 상호작용 소품 (월드 3D — 전 클라)
 	inline const FName GearBreak(TEXT("Gear.Break"));
 	inline const FName GearRepair(TEXT("Gear.Repair"));

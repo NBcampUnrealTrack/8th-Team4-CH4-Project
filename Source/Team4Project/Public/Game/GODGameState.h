@@ -13,7 +13,9 @@ enum class EGamePhase : uint8
 	Countdown         UMETA(DisplayName = "출발 카운트다운"),
 	Playing           UMETA(DisplayName = "진행 중"),
 	CitizensWon       UMETA(DisplayName = "보안관/시민 승리"),
-	OutlawWon         UMETA(DisplayName = "무법자 승리"),
+	// [미사용 예약] 무법자는 이중스파이라 단독 승리가 없다 (시민/마피아 사이드에 편승).
+	// enum 언더라잉 값 보존을 위해 자리만 유지.
+	OutlawWon         UMETA(DisplayName = "무법자 승리 (미사용)"),
 	MafiaWon          UMETA(DisplayName = "마피아 승리"),
 	Meeting           UMETA(DisplayName = "긴급 회의")
 };
@@ -24,7 +26,6 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRemainingTimeChanged, int32, NewT
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDistanceChanged, float, NewDistance);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPressureLevelChanged, float, NewPressure);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrainFuelLevelChanged, float, NewFuel);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGunsUnlocked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnQuestProgressChanged, float, SpeedMultiplier, int32, CompletedCitizens, int32, TotalCitizens);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAnnouncement, const FText&, Message, EAnnouncementType, Type);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMeetingTimeChanged, int32, RemainingSeconds);
@@ -58,10 +59,6 @@ public:
 	/** 연료 비율 (0~1). GODTrain Furnace에서 매 Tick 동기화. */
 	UPROPERTY(ReplicatedUsing = OnRep_FuelLevel, BlueprintReadOnly, Category = "Game State")
 	float FuelLevel = 0.f;
-
-	/** 게임 시작 3분 후 true 로 전환 (발포 잠금 해제) */
-	UPROPERTY(ReplicatedUsing = OnRep_bGunsUnlocked, BlueprintReadOnly, Category = "Game State")
-	bool bGunsUnlocked;
 
 	/**
 	 * 퀘스트 진행에 따른 열차 속도 배율 (1.0 ~ 2.0).
@@ -132,13 +129,6 @@ public:
 	/** 연료 비율 변경 시 브로드캐스트 (0~1). 연료 게이지 위젯에서 바인딩. */
 	UPROPERTY(BlueprintAssignable, Category = "Game State|Events")
 	FOnTrainFuelLevelChanged OnFuelLevelChanged;
-
-	/** 3분 발포 잠금 해제 시 브로드캐스트. HUD "총기 제한 해제" 알림에서 바인딩. */
-	UPROPERTY(BlueprintAssignable, Category = "Game State|Events")
-	FOnGunsUnlocked OnGunsUnlocked;
-
-	UFUNCTION()
-	void OnRep_bGunsUnlocked();
 
 	UFUNCTION()
 	void OnRep_GamePhase();
