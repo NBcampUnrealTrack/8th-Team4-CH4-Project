@@ -10,6 +10,8 @@ UGA_EnterVent::UGA_EnterVent()
 	InstancingPolicy  = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
 	ActivationRequiredTags.AddTag(Character::Special::Mafia.GetTag());
+	// 긴급 회의 중 사용 불가.
+	ActivationBlockedTags.AddTag(State::Meeting.GetTag());
 }
 
 void UGA_EnterVent::ActivateAbility(

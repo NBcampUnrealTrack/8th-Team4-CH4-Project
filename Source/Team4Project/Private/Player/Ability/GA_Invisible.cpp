@@ -16,6 +16,9 @@ UGA_Invisible::UGA_Invisible()
 
 	// 활성 동안 Ability.Invisible 태그 부여 → 공격 등이 이 태그를 ActivationBlockedTags 로 차단.
 	ActivationOwnedTags.AddTag(Abilities::Invisible.GetTag());
+
+	// 긴급 회의 중 사용 불가.
+	ActivationBlockedTags.AddTag(State::Meeting.GetTag());
 }
 
 void UGA_Invisible::ActivateAbility(

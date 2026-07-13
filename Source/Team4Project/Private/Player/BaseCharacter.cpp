@@ -1452,6 +1452,21 @@ void ABaseCharacter::CheckFallRescueOrDeath()
 		return;
 	}
 
+	// 회의 중에는 사망 판정이 없다. 열차 밖으로 떨어졌으면 회의실 좌석으로 복귀만 시킨다.
+	if (GS->CurrentPhase == EGamePhase::Meeting)
+	{
+		float MeetingRefZ = 0.f;
+		if (GetFallReferenceZ(MeetingRefZ) &&
+			GetActorLocation().Z < MeetingRefZ - FallDeathDepth)
+		{
+			if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
+			{
+				GM->RescueToMeeting(this);
+			}
+		}
+		return;
+	}
+
 	if (GS->CurrentPhase != EGamePhase::Playing) return;
 
 	// 주행 중에는 지형이 열차보다 높아 KillZ 에 닿지 않는 구간이 있으므로
@@ -1517,6 +1532,16 @@ void ABaseCharacter::FellOutOfWorld(const UDamageType& dmgType)
 		if (bLobbyPhase && RescueToStart())
 		{
 			return;
+		}
+
+		// 회의 중에는 사망 대신 회의실로 복귀.
+		if (GS->CurrentPhase == EGamePhase::Meeting)
+		{
+			if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
+			{
+				GM->RescueToMeeting(this);
+				return;
+			}
 		}
 
 		// 진행 중이면 폰을 그냥 파괴하지 않고 사망 경로를 태운다. (관전 전환 + 승리조건 체크)

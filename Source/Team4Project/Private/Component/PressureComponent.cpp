@@ -23,7 +23,7 @@ void UPressureComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (!GetOwner()->HasAuthority() || bExploded) return;
+	if (!GetOwner()->HasAuthority() || bExploded || bFrozen) return;
 
 	if (bTrainRunning)
 	{

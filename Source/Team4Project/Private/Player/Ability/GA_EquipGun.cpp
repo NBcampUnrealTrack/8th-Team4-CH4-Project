@@ -20,6 +20,8 @@ UGA_EquipGun::UGA_EquipGun()
 
 	// 투명화(Ability.Invisible) 중에는 장착 불가. 투명화가 풀리면 다시 장착 가능.
 	ActivationBlockedTags.AddTag(Abilities::Invisible.GetTag());
+	// 긴급 회의 중 사용 불가.
+	ActivationBlockedTags.AddTag(State::Meeting.GetTag());
 }
 
 void UGA_EquipGun::ActivateAbility(

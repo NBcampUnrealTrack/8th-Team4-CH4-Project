@@ -51,6 +51,7 @@ namespace State
 	}
 
 	UE_DEFINE_GAMEPLAY_TAG(Stumble, "State.Stumble")
+	UE_DEFINE_GAMEPLAY_TAG(Meeting, "State.Meeting")
 }
 
 namespace Cooldown

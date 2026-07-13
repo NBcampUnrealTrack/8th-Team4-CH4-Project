@@ -70,6 +70,36 @@ public:
 	void ReleaseSkinVariant(APlayerState* PS);
 
 	// ============================================================
+	// 긴급 소집 (Meeting)
+	// ============================================================
+
+	/** 소집 벨에서 호출 (서버). 조건 충족 시 회의 시작. 성공 여부 반환. */
+	UFUNCTION(BlueprintCallable, Category = "Meeting")
+	bool TryStartMeeting();
+
+	/** 회의 종료 → Playing 복귀 (타이머 만료 시 자동 호출. BP 강제 종료용으로도 사용 가능). */
+	UFUNCTION(BlueprintCallable, Category = "Meeting")
+	void EndMeeting();
+
+	/** 지금 벨을 누를 수 있는가 (서버 전용 — 클라 프롬프트는 GameState.bMeetingBellReady 사용). */
+	bool CanStartMeeting() const;
+
+	/** 회의 중 열차 밖으로 떨어진 플레이어를 회의실 좌석으로 복귀 (BaseCharacter 낙하 판정에서 호출). */
+	void RescueToMeeting(ABaseCharacter* Character);
+
+	/** 회의(토론) 지속 시간 (초) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Meeting")
+	int32 MeetingDuration = 60;
+
+	/** 게임 시작 후 벨이 활성화되기까지의 시간 (초) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Meeting")
+	int32 MeetingUnlockDelay = 60;
+
+	/** 회의 종료 후 다시 벨을 누를 수 있기까지의 쿨다운 (초) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Meeting")
+	int32 MeetingCooldownAfterEnd = 60;
+
+	// ============================================================
 	// 설정
 	// ============================================================
 	/** 게임 시작에 필요한 플레이어 수 (기본 8인, 세션 정원과 동일하게 유지) */
@@ -124,6 +154,17 @@ private:
 	FTimerHandle GameTimerHandle;
 	FTimerHandle CountdownTimerHandle;
 	FTimerHandle MenuReturnTimerHandle;
+	FTimerHandle MeetingTimerHandle;
+
+	// ── 긴급 소집 (서버 전용 상태) ──
+	// 직전 회의가 끝난 서버 시각. 음수면 아직 회의가 없었다.
+	double LastMeetingEndTime = -1.0;
+	// 회의 직전 열차가 달리고 있었는지. 기어 전멸 정지 등과 겹칠 때 잘못 재출발하지 않기 위함.
+	bool bTrainWasRunningBeforeMeeting = false;
+
+	void UpdateMeetingTimer();
+	void SetMeetingTagOnAllCharacters(bool bEnable);
+	class AMeetingRoom* FindMeetingRoom() const;
 
 	void UpdateCountdown();
 	void UpdateGameTimer();

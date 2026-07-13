@@ -103,4 +103,5 @@ namespace SoundRows
 	inline const FName TrainExplosion(TEXT("Train.Explosion"));
 	inline const FName TrainDerail(TEXT("Train.Derail"));
 	inline const FName FurnaceBurning(TEXT("Furnace.Burning")); // 루프
+	inline const FName MeetingCall(TEXT("Meeting.Call"));       // 긴급 소집 벨
 }

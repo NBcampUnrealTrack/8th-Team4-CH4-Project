@@ -12,6 +12,8 @@ UGA_ForceClosePressureValve::UGA_ForceClosePressureValve()
 	InstancingPolicy  = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
 	ActivationRequiredTags.AddTag(Character::Crew::Stoker.GetTag());
+	// 긴급 회의 중 사용 불가.
+	ActivationBlockedTags.AddTag(State::Meeting.GetTag());
 }
 
 void UGA_ForceClosePressureValve::ActivateAbility(

@@ -55,6 +55,10 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_bIsBurning, BlueprintReadOnly, Category = "Furnace")
 	bool bIsBurning = false;
 
+	// 긴급 회의 등으로 연료 연소 정지 (서버 전용). PressureComponent.bFrozen 과 세트로 토글.
+	UPROPERTY(BlueprintReadOnly, Category = "Furnace")
+	bool bFrozen = false;
+
 	// 연료 상태 구분 임계값 (0~1 비율). 이 값 미만이면 해당 상태의 아래 단계.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Furnace|State")
 	float LowFuelRatio = 0.25f;

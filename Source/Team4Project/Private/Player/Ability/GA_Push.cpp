@@ -24,6 +24,8 @@ UGA_Push::UGA_Push()
 	ActivationBlockedTags.AddTag(Abilities::Invisible.GetTag());
 	// 밀려서 비틀거리는 동안에는 반격 불가.
 	ActivationBlockedTags.AddTag(State::Stumble.GetTag());
+	// 긴급 회의 중 사용 불가.
+	ActivationBlockedTags.AddTag(State::Meeting.GetTag());
 }
 
 void UGA_Push::ActivateAbility(

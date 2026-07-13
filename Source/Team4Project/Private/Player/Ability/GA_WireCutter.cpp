@@ -37,6 +37,8 @@ UGA_WireCutter::UGA_WireCutter()
 	InstancingPolicy  = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
 	ActivationRequiredTags.AddTag(Character::Special::Mafia.GetTag());
+	// 긴급 회의 중 사용 불가.
+	ActivationBlockedTags.AddTag(State::Meeting.GetTag());
 	// BP 에서 CooldownGameplayEffectClass = GE_Cooldown_WireCutter (Duration 120s) 지정
 }
 

@@ -58,6 +58,11 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Pressure")
 	bool bExploded = false;
 
+	// 긴급 회의 등으로 압력 시뮬레이션 전체 정지 (서버 전용).
+	// bTrainRunning=false 만으로는 감소(PressureDecayRate)가 계속되므로 별도 플래그가 필요하다.
+	UPROPERTY(BlueprintReadOnly, Category = "Pressure")
+	bool bFrozen = false;
+
 	// 밸브 조작으로 감압
 	UFUNCTION(BlueprintCallable, Category = "Pressure")
 	void ReducePressure(float Amount);
