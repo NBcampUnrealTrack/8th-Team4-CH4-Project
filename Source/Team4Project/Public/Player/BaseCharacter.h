@@ -38,6 +38,7 @@ struct FInputActionValue;
 class UCustomMovementComponent;
 class UDataTable;
 class UAnimMontage;
+class UTexture2D;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterDied,
 	ABaseCharacter*, DeadCharacter,
@@ -74,6 +75,9 @@ struct FCharacterSkinData
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
 	TObjectPtr<UAnimMontage> StumbleMontage = nullptr;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	TArray<TObjectPtr<UTexture2D>> VariantTextures;
 };
 
 // 순찰자 발자국 기록 (기록 시각 + 위치)
@@ -460,6 +464,14 @@ protected:
 	// 소유 클라: GameInstance 에 저장된 선택 스킨을 서버로 1회 전송.
 	void SendSkinSelectionToServer();
 	bool bSkinSelectionSent = false;
+	
+	
+	// 같은 캐릭터일 경우 다른 색상
+	UPROPERTY(ReplicatedUsing = OnRep_SkinVariantIndex)
+	int32 SkinVariantIndex = INDEX_NONE;
+
+	UFUNCTION()
+	void OnRep_SkinVariantIndex();
 
 	// ============================================================
 	// 이동 속도 (무게 / 직업)

@@ -8,6 +8,7 @@
 
 class ABaseCharacter;
 class AGODPlayerState;
+class APlayerState;
 class AQuestStation;
 
 UCLASS()
@@ -58,6 +59,15 @@ public:
 	/** 탈선 유발 — GODTrain 정지 후 MafiaWon 처리 */
 	UFUNCTION(BlueprintCallable, Category = "Game Logic")
 	void TriggerDerailment();
+	
+	// ============================================================
+	// 스킨 색상 변형 풀 (서버 전용 — 복제 불필요)
+	// ============================================================
+
+	/** 해당 스킨에서 아직 안 쓰인 변형을 랜덤 배정. 이미 배정된 플레이어(리스폰)는 기존 값 반환. */
+	int32 AssignSkinVariant(APlayerState* PS, int32 SkinIndex, int32 VariantCount);
+	
+	void ReleaseSkinVariant(APlayerState* PS);
 
 	// ============================================================
 	// 긴급 소집 (Meeting)
@@ -183,4 +193,16 @@ private:
 
 	int32 TotalMatchTime = 600;
 	int32 TimeElapsed = 0;
+	
+	
+	// 플레이어별 배정 기록 { 스킨, 변형 }. 키가 PlayerState 라 캐릭터가 리스폰되어도 유지될듯하네용
+	struct FSkinVariantAssignment
+	{
+		int32 SkinIndex = INDEX_NONE;
+		int32 VariantIndex = INDEX_NONE;
+	};
+	TMap<TWeakObjectPtr<APlayerState>, FSkinVariantAssignment> SkinVariantAssignments;
+
+	
+	
 };

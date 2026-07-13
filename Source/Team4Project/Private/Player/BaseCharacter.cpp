@@ -239,8 +239,26 @@ void ABaseCharacter::Server_SetSkin_Implementation(int32 InSkinIndex)
 	if (!SkinOptions.IsValidIndex(InSkinIndex)) return;
 
 	SkinIndex = InSkinIndex;
+	
+	// [테스트용] 변형 텍스처 중 그냥 랜덤 배정 (중복 허용, 풀 관리 없음)
+	const int32 VariantCount = SkinOptions[InSkinIndex].VariantTextures.Num();
+	SkinVariantIndex = (VariantCount > 0) ? FMath::RandRange(0, VariantCount - 1) : INDEX_NONE;
+	
+	/*// GameMode 풀에서 색상 변형 배정 (리스폰 시 같은 플레이어는 같은 색 유지
+	if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
+	{
+		SkinVariantIndex = GM->AssignSkinVariant(
+				GetPlayerState(), InSkinIndex, SkinOptions[InSkinIndex].VariantTextures.Num());
+	}*/
 	ApplySkin(); // 리슨 서버(호스트) 화면 반영 — 클라는 OnRep 에서 반영
 }
+
+void ABaseCharacter::OnRep_SkinVariantIndex()
+{
+	// SkinIndex 와 도착 순서가 다를 수 있으므로 여기서도 적용 (ApplySkin 은
+	ApplySkin();
+}
+
 
 void ABaseCharacter::OnRep_SkinIndex()
 {
@@ -261,6 +279,15 @@ void ABaseCharacter::ApplySkin()
 	{
 		MeshComp->SetAnimInstanceClass(Skin.AnimClass);
 	}
+	
+	if (Skin.VariantTextures.IsValidIndex(SkinVariantIndex) && Skin.VariantTextures[SkinVariantIndex])
+	{
+		if (UMaterialInstanceDynamic* MID = MeshComp->CreateDynamicMaterialInstance(0))
+		{
+			MID->SetTextureParameterValue(TEXT("BaseColorTexture"), Skin.VariantTextures[SkinVariantIndex]);
+		}
+	}
+	
 }
 
 void ABaseCharacter::InitializeAbilityActorInfo()
@@ -515,6 +542,7 @@ void ABaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(ABaseCharacter, CurrentHeldItem);
 	DOREPLIFETIME(ABaseCharacter, bMeshHidden);
 	DOREPLIFETIME(ABaseCharacter, SkinIndex);
+	DOREPLIFETIME(ABaseCharacter, SkinVariantIndex);
 	// 직업 태그는 소유 클라에만 복제(다른 플레이어에게 역할 노출 방지).
 	DOREPLIFETIME_CONDITION(ABaseCharacter, CharacterTag, COND_OwnerOnly);
 	
