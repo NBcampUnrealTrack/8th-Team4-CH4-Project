@@ -32,7 +32,7 @@ void UGODMainHUDWidget::NativeConstruct()
 	if (Slot_Active2) Slot_Active2->SetVisibility(ESlateVisibility::Collapsed);
 
 	// 툴팁 패널 초기 숨김
-	if (Panel_RoleTooltip) Panel_RoleTooltip->SetVisibility(ESlateVisibility::Collapsed);
+	//if (Panel_RoleTooltip) Panel_RoleTooltip->SetVisibility(ESlateVisibility::Collapsed);
 
 	// 경고 문구 초기 숨김
 	if (TB_PressureWarning) TB_PressureWarning->SetVisibility(ESlateVisibility::Hidden);
@@ -44,14 +44,14 @@ void UGODMainHUDWidget::NativeConstruct()
 	// 알림 방송 배너 초기 숨김
 	if (TB_Announcement) TB_Announcement->SetVisibility(ESlateVisibility::Collapsed);
 
-	// 역할 아이콘 호버 버튼 바인딩
+	/* 역할 아이콘 호버 버튼 바인딩
 	if (Btn_RoleIcon)
 	{
 		Btn_RoleIcon->OnHovered.AddDynamic(this, &UGODMainHUDWidget::OnRoleIconHovered);
 		Btn_RoleIcon->OnUnhovered.AddDynamic(this, &UGODMainHUDWidget::OnRoleIconUnhovered);
-	}
+	}*/
 
-	if (PB_Pressure)
+	/*if (PB_Pressure)
 	{
 		if (UMaterialInterface* FillMat = Cast<UMaterialInterface>(PB_Pressure->WidgetStyle.FillImage.GetResourceObject()))
 		{
@@ -69,7 +69,7 @@ void UGODMainHUDWidget::NativeConstruct()
 			UE_LOG(LogTemp, Error, TEXT("[PressureBar] Fill이 머테리얼이 아님(%s) → MI_ProgressBar_Gauge 로 지정 필요"),
 				Res ? *Res->GetName() : TEXT("None"));
 		}
-	}
+	}*/
 
 	TryBindGameState();
 
@@ -111,11 +111,11 @@ void UGODMainHUDWidget::NativeDestruct()
 	}
 
 	// 압력 게이지 동적 머테리얼/브러시 참조 해제 (GC 정리 순서 경고 예방)
-	if (PB_Pressure)
+	/*if (PB_Pressure)
 	{
 		PB_Pressure->WidgetStyle.FillImage.SetResourceObject(nullptr);
 	}
-	PressureFillMID = nullptr;
+	PressureFillMID = nullptr; */
 
 	Super::NativeDestruct();
 }
@@ -326,7 +326,11 @@ void UGODMainHUDWidget::OnFuelLevelChanged(float NewFuel)
 void UGODMainHUDWidget::UpdateTimeDisplay()
 {
 	if (TB_RemainingTime)
-		TB_RemainingTime->SetText(FText::FromString(FormatTime(CurrentTime)));
+	{
+		FString CombinedString = FString::Printf(TEXT("시민에게 남은 시간 %s"), *FormatTime(CurrentTime));
+
+		TB_RemainingTime->SetText(FText::FromString(CombinedString));
+	}
 }
 
 void UGODMainHUDWidget::UpdateTrainProgress()
@@ -338,11 +342,11 @@ void UGODMainHUDWidget::UpdateTrainProgress()
 	if (PB_TrainProgress)
 		PB_TrainProgress->SetPercent(Progress);
 
-	if (TB_TrainProgressLabel)
-	{
-		TB_TrainProgressLabel->SetText(
-			FText::FromString(FString::Printf(TEXT("도착지까지 %.0f%%"), (1.f - Progress) * 100.f)));
-	}
+	//if (TB_TrainProgressLabel)
+	//{
+		//TB_TrainProgressLabel->SetText(
+			//FText::FromString(FString::Printf(TEXT("도착지까지 %.0f%%"), (1.f - Progress) * 100.f)));
+	//}
 
 	if (Train_img)
 	{
@@ -364,23 +368,23 @@ void UGODMainHUDWidget::UpdatePressureDisplay()
 {
 	const float Percent = FMath::Clamp(CurrentPressure / 100.f, 0.f, 1.f);
 
-	if (PB_Pressure)
-		PB_Pressure->SetPercent(Percent);
+	//if (PB_Pressure)
+		//PB_Pressure->SetPercent(Percent);
 
 	// 바 전체 색을 현재 값에 따라 Safe→Mid→Danger 로 보간 (MI_ProgressBar_Gauge)
-	if (PressureFillMID)
-		PressureFillMID->SetScalarParameterValue(TEXT("Percent"), Percent);
+	//if (PressureFillMID)
+		//PressureFillMID->SetScalarParameterValue(TEXT("Percent"), Percent);
 
 	// ── 디버그(확인 후 삭제): 압력/퍼센트/MID 상태를 화면 좌상단에 표시 ──
-#if !UE_BUILD_SHIPPING
+/*#if !UE_BUILD_SHIPPING
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(
 			(uint64)(UPTRINT)this, 0.f, FColor::Yellow,
 			FString::Printf(TEXT("[PressureBar] Pressure=%.1f  Percent=%.2f  MID=%s"),
 				CurrentPressure, Percent, PressureFillMID ? TEXT("OK") : TEXT("NULL")));
-	}
-#endif
+	}*/
+	//#endif
 
 	if (TB_PressureValue)
 		TB_PressureValue->SetText(FText::FromString(FString::Printf(TEXT("압력: %.0f%%"), CurrentPressure)));
@@ -390,8 +394,8 @@ void UGODMainHUDWidget::UpdateFuelDisplay()
 {
 	const float Percent = FMath::Clamp(CurrentFuel, 0.f, 1.f);
 
-	if (PB_Fuel)
-		PB_Fuel->SetPercent(Percent);
+	//if (PB_Fuel)
+		//PB_Fuel->SetPercent(Percent);
 
 	if (TB_FuelValue)
 		TB_FuelValue->SetText(FText::FromString(FString::Printf(TEXT("연료: %.0f%%"), CurrentFuel * 100.f)));
@@ -431,12 +435,12 @@ void UGODMainHUDWidget::UpdateWarnings(float DeltaTime)
 	}
 }
 
-void UGODMainHUDWidget::UpdateCrosshair(bool bShow)
+/*void UGODMainHUDWidget::UpdateCrosshair(bool bShow)
 {
 	if (!Img_Crosshair) return;
 
 	Img_Crosshair->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
-}
+}*/
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 역할 HUD 세팅
@@ -452,11 +456,20 @@ void UGODMainHUDWidget::SetupRoleHUD(const FGameplayTag& CharTag)
 		if (Img_RoleIcon && Setup->DisplayInfo.Icon)
 			Img_RoleIcon->SetBrushFromTexture(Setup->DisplayInfo.Icon);
 
-		if (TB_RoleName)
-			TB_RoleName->SetText(Setup->DisplayInfo.RoleName);
+		//if (TB_RoleName)
+			//TB_RoleName->SetText(Setup->DisplayInfo.RoleName);
 
-		if (TB_RoleDescription)
-			TB_RoleDescription->SetText(Setup->DisplayInfo.RoleDescription);
+		//if (TB_RoleDescription)
+			//TB_RoleDescription->SetText(Setup->DisplayInfo.RoleDescription);
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// 💡 [여기에 추가] 처음 역할을 배정받았을 때만 전면 역할 소개 창을 트리거합니다.
+		// ─────────────────────────────────────────────────────────────────────────────
+		if (!bHasShownRoleIntro)
+		{
+			BP_ShowRoleIntro(Setup->DisplayInfo);
+			bHasShownRoleIntro = true;
+		}
 	}
 
 	// 능력 슬롯 설정
@@ -505,7 +518,7 @@ void UGODMainHUDWidget::SetupRoleHUD(const FGameplayTag& CharTag)
 // 역할 아이콘 호버
 // ─────────────────────────────────────────────────────────────────────────────
 
-void UGODMainHUDWidget::OnRoleIconHovered()
+/*void UGODMainHUDWidget::OnRoleIconHovered()
 {
 	if (Panel_RoleTooltip)
 		Panel_RoleTooltip->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -515,7 +528,7 @@ void UGODMainHUDWidget::OnRoleIconUnhovered()
 {
 	if (Panel_RoleTooltip)
 		Panel_RoleTooltip->SetVisibility(ESlateVisibility::Collapsed);
-}
+}*/
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 유틸
