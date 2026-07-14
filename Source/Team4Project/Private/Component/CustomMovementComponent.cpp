@@ -160,6 +160,7 @@ FHitResult UCustomMovementComponent::DoLineTraceSingleByObject(const FVector& St
 
 #pragma region ClimbCore
 
+
 void UCustomMovementComponent::ToggleClimbing(bool bEnableClimb)
 {
 	if (bEnableClimb)
@@ -499,6 +500,28 @@ void UCustomMovementComponent::OnClimbMontageEnded(UAnimMontage* Montage, bool b
 FVector UCustomMovementComponent::GetUnrotatedClimbVelocity() const
 {
 	return UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), Velocity);
+}
+
+void UCustomMovementComponent::RefreshAnimInstance()
+{
+	if (OwningPlayerAnimInstance)
+	{
+		OwningPlayerAnimInstance->OnMontageEnded.RemoveDynamic(this, &UCustomMovementComponent::OnClimbMontageEnded);
+		OwningPlayerAnimInstance->OnMontageBlendingOut.RemoveDynamic(this, &UCustomMovementComponent::OnClimbMontageEnded);
+	}
+
+	// 바뀐 메쉬의 새로운 AnimInstance를 가져오기
+	if (CharacterOwner && CharacterOwner->GetMesh())
+	{
+		OwningPlayerAnimInstance = CharacterOwner->GetMesh()->GetAnimInstance();
+
+		// 새로운 AnimInstance에 델리게이트 다시 묶어주기
+		if (OwningPlayerAnimInstance)
+		{
+			OwningPlayerAnimInstance->OnMontageEnded.AddDynamic(this, &UCustomMovementComponent::OnClimbMontageEnded);
+			OwningPlayerAnimInstance->OnMontageBlendingOut.AddDynamic(this, &UCustomMovementComponent::OnClimbMontageEnded);
+		}
+	}
 }
 #pragma endregion
 

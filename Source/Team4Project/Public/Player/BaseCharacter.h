@@ -77,6 +77,30 @@ struct FCharacterSkinData
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
 	TArray<TObjectPtr<UTexture2D>> VariantTextures;
+
+	// 동물 스킨별 등반 몽타주
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	TObjectPtr<UAnimMontage> IdleToClimbMontage = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	TObjectPtr<UAnimMontage> ClimbToTopMontage = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	TObjectPtr<UAnimMontage> ClimbDownLedgeMontage = nullptr;
+
+	//문 열기 / 닫기 몽타주
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	TObjectPtr<UAnimMontage> DoorOpenMontage = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	TObjectPtr<UAnimMontage> DoorCloseMontage = nullptr;
+
+	//게임 종료 연출용 몽타주
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin|MatchEnd")
+	TObjectPtr<UAnimMontage> VictoryMontage = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin|MatchEnd")
+	TObjectPtr<UAnimMontage> DefeatMontage = nullptr;
 };
 
 // 순찰자 발자국 기록 (기록 시각 + 위치)
@@ -740,4 +764,11 @@ private:
 public:
 	FORCEINLINE UCustomMovementComponent* GetCustomMovementComponent() const { return CustomMovementComponent; }
 #pragma endregion
+
+	//문 열고 닫는 모션
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayDoorMontage(bool bIsOpening);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayMatchEndMontage(bool bIsVictory);
 };

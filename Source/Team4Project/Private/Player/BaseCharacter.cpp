@@ -280,6 +280,14 @@ void ABaseCharacter::ApplySkin()
 		}
 	}
 
+	if (CustomMovementComponent)
+	{
+		CustomMovementComponent->IdleToClimbMontage = Skin.IdleToClimbMontage;
+		CustomMovementComponent->ClimbToTopMontage = Skin.ClimbToTopMontage;
+		CustomMovementComponent->ClimbDownLedgeMontage = Skin.ClimbDownLedgeMontage;
+
+		CustomMovementComponent->RefreshAnimInstance();
+	}
 }
 
 void ABaseCharacter::InitializeAbilityActorInfo()
@@ -1888,4 +1896,26 @@ void ABaseCharacter::Client_EndPressureMinigame_Implementation(bool bSuccess)
 			HUD->HidePressureMinigame(bSuccess);
 		}
 	}
+}
+
+void ABaseCharacter::Multicast_PlayDoorMontage_Implementation(bool bIsOpening)
+{
+	if (SkinOptions.IsValidIndex(SkinIndex))
+	{
+		// bIsOpening이 true면 여는 몽타주, false면 닫는 몽타주 선택
+		UAnimMontage* MontageToPlay = bIsOpening ? SkinOptions[SkinIndex].DoorOpenMontage
+			: SkinOptions[SkinIndex].DoorCloseMontage;
+
+		PlayMontageLocal(MontageToPlay);
+	}
+}
+
+void ABaseCharacter::Multicast_PlayMatchEndMontage_Implementation(bool bIsVictory)
+{
+	if (!SkinOptions.IsValidIndex(SkinIndex)) return;
+
+	UAnimMontage* MontageToPlay = bIsVictory ? SkinOptions[SkinIndex].VictoryMontage
+		: SkinOptions[SkinIndex].DefeatMontage;
+
+	PlayMontageLocal(MontageToPlay);
 }

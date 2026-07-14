@@ -6,6 +6,7 @@
 #include "AbilitySystemBlueprintLibrary.h"
 #include "Sound/GameSoundStatics.h"
 #include "Sound/GameSoundTypes.h"
+#include "Player/BaseCharacter.h"
 
 ADoorBase::ADoorBase()
 {
@@ -144,8 +145,22 @@ void ADoorBase::Interact_Implementation(ACharacter* Interactor)
 	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
 		Interactor, FGameplayTag::RequestGameplayTag(TEXT("Ability.Trigger.UnlockDoor")), EventData);
 
+
+	if (bIsLocked) return;
+
+	// 토글하기 전에 문이 원래 '열려있었는지' 상태를 먼저 기억
+	bool bWasOpen = bIsOpen;
+
 	// 일반 개폐 (잠긴 상태면 ToggleDoor 내부에서 무시됨)
 	ToggleDoor();
+
+	// 나랑 상호작용한 Interactor가 BaseCharacter인지 확인
+	if (ABaseCharacter* BaseChar = Cast<ABaseCharacter>(Interactor))
+	{
+		// 방금 닫혀있었으면(!bWasOpen) -> 여는 애니메이션(true)을 재생하라고 명령
+		// 방금 열려있었으면(bWasOpen) -> 닫는 애니메이션(false)을 재생하라고 명령
+		BaseChar->Multicast_PlayDoorMontage(!bWasOpen);
+	}
 }
 
 FText ADoorBase::GetInteractPrompt_Implementation() const
