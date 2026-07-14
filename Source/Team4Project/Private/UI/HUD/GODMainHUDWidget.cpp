@@ -26,10 +26,11 @@ void UGODMainHUDWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// 💡 스킬 슬롯 초기 숨김 (새로운 변수명으로 변경)
+	// 💡 스킬 슬롯 / 역할 아이콘 초기 숨김 (새로운 변수명으로 변경)
 	if (Slot_Passive) Slot_Passive->SetVisibility(ESlateVisibility::Collapsed);
 	if (Slot_Active1) Slot_Active1->SetVisibility(ESlateVisibility::Collapsed);
 	if (Slot_Active2) Slot_Active2->SetVisibility(ESlateVisibility::Collapsed);
+	if (Btn_RoleIcon) Btn_RoleIcon->SetVisibility(ESlateVisibility::Collapsed);
 
 	// 툴팁 패널 초기 숨김
 	//if (Panel_RoleTooltip) Panel_RoleTooltip->SetVisibility(ESlateVisibility::Collapsed);
@@ -455,6 +456,8 @@ void UGODMainHUDWidget::SetupRoleHUD(const FGameplayTag& CharTag)
 	{
 		if (Img_RoleIcon && Setup->DisplayInfo.Icon)
 			Img_RoleIcon->SetBrushFromTexture(Setup->DisplayInfo.Icon);
+
+		if (Btn_RoleIcon) Btn_RoleIcon->SetVisibility(ESlateVisibility::Visible);
 
 		//if (TB_RoleName)
 			//TB_RoleName->SetText(Setup->DisplayInfo.RoleName);
