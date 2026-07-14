@@ -362,10 +362,30 @@ void AGODGameMode::AssignQuests()
 		Stations.Swap(i, FMath::RandRange(0, i));
 	}
 
+	// 퀘스트 배정 대상 = 시민 + 보안관. 마피아/무법자는 배정 없음.
 	TArray<APlayerController*> PlayerArray;
+	TArray<AGODPlayerState*> ExcludedStates;
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
-		if (APlayerController* PC = It->Get()) PlayerArray.Add(PC);
+		APlayerController* PC = It->Get();
+		AGODPlayerState* PS = PC ? PC->GetPlayerState<AGODPlayerState>() : nullptr;
+		if (!PS) continue;
+
+		if (PS->MainRole == EMainRole::Mafia || PS->MainRole == EMainRole::Outlaw)
+		{
+			ExcludedStates.Add(PS);
+		}
+		else
+		{
+			PlayerArray.Add(PC);
+		}
+	}
+
+	// 배정 제외자는 라운드 재시작 대비 목록만 비운다.
+	for (AGODPlayerState* PS : ExcludedStates)
+	{
+		PS->AssignedQuests.Reset();
+		PS->OnRep_AssignedQuests();
 	}
 
 	const int32 Needed = PlayerArray.Num() * NumQuestsPerPlayer;

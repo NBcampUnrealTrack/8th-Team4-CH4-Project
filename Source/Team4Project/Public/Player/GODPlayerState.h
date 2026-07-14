@@ -98,8 +98,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Quest")
 	int32 GetCompletedQuestCount() const;
 
-	// 속도 배율에 기여하는가 (시민만). 특수직의 퀘스트는 위장용이라 기여/보상 없음.
-	bool ContributesToQuestSpeed() const { return MainRole == EMainRole::Citizen; }
+	// 속도 배율에 기여하는가
+	// 전원 완료 시 배율 = 1 + N/N = 2.0 (열차 속도 2배). 마피아/무법자는 배정 자체가 없다.
+	bool ContributesToQuestSpeed() const
+	{
+		return MainRole == EMainRole::Citizen || MainRole == EMainRole::Sheriff;
+	}
 
 	// ============================================================
 	// 무법자 (이중스파이)
