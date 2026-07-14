@@ -59,7 +59,7 @@ void UCharacterAnimInstance::GetAirSpeed()
 
 void UCharacterAnimInstance::GetShouldMove()
 {
-	bShouldMove = (CustomMovementComponent->GetCurrentAcceleration().IsNearlyZero() &&
+	bShouldMove = (!CustomMovementComponent->GetCurrentAcceleration().IsNearlyZero() &&
 		GroundSpeed > 5.f &&
 		!bIsFalling);
 }
