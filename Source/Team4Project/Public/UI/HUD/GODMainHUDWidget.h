@@ -36,11 +36,11 @@ struct FRoleDisplayInfo
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
 	TObjectPtr<UTexture2D> Icon;
 
-	/** 역할 이름 (툴팁에 표시) */
+	// 역할 이름 (툴팁에 표시) 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
-	FText RoleName = FText::GetEmpty();
+	FText RoleName = FText::GetEmpty(); 
 
-	/** 역할 설명 (툴팁에 표시) */
+	// 역할 설명 (툴팁에 표시) 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
 	FText RoleDescription = FText::GetEmpty();
 };
@@ -104,8 +104,8 @@ public:
 	TObjectPtr<UDataTable> UISoundTable;
 
 	//조준점 ui 노출
-	UFUNCTION(BlueprintCallable, Category = "HUD")
-	void UpdateCrosshair(bool bShow);
+	//UFUNCTION(BlueprintCallable, Category = "HUD")
+	//void UpdateCrosshair(bool bShow);
 
 protected:
 	virtual void NativeConstruct() override;
@@ -118,22 +118,22 @@ protected:
 	UPROPERTY(meta = (BindWidget), BlueprintReadWrite)
 	TObjectPtr<UProgressBar> PB_TrainProgress;
 
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UTextBlock> TB_TrainProgressLabel;
+	//UPROPERTY(meta = (BindWidget))
+	//TObjectPtr<UTextBlock> TB_TrainProgressLabel;
 
 	UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "HUD|Train")
 	TObjectPtr<UImage> Train_img;
 
 	// 우 상단 — 압력
-	UPROPERTY(meta = (BindWidget), BlueprintReadWrite)
-	TObjectPtr<UProgressBar> PB_Pressure;
+	//UPROPERTY(meta = (BindWidget), BlueprintReadWrite)
+	//TObjectPtr<UProgressBar> PB_Pressure;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> TB_PressureValue;
 
 	// 우 상단 — 연료
-	UPROPERTY(meta = (BindWidget), BlueprintReadWrite)
-	TObjectPtr<UProgressBar> PB_Fuel;
+	//UPROPERTY(meta = (BindWidget), BlueprintReadWrite)
+	//TObjectPtr<UProgressBar> PB_Fuel;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> TB_FuelValue;
@@ -150,8 +150,8 @@ protected:
 	TObjectPtr<UTextBlock> TB_FuelWarning;
 
 	// 중앙 — 조준선
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UImage> Img_Crosshair;
+	//UPROPERTY(meta = (BindWidget))
+	//TObjectPtr<UImage> Img_Crosshair;
 
 	//우 하단 — 역할 아이콘 및 툴팁
 	UPROPERTY(meta = (BindWidget))
@@ -160,14 +160,14 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UButton> Btn_RoleIcon;
 
-	UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "HUD|Role")
-	TObjectPtr<UWidget> Panel_RoleTooltip;
+	//UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "HUD|Role")
+	//TObjectPtr<UWidget> Panel_RoleTooltip;
 
-	UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "HUD|Role")
-	TObjectPtr<UTextBlock> TB_RoleName;
+	//UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "HUD|Role")
+	//TObjectPtr<UTextBlock> TB_RoleName;
 
-	UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "HUD|Role")
-	TObjectPtr<UTextBlock> TB_RoleDescription;
+	//UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "HUD|Role")
+	//TObjectPtr<UTextBlock> TB_RoleDescription;
 
 	// 우 하단 — 능력 슬롯 (WBP_AbilitySlot 상속 위젯을 배치)
 	UPROPERTY(meta = (BindWidget))
@@ -214,6 +214,9 @@ protected:
 	// 대상/프롬프트 변경 시 WBP 확장 포인트 (마커 표시/애니메이션 등을 BP에서 구현)
 	UFUNCTION(BlueprintImplementableEvent, Category = "HUD|Interact")
 	void BP_OnInteractTargetChanged(AActor* NewTarget, const FText& Prompt);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "HUD|Role")
+	void BP_ShowRoleIntro(const FRoleDisplayInfo& DisplayInfo);
 
 private:
 	// ─── 런타임 상태 ─────────────────────────────
@@ -284,8 +287,8 @@ private:
 	// 압력 게이지(PB_Pressure) 채움의 동적 머테리얼. NativeConstruct 에서 생성,
 	// UpdatePressureDisplay 에서 "Percent" 스칼라를 넣어 바 전체 색을 값에 따라 보간한다.
 	// (Fill 브러시 머테리얼을 MI_ProgressBar_Gauge 로 지정해 둔 경우에만 동작)
-	UPROPERTY(Transient)
-	TObjectPtr<UMaterialInstanceDynamic> PressureFillMID;
+	//UPROPERTY(Transient)
+	//TObjectPtr<UMaterialInstanceDynamic> PressureFillMID;
 
 	// ─── UI 갱신 ────────────────────────────────
 
@@ -298,11 +301,13 @@ private:
 
 	void SetupRoleHUD(const FGameplayTag& CharTag);
 
-	UFUNCTION()
-	void OnRoleIconHovered();
+	//UFUNCTION()
+	//void OnRoleIconHovered();
 
-	UFUNCTION()
-	void OnRoleIconUnhovered();
+	//UFUNCTION()
+	//void OnRoleIconUnhovered();
 
 	static FString FormatTime(int32 TotalSeconds);
+
+	bool bHasShownRoleIntro = false;
 };
