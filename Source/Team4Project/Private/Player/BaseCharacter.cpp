@@ -725,6 +725,9 @@ void ABaseCharacter::Server_DropHeldItem_Implementation()
 		// 버리기 사운드는 플레이어가 직접 버리는 이 경로에서만 낸다
 		// (화로 투입/기어 조립 내부의 Server_Drop 에서는 각자의 사운드가 따로 있다).
 		Multicast_PlayCharacterSound(SoundRows::ItemDrop);
+
+		//아이템 Drop 몽타주
+		Multicast_PlayDropMontage();
 	}
 }
 
@@ -1662,7 +1665,6 @@ void ABaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ABaseCharacter::Look);
 
-		EnhancedInputComponent->BindAction(ClimbAction, ETriggerEvent::Started, this, &ABaseCharacter::OnClimbActionStarted);
 	}
 
 	// 기어 QTE(화살표) — 새 IA 에셋 없이 BasePlayerController와 동일한
@@ -1918,4 +1920,42 @@ void ABaseCharacter::Multicast_PlayMatchEndMontage_Implementation(bool bIsVictor
 		: SkinOptions[SkinIndex].DefeatMontage;
 
 	PlayMontageLocal(MontageToPlay);
+}
+
+void ABaseCharacter::Multicast_PlayPickUpMontage_Implementation()
+{
+	if (SkinOptions.IsValidIndex(SkinIndex))
+	{
+		PlayMontageLocal(SkinOptions[SkinIndex].PickUpMontage);
+	}
+}
+
+void ABaseCharacter::Multicast_PlayDropMontage_Implementation()
+{
+	if (SkinOptions.IsValidIndex(SkinIndex))
+	{
+		PlayMontageLocal(SkinOptions[SkinIndex].DropMontage);
+	}
+}
+
+void ABaseCharacter::Client_ForceStartClimbing_Implementation()
+{
+	if (!CustomMovementComponent)
+	{
+		return;
+	}
+
+
+	if (!CustomMovementComponent->IsClimbing())
+	{
+		CustomMovementComponent->ToggleClimbing(true);
+		if (CustomMovementComponent->IsClimbing())
+		{
+			PlayCharacterSoundLocal(SoundRows::FootstepClimb);
+		}
+	}
+	else
+	{
+		CustomMovementComponent->ToggleClimbing(false);
+	}
 }

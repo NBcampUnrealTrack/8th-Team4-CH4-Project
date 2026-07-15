@@ -710,6 +710,46 @@ void AGODGameMode::EndGame(EGamePhase WinningPhase)
 	GetWorld()->GetTimerManager().ClearTimer(GameTimerHandle);
 	GetWorld()->GetTimerManager().ClearTimer(MeetingTimerHandle);
 
+	//게임 끝난 후 승리|패배 애니메이션 
+	for (TActorIterator<ABaseCharacter> It(GetWorld()); It; ++It)
+	{
+		ABaseCharacter* Char = *It;
+
+		if (!Char)
+		{
+			continue;
+		}
+
+		AGODPlayerState* PS = Char->GetPlayerState<AGODPlayerState>();
+		if (!PS)
+		{
+			continue;
+		}
+
+		bool bIsWinner = false;
+
+		if (WinningPhase == EGamePhase::CitizensWon)
+		{
+			if (PS->MainRole == EMainRole::Citizen || PS->MainRole == EMainRole::Sheriff)
+			{
+				bIsWinner = true;
+			}
+			else if (PS->MainRole == EMainRole::Outlaw && !PS->bTurnedToMafia)
+			{
+				bIsWinner = true;
+			}
+		}
+		else if (WinningPhase == EGamePhase::MafiaWon)
+		{
+			if (PS->MainRole == EMainRole::Mafia || (PS->MainRole == EMainRole::Outlaw && PS->bTurnedToMafia))
+			{
+				bIsWinner = true;
+			}
+		}
+
+		Char->Multicast_PlayMatchEndMontage(bIsWinner);
+	}
+
 	GetWorld()->GetTimerManager().SetTimer(
 		MenuReturnTimerHandle, this, &AGODGameMode::ReturnToMainMenu, EndGameDelay, /*bLoop=*/false);
 }

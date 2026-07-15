@@ -80,6 +80,8 @@ void AItemBase::Server_PickUp_Implementation(ACharacter* Holder)
 				ASC->AddReplicatedLooseGameplayTag(EquipStateTag);
 			}
 		}
+		//아이템 줍기 몽타주
+		BaseChar->Multicast_PlayPickUpMontage();
 	}
 }
 
@@ -216,6 +218,7 @@ void AItemBase::SetPhysicsForHeld(bool bHeld)
 
 void AItemBase::Interact_Implementation(ACharacter* Interactor)
 {
+
 	Server_PickUp(Interactor);
 }
 

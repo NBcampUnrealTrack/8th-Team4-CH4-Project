@@ -96,11 +96,18 @@ struct FCharacterSkinData
 	TObjectPtr<UAnimMontage> DoorCloseMontage = nullptr;
 
 	//게임 종료 연출용 몽타주
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin|MatchEnd")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
 	TObjectPtr<UAnimMontage> VictoryMontage = nullptr;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin|MatchEnd")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
 	TObjectPtr<UAnimMontage> DefeatMontage = nullptr;
+
+	//아이템 줍기,놓기 몽타주
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	TObjectPtr<UAnimMontage> PickUpMontage = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skin")
+	TObjectPtr<UAnimMontage>  DropMontage = nullptr;
 };
 
 // 순찰자 발자국 기록 (기록 시각 + 위치)
@@ -771,4 +778,13 @@ public:
 
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PlayMatchEndMontage(bool bIsVictory);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayPickUpMontage();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayDropMontage();
+
+	UFUNCTION(Client, Reliable)
+	void Client_ForceStartClimbing();
 };
