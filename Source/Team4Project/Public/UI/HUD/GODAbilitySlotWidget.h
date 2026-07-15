@@ -108,7 +108,7 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> TB_InputHint;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidget), BlueprintReadOnly, Category = "Ability Slot")
 	TObjectPtr<UButton> Btn_AbilitySlot;
 
 	UPROPERTY(meta = (BindWidget))
