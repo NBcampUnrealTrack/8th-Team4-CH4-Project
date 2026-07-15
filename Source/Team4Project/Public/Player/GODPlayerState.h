@@ -73,6 +73,8 @@ public:
 	
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SendChat(const FString& Message);
+	
+	virtual FString GetDisplayName() const { return GetPlayerName(); }
 
 	// ============================================================
 	// 퀘스트

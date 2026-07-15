@@ -125,7 +125,7 @@ void AGODPlayerState::Server_SendChat_Implementation(const FString& Message)
 	UE_LOG(LogTemp, Warning, TEXT("[Chat RPC] 수신됨: %s"), *Message);
 	// 게임 시작하기 전에 채팅 허용하려면 조건 제거하면 됩니당
 	FChatMessage Msg;
-	Msg.SenderName  = GetPlayerName(); 
+	Msg.SenderName  = GetDisplayName();
 	Msg.Message     = Message.Left(MaxChatLength);
 	Msg.Timestamp   = GetWorld()->GetTimeSeconds();
 	

@@ -62,6 +62,8 @@ public:
 	
 	void SetPlayerNameString(const FString& InName);
 	
+	virtual FString GetDisplayName() const override;
+	
 
 	FString GetPersistentPlayerID() const;
 };

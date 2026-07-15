@@ -11,6 +11,7 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/GameStateBase.h"
 #include "Interfaces/OnlineIdentityInterface.h"
+#include "Game/PlayerGameInstance.h"
 #include "Net/UnrealNetwork.h"
 #include "Player/VoicePlayerState.h"
 #include "Player/GODPlayerState.h"
@@ -70,17 +71,26 @@ void ABasePlayerController::OnRep_PlayerState()
 void ABasePlayerController::TrySendNickname()
 {
 	if (!IsLocalController() || bNicknameSent) return;
-
+	UE_LOG(LogTemp, Warning, TEXT("[Nickname] TrySend. Local=%d, AlreadySent=%d"), IsLocalController(), bNicknameSent);
 	FString Nick;
-	if (IOnlineSubsystem* OSS = IOnlineSubsystem::Get())
+
+	// 1순위: 메인 메뉴에서 입력한 커스텀 닉네임
+	if (UPlayerGameInstance* GI = GetGameInstance<UPlayerGameInstance>())
 	{
-		// NULL 서브시스템(PIE 등)은 진짜 닉네임이 없고 머신/계정 기본 이름(DESKTOP-...)을 돌려준다.
-		// 이 경우 전송하지 않고 서버 폴백("Player{N}")을 유지한다. 실제 플랫폼(Steam/EOS)만 닉네임 사용.
-		if (OSS->GetSubsystemName() != NULL_SUBSYSTEM)
+		Nick = GI->CustomNickname;
+	}
+
+	// 2순위: 스팀 닉네임 (기존 로직 그대로)
+	if (Nick.IsEmpty())
+	{
+		if (IOnlineSubsystem* OSS = IOnlineSubsystem::Get())
 		{
-			if (IOnlineIdentityPtr Identity = OSS->GetIdentityInterface())
+			if (OSS->GetSubsystemName() != NULL_SUBSYSTEM)
 			{
-				Nick = Identity->GetPlayerNickname(0);
+				if (IOnlineIdentityPtr Identity = OSS->GetIdentityInterface())
+				{
+					Nick = Identity->GetPlayerNickname(0);
+				}
 			}
 		}
 	}

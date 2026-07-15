@@ -149,17 +149,28 @@ void AVoicePlayerState::SetPlayerNameString(const FString& InName)
 
 FString AVoicePlayerState::GetPersistentPlayerID() const
 {
-	if (!PlayerNameString.IsEmpty() && PlayerNameString != TEXT("None"))
-	{
-		return PlayerNameString;
-	}
-
-	// 폴백: PlayerState UniqueNetId → 이름. (스팀 닉네임이 아직 도착 전이거나 NULL 서브시스템)
+	// 1순위: UniqueNetId (스팀 SteamID) — 닉네임과 무관한 진짜 고유 키.
+	// 커스텀 닉네임은 중복/변경 가능하므로 저장 키로 쓰면 안 된다.
 	FUniqueNetIdRepl PsUniqueId = GetUniqueId();
 	if (PsUniqueId.IsValid())
 	{
 		return PsUniqueId->ToString();
 	}
+
+	// 폴백: 닉네임 (NULL 서브시스템 등 UniqueNetId 가 없는 환경)
+	if (!PlayerNameString.IsEmpty() && PlayerNameString != TEXT("None"))
+	{
+		return PlayerNameString;
+	}
 	return GetPlayerName();
 }
 
+FString AVoicePlayerState::GetDisplayName() const
+{
+	// 커스텀/스팀 닉네임이 도착했으면 그걸, 아니면 엔진 기본 이름
+	if (!PlayerNameString.IsEmpty() && PlayerNameString != TEXT("None"))
+	{
+		return PlayerNameString;
+	}
+	return GetPlayerName();
+}
