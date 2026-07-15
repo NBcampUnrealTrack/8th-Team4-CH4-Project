@@ -127,6 +127,16 @@ public:
 	// 클라 로컬 값 — 캐릭터 스폰 후 Server_SetSkin 으로 서버에 전달된다.
 	UPROPERTY(BlueprintReadWrite, Category = "Skin")
 	int32 SelectedSkinIndex = 0;
+	
+	
+	// ============================================================
+	// 커스텀 닉네임
+	// ============================================================
+
+	// 메인 메뉴 Host/Join 시 입력한 닉네임. 비어 있으면 스팀 닉네임 사용.
+	// 클라 로컬 값 — BasePlayerController::TrySendNickname 이 읽어서 서버에 전송
+	UPROPERTY(BlueprintReadWrite, Category = "Player")
+	FString CustomNickname;
 
 	// ============================================================
 	// 세션 설정

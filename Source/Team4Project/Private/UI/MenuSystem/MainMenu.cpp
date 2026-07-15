@@ -105,6 +105,13 @@ bool UMainMenu::Initialize()
     BindButtonSounds(SkinRaccoonButton);
     BindButtonSounds(ConfirmSkinButton);
     BindButtonSounds(SettingsButton);
+	
+	
+	//닉네임 Input
+	if (NicknameInput)
+		NicknameInput->OnTextChanged.AddDynamic(this, &UMainMenu::OnNicknameChanged);
+	if (JoinNicknameInput)
+		JoinNicknameInput->OnTextChanged.AddDynamic(this, &UMainMenu::OnNicknameChanged);
 
     return true;
 }
@@ -235,6 +242,7 @@ void UMainMenu::OpenHostMenu()
 
 void UMainMenu::HostServer()
 {
+	SaveNicknameToGameInstance(NicknameInput);
     if (MenuInterface == nullptr) return;
 
     FString ServerName = ServerHostName->GetText().ToString();
@@ -304,6 +312,7 @@ void UMainMenu::UpdateChildren()
 
 void UMainMenu::JoinServer()
 {
+	SaveNicknameToGameInstance(JoinNicknameInput);
     if (!SelectedIndex.IsSet() || MenuInterface == nullptr)
     {
         UE_LOG(LogTemp, Warning, TEXT("Selected index not set"));
@@ -343,6 +352,7 @@ void UMainMenu::JoinServer()
 
 void UMainMenu::ConfirmJoinPasswordPressed()
 {
+	SaveNicknameToGameInstance(JoinNicknameInput);
     if (!SelectedIndex.IsSet() || MenuInterface == nullptr)
         return;
 
@@ -412,6 +422,7 @@ void UMainMenu::CloseJoinPasswordPopup()
 
 void UMainMenu::QuickJoinPressed()
 {
+	SaveNicknameToGameInstance(JoinNicknameInput);
     if (MenuInterface != nullptr)
     {
         MenuInterface->QuickJoin();
@@ -527,4 +538,30 @@ void UMainMenu::QuitPressed()
         return;
 
     PlayerController->ConsoleCommand("quit");
+}
+
+void UMainMenu::SaveNicknameToGameInstance(UEditableTextBox* SourceBox)
+{
+	if (!SourceBox)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Nickname] Save 호출. 바인딩: 실패"));
+		return;
+	}
+
+	if (UPlayerGameInstance* GI = GetGameInstance<UPlayerGameInstance>())
+	{
+		// 공백 제거 + 길이 제한 (UI 깨짐 방지)
+		GI->CustomNickname = SourceBox->GetText().ToString().TrimStartAndEnd().Left(16);
+		UE_LOG(LogTemp, Warning, TEXT("[Nickname] 저장됨: '%s'"), *GI->CustomNickname);
+	}
+}
+
+void UMainMenu::OnNicknameChanged(const FText& Text)
+{
+	// 한쪽에 입력하면 반대쪽에도 복사.
+	
+	if (NicknameInput && !NicknameInput->GetText().EqualTo(Text))
+		NicknameInput->SetText(Text);
+	if (JoinNicknameInput && !JoinNicknameInput->GetText().EqualTo(Text))
+		JoinNicknameInput->SetText(Text);
 }

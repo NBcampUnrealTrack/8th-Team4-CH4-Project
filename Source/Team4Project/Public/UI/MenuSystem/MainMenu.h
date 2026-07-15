@@ -109,6 +109,13 @@ private:
 	// (별도의 공개/비밀 체크박스 없이 이 입력창만으로 판별)
 	UPROPERTY(meta = (BindWidgetOptional))
 	class UEditableTextBox* ServerPassword;
+	
+	// 닉네임 입력 (빈칸이면 스팀 닉네임 사용)
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UEditableTextBox* NicknameInput;
+	
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UEditableTextBox* JoinNicknameInput;
 
 	// ── 비밀방 참여 비밀번호 팝업 ──
 	// 비밀방을 선택하고 Join 을 누르면 이 팝업이 뜬다.
@@ -250,6 +257,12 @@ private:
 
 	UFUNCTION()
 	void QuitPressed();
+	
+	void SaveNicknameToGameInstance(class UEditableTextBox* SourceBox);
+	
+	// 두 닉네임 입력창 값 동기화
+	UFUNCTION()
+	void OnNicknameChanged(const FText& Text);
 
 	// ── 스킨 선택 ──
 	UFUNCTION()
