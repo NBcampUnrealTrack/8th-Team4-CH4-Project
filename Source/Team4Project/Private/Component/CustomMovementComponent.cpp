@@ -16,8 +16,8 @@ void UCustomMovementComponent::BeginPlay()
 
 	if (OwningPlayerAnimInstance)
 	{
-		OwningPlayerAnimInstance->OnMontageEnded.AddDynamic(this, &UCustomMovementComponent::OnClimbMontageEnded);
-		OwningPlayerAnimInstance->OnMontageBlendingOut.AddDynamic(this, &UCustomMovementComponent::OnClimbMontageEnded);
+		OwningPlayerAnimInstance->OnMontageEnded.AddUniqueDynamic(this, &UCustomMovementComponent::OnClimbMontageEnded);
+		OwningPlayerAnimInstance->OnMontageBlendingOut.AddUniqueDynamic(this, &UCustomMovementComponent::OnClimbMontageEnded);
 	}
 }
 
@@ -218,7 +218,7 @@ bool UCustomMovementComponent::CanClimbDownLedge()
 	const FVector LedgeTraceStart = WalkableSurfaceHit.TraceStart + ComponentForward * ClimbDownLedgeTraceOffset;
 	const FVector LedgeTraceEnd = LedgeTraceStart + DownVector * 200.f;
 
-	FHitResult LedgeTraceHit = DoLineTraceSingleByObject(LedgeTraceStart, LedgeTraceEnd,true);
+	FHitResult LedgeTraceHit = DoLineTraceSingleByObject(LedgeTraceStart, LedgeTraceEnd);
 
 	if (WalkableSurfaceHit.bBlockingHit && !LedgeTraceHit.bBlockingHit)
 	{
@@ -518,8 +518,8 @@ void UCustomMovementComponent::RefreshAnimInstance()
 		// 새로운 AnimInstance에 델리게이트 다시 묶어주기
 		if (OwningPlayerAnimInstance)
 		{
-			OwningPlayerAnimInstance->OnMontageEnded.AddDynamic(this, &UCustomMovementComponent::OnClimbMontageEnded);
-			OwningPlayerAnimInstance->OnMontageBlendingOut.AddDynamic(this, &UCustomMovementComponent::OnClimbMontageEnded);
+			OwningPlayerAnimInstance->OnMontageEnded.AddUniqueDynamic(this, &UCustomMovementComponent::OnClimbMontageEnded);
+			OwningPlayerAnimInstance->OnMontageBlendingOut.AddUniqueDynamic(this, &UCustomMovementComponent::OnClimbMontageEnded);
 		}
 	}
 }
