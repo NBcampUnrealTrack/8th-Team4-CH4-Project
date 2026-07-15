@@ -29,8 +29,8 @@ void UGODAbilitySlotWidget::NativeConstruct()
 
 	if (Btn_AbilitySlot)
 	{
-		Btn_AbilitySlot->OnHovered.AddDynamic(this, &UGODAbilitySlotWidget::OnSlotHovered);
-		Btn_AbilitySlot->OnUnhovered.AddDynamic(this, &UGODAbilitySlotWidget::OnSlotUnhovered);
+		//Btn_AbilitySlot->OnHovered.AddDynamic(this, &UGODAbilitySlotWidget::OnSlotHovered);
+		//Btn_AbilitySlot->OnUnhovered.AddDynamic(this, &UGODAbilitySlotWidget::OnSlotUnhovered);
 		Btn_AbilitySlot->OnClicked.AddDynamic(this, &UGODAbilitySlotWidget::OnSlotClicked);
 	}
 
@@ -59,11 +59,11 @@ void UGODAbilitySlotWidget::RefreshStaticInfo()
 	}
 
 	// 툴팁 텍스트
-	if (TB_AbilityName)
-		TB_AbilityName->SetText(SlotConfig.AbilityName);
+	//if (TB_AbilityName)
+		//TB_AbilityName->SetText(SlotConfig.AbilityName);
 
-	if (TB_AbilityDescription)
-		TB_AbilityDescription->SetText(SlotConfig.AbilityDescription);
+	//if (TB_AbilityDescription)
+		//TB_AbilityDescription->SetText(SlotConfig.AbilityDescription);
 
 	// 쿨타임 초기 숨김
 	if (PB_Cooldown)
@@ -147,12 +147,12 @@ bool UGODAbilitySlotWidget::TryActivateSlotAbility()
 
 void UGODAbilitySlotWidget::OnSlotHovered()
 {
-	if (Panel_Tooltip)
-		Panel_Tooltip->SetVisibility(ESlateVisibility::HitTestInvisible);
+	//if (Panel_Tooltip)
+		//Panel_Tooltip->SetVisibility(ESlateVisibility::HitTestInvisible);
 }
 
 void UGODAbilitySlotWidget::OnSlotUnhovered()
 {
-	if (Panel_Tooltip)
-		Panel_Tooltip->SetVisibility(ESlateVisibility::Collapsed);
+	//if (Panel_Tooltip)
+		//Panel_Tooltip->SetVisibility(ESlateVisibility::Collapsed);
 }
