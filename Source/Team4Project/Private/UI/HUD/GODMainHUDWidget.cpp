@@ -30,6 +30,7 @@ void UGODMainHUDWidget::NativeConstruct()
 	if (Slot_Passive) Slot_Passive->SetVisibility(ESlateVisibility::Collapsed);
 	if (Slot_Active1) Slot_Active1->SetVisibility(ESlateVisibility::Collapsed);
 	if (Slot_Active2) Slot_Active2->SetVisibility(ESlateVisibility::Collapsed);
+	if (Slot_Active3) Slot_Active3->SetVisibility(ESlateVisibility::Collapsed);
 	if (Btn_RoleIcon) Btn_RoleIcon->SetVisibility(ESlateVisibility::Collapsed);
 
 	// 툴팁 패널 초기 숨김
@@ -173,6 +174,7 @@ void UGODMainHUDWidget::InitializeForPawn(APawn* NewPawn)
 		if (Slot_Passive) Slot_Passive->SetAbilitySystemComponent(ASC);
 		if (Slot_Active1) Slot_Active1->SetAbilitySystemComponent(ASC);
 		if (Slot_Active2) Slot_Active2->SetAbilitySystemComponent(ASC);
+		if (Slot_Active3) Slot_Active3->SetAbilitySystemComponent(ASC);
 	}
 
 	// 역할 태그로 HUD 세팅
@@ -515,6 +517,27 @@ void UGODMainHUDWidget::SetupRoleHUD(const FGameplayTag& CharTag)
 	// 💡 요청하신 정확한 화면 자리에 인덱스를 매핑합니다.
 	ConfigureActiveSlot(Slot_Active1, 0); // 0번 데이터(액티브1) ➡️ 우하단 슬롯(`Slot_Active1`) 배치
 	ConfigureActiveSlot(Slot_Active2, 1); // 1번 데이터(액티브2) ➡️ 우상단 슬롯(`Slot_Active2`) 배치
+	ConfigureActiveSlot(Slot_Active3, 2); // 2번 데이터(액티브3) ➡️ `Slot_Active3` (WBP 에 있을 때만)
+}
+
+bool UGODMainHUDWidget::TryActivateActiveSlot(int32 SlotIndex)
+{
+	UGODAbilitySlotWidget* SlotWidget = nullptr;
+	switch (SlotIndex)
+	{
+		case 0: SlotWidget = Slot_Active1; break;
+		case 1: SlotWidget = Slot_Active2; break;
+		case 2: SlotWidget = Slot_Active3; break;
+		default: break;
+	}
+
+	// 역할에 없는 슬롯은 Collapsed 상태인데, 이전 역할의 SlotConfig 가
+	// 남아 있을 수 있으므로 보이는 슬롯만 발동을 허용한다.
+	if (!SlotWidget || SlotWidget->GetVisibility() == ESlateVisibility::Collapsed)
+	{
+		return false;
+	}
+	return SlotWidget->TryActivateSlotAbility();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

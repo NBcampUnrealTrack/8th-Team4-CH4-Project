@@ -60,7 +60,7 @@ struct FRoleHUDSetup
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
 	FAbilitySlotConfig PassiveSlot;
 
-	/** 액티브 능력 슬롯 설정 (최대 2개 - 0번: 우하단 고정, 1번: 우상단 추가) */
+	/** 액티브 능력 슬롯 설정 (최대 3개 — 0번: Slot_Active1/1키, 1번: Slot_Active2/2키, 2번: Slot_Active3/R키) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
 	TArray<FAbilitySlotConfig> ActiveSlots;
 };
@@ -102,6 +102,14 @@ public:
 	/** UI 사운드 DT (BGM.InGame 행으로 인게임 BGM 재생). WBP 디폴트에서 지정. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HUD|Sound")
 	TObjectPtr<UDataTable> UISoundTable;
+
+	/**
+	 * 키보드 입력용 액티브 슬롯 발동 (0=1키, 1=2키, 2=R키 — BaseCharacter 가 호출).
+	 * 버튼 클릭과 동일한 TryActivateSlotAbility 경로라 버튼 방식은 그대로 유지된다.
+	 * 현재 역할에 해당 슬롯이 없으면(Collapsed) 무시한다.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "HUD|Ability")
+	bool TryActivateActiveSlot(int32 SlotIndex);
 
 	//조준점 ui 노출
 	//UFUNCTION(BlueprintCallable, Category = "HUD")
@@ -178,6 +186,11 @@ protected:
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UGODAbilitySlotWidget> Slot_Active2;
+
+	// 세 번째 액티브 슬롯 (액티브 3개짜리 역할용, R키).
+	// Optional — WBP 에 아직 없어도 컴파일/동작에 지장 없다.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UGODAbilitySlotWidget> Slot_Active3;
 
 	// 중앙 하단 — 인터랙트 프롬프트 ("[F] 열기" 등).
 	// WBP에 이 이름의 TextBlock을 배치하면 자동 연결된다 (Optional이라 없어도 컴파일됨).

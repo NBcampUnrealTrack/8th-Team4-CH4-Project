@@ -743,6 +743,13 @@ protected:
 	void OnQTEDownPressed();
 	void OnQTELeftPressed();
 	void OnQTERightPressed();
+
+	// 액티브 스킬 키보드 발동 (1키/2키/R키). 버튼 클릭과 병행 — HUD 슬롯의
+	// TryActivateSlotAbility 를 그대로 호출하므로 쿨타임/태그 검사도 동일하다.
+	void OnAbilitySlot1Pressed();
+	void OnAbilitySlot2Pressed();
+	void OnAbilitySlot3Pressed();
+	void ActivateAbilitySlotFromKey(int32 SlotIndex);
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	USpringArmComponent* CameraBoom;
