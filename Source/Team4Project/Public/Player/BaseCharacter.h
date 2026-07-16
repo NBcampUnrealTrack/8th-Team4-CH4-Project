@@ -372,6 +372,11 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Sheriff")
 	void OnSearchResult(bool bHasMafiaAbility, ABaseCharacter* Target);
 
+	// 수색(감별) 결과를 보안관 본인에게만 통지 (서버 → 소유 클라).
+	// HUD 배너(OnAnnouncement 로컬 브로드캐스트)로 성공/실패를 표시하고 OnSearchResult BIE 도 호출한다.
+	UFUNCTION(Client, Reliable)
+	void Client_NotifySearchResult(bool bIsMafia, ABaseCharacter* Target);
+
 	void UnlockDoor(AActor* DoorActor);
 
 	// ============================================================

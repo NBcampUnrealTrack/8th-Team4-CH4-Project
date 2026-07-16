@@ -69,7 +69,10 @@ void UPressureComponent::ResetAfterExplosion()
 	if (!GetOwner()->HasAuthority()) return;
 	bExploded = false;
 	CurrentPressure = 30.f;
-	bWasWarning = false;
+	// bWasWarning 은 건드리지 않는다 — 직전까지 경고 구간이었으므로, 다음 Tick 에서
+	// (30 < WarningThreshold) 조건으로 OnPressureRecovered 가 정상 발화해야
+	// 열차의 고압 감속(bHighPressure)이 풀린다. 여기서 false 로 지우면 해제 이벤트가
+	// 영영 나가지 않아 감속 배수가 게임 끝까지 남는다.
 }
 
 void UPressureComponent::ResetForNewGame()

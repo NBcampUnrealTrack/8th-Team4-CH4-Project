@@ -423,6 +423,18 @@ void AGODGameMode::HandleQuestCompleted(AGODPlayerState* PS, AQuestStation* Stat
 	// 특수직(보안관/마피아/밀수꾼)의 퀘스트는 위장용 — 완료해도 보상/기여 없음.
 	// (배정 자체를 빼면 좌상단 목록이 비어 어깨너머로 역할이 탄로난다)
 
+	// 배정 퀘스트 전부 완료 → 본인에게만 클리어 사운드 (타인에게 들리면 진행 상황 노출).
+	if (PS->AreAllQuestsCompleted())
+	{
+		if (AController* PC = Cast<AController>(PS->GetOwner()))
+		{
+			if (ABaseCharacter* Char = Cast<ABaseCharacter>(PC->GetPawn()))
+			{
+				Char->Client_PlayCharacterSound(SoundRows::QuestAllComplete);
+			}
+		}
+	}
+
 	RecalculateQuestSpeedMultiplier();
 }
 
@@ -756,8 +768,13 @@ void AGODGameMode::ReturnToMainMenu()
 
 void AGODGameMode::HandlePressureExplosion()
 {
-	// 압력 100% 달성 → 열차 탈선 + 마피아 승리
-	TriggerDerailment();
+	// 압력 100% 달성 →  탈선/마피아 승리 대신 일시 감속 페널티.
+	// 감속 배수·지속시간·폭발 후 압력 리셋은 GODTrain::OnPressureExploded 가 처리한다.
+	if (AGODGameState* GS = GetGameState<AGODGameState>())
+	{
+		GS->Announce(NSLOCTEXT("Announce", "PressureExplosion",
+			"보일러 폭발 — 열차가 한동안 감속한다"), EAnnouncementType::Critical);
+	}
 }
 
 // ============================================================
@@ -766,6 +783,9 @@ void AGODGameMode::HandlePressureExplosion()
 
 bool AGODGameMode::CanStartMeeting() const
 {
+	// 긴급 회의 제거: 기능 전체를 여기서 차단한다.
+	if (!bMeetingSystemEnabled) return false;
+
 	const AGODGameState* GODGS = GetGameState<AGODGameState>();
 	if (!GODGS || GODGS->CurrentPhase != EGamePhase::Playing) return false;
 

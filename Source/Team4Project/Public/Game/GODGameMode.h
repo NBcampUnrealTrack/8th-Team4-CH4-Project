@@ -87,6 +87,14 @@ public:
 	/** 회의 중 열차 밖으로 떨어진 플레이어를 회의실 좌석으로 복귀 (BaseCharacter 낙하 판정에서 호출). */
 	void RescueToMeeting(ABaseCharacter* Character);
 
+	/**
+	 * 긴급 소집 기능 사용 여부. false 면 벨이 영구 비활성(bMeetingBellReady 가 항상 false)이라
+	 * 프롬프트도 뜨지 않고 TryStartMeeting 도 거부된다.
+	 * MeetingRoom 액터는 낙하 복귀 지점으로 계속 쓰이므로 유지.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Meeting")
+	bool bMeetingSystemEnabled = false;
+
 	/** 회의(토론) 지속 시간 (초) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Meeting")
 	int32 MeetingDuration = 60;

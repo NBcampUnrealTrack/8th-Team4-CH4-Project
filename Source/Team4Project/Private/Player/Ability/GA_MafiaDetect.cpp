@@ -42,33 +42,51 @@ void UGA_MafiaDetect::ActivateAbility(
 
 	if (Character->HasAuthority())
 	{
-		// 총 제거 후 시선(눈높이) 기준으로 조준 트레이스.
-		const FRotator AimRot = Character->GetBaseAimRotation();
-		const FVector Start = Character->GetPawnViewLocation();
-		const FVector End = Start + AimRot.Vector() * Range;
+		ABaseCharacter* Target = nullptr;
 
-		FCollisionQueryParams Params;
-		Params.AddIgnoredActor(Character);
-
-		FHitResult Hit;
-		const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Pawn, Params);
-
-		if (bHit)
+		// F 수색(캐릭터 인터랙트)으로 트리거된 경우 이벤트에 대상이 실려 온다 — 조준 불필요.
+		// (BaseCharacter::Interact_Implementation 이 OptionalObject 에 자기 자신을 담아 보낸다)
+		if (TriggerEventData && TriggerEventData->OptionalObject)
 		{
-			// 맞은 대상이 마피아면 그 대상 위치에 감별 이펙트 재생.
-			if (ABaseCharacter* Target = Cast<ABaseCharacter>(Hit.GetActor()))
+			Target = Cast<ABaseCharacter>(const_cast<UObject*>(TriggerEventData->OptionalObject.Get()));
+		}
+
+		// 이벤트 대상이 없으면(슬롯 발동 등) 기존 시선(눈높이) 조준 트레이스로 폴백.
+		if (!Target)
+		{
+			const FRotator AimRot = Character->GetBaseAimRotation();
+			const FVector Start = Character->GetPawnViewLocation();
+			const FVector End = Start + AimRot.Vector() * Range;
+
+			FCollisionQueryParams Params;
+			Params.AddIgnoredActor(Character);
+
+			FHitResult Hit;
+			const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Pawn, Params);
+			if (bHit)
 			{
-				if (Target->IsMafia())
-				{
-					Target->Multicast_PlayNiagaraAtSelf(DetectEffect);
-				}
+				Target = Cast<ABaseCharacter>(Hit.GetActor());
+			}
+
+			if (bDrawDebug)
+			{
+				DrawDebugLine(GetWorld(), Start, bHit ? Hit.ImpactPoint : End,
+					FColor::Green, false, 1.0f, 0, 1.0f);
 			}
 		}
 
-		if (bDrawDebug)
+		if (Target && Target != Character && !Target->IsDead())
 		{
-			DrawDebugLine(GetWorld(), Start, bHit ? Hit.ImpactPoint : End,
-				FColor::Green, false, 1.0f, 0, 1.0f);
+			const bool bIsMafia = Target->IsMafia();
+
+			// 마피아면 대상 위치에 감별 이펙트 재생 (기존 동작 유지).
+			if (bIsMafia)
+			{
+				Target->Multicast_PlayNiagaraAtSelf(DetectEffect);
+			}
+
+			// 성공/실패를 보안관 본인에게 통지 (New 2 — 수색 결과가 안 뜨던 문제).
+			Character->Client_NotifySearchResult(bIsMafia, Target);
 		}
 	}
 

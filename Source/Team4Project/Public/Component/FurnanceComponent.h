@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
@@ -42,9 +42,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Furnace")
 	float MaxFuel = 150.f;
 
-	// 초당 연료 소모량
+	// 초당 연료 소모량. 2.5 → 1/3 로 하향 — 석탄 투입 후 게이지가 너무 빨리 닳던 문제.
+	// BP(열차) 에서 이 값을 오버라이드해 뒀다면 BP 값이 우선이므로 에디터에서도 확인할 것.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Furnace")
-	float FuelBurnRate = 2.5f;
+	float FuelBurnRate = 0.833333f;
 
 	// 연료 UI(OnFuelLevelChanged) 갱신 간격(초). 매 Tick 대신 이 주기로만 쏜다.
 	// 0 이하면 타이머를 끄고 투입 시점 등에만 갱신.

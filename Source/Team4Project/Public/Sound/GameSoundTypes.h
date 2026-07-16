@@ -71,6 +71,10 @@ namespace SoundRows
 	inline const FName CoalDispense(TEXT("Coal.Dispense"));
 	inline const FName SinkWashing(TEXT("Sink.Washing")); // 루프
 
+	// 퀘스트 1개 완료 / 배정된 퀘스트 전부 완료 (본인 로컬 — DT_CharacterSounds 행)
+	inline const FName QuestComplete(TEXT("Quest.Complete"));
+	inline const FName QuestAllComplete(TEXT("Quest.AllComplete"));
+
 	// 미니게임 (본인 로컬 2D)
 	inline const FName QTEStart(TEXT("QTE.Start"));
 	inline const FName QTESuccess(TEXT("QTE.Success"));
