@@ -547,6 +547,11 @@ protected:
 
 	FTimerHandle StumbleTimer;
 	FTimerHandle StumbleInputLockTimer;
+	FTimerHandle StumblePhysicsRestoreTimer;
+
+	// 밀치기 때 켠 CCD/Pawn 충돌 무시를 원상복구. 충돌 응답은 리플리케이션되지 않으므로
+	// 로컬에서 바꾼 쪽(ApplyLocalStumble)이 로컬에서 직접 되돌려야 한다.
+	void RestoreStumblePhysics();
 	TWeakObjectPtr<ABaseCharacter> LastPusher;
 	float LastPushedTime = -1000.f;
 
