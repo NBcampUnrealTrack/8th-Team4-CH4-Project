@@ -323,15 +323,10 @@ void AGODGameMode::AssignRoles()
 				break;
 			default: RoleStr = TEXT("Unknown"); break;
 		}
+		// 화면 출력 금지 — 호스트 화면에 전원 역할이 노출된다. 로그 파일로만 남긴다.
 		FString PawnOk = PC->GetPawn() ? TEXT("OK") : TEXT("NO PAWN");
 		UE_LOG(LogTemp, Warning, TEXT("[AssignRoles] %s → %s (Tag:%s, Pawn:%s)"),
 			*PlayerName, *RoleStr, *AssignedTag.ToString(), *PawnOk);
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(
-				i, 10.f, FColor::Cyan,
-				FString::Printf(TEXT("[역할] %s → %s"), *PlayerName, *RoleStr));
-		}
 	}
 
 	SetupWatchmanTracking();

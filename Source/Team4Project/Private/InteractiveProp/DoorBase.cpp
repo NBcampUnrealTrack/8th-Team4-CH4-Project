@@ -136,14 +136,8 @@ void ADoorBase::Interact_Implementation(ACharacter* Interactor)
 {
 	if (!HasAuthority() || !Interactor) return;
 
-	// 역할별 GA 이벤트 전송 (ActivationRequiredTags가 역할 판정)
-	// MasterKey(마피아): 잠금 / UnlockDoor(보안관): 잠금 해제
-	FGameplayEventData EventData;
-	EventData.OptionalObject = this;
-	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
-		Interactor, FGameplayTag::RequestGameplayTag(TEXT("Ability.Trigger.MasterKey")), EventData);
-	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
-		Interactor, FGameplayTag::RequestGameplayTag(TEXT("Ability.Trigger.UnlockDoor")), EventData);
+	// MasterKey(마피아 잠금)/UnlockDoor(보안관 해제)는 F에서 분리됨 — HUD 슬롯/키보드에서
+	// 각 GA 가 근처 문을 스스로 찾아 발동한다. F 는 순수 여닫기만 담당.
 
 
 	if (bIsLocked) return;

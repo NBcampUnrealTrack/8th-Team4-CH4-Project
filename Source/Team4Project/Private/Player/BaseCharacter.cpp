@@ -36,6 +36,7 @@
 #include "Game/GODGameMode.h"
 #include "InteractiveProp/GODTrain.h"
 #include "UI/HUD/GODHUD.h"
+#include "UI/HUD/GODMainHUDWidget.h"
 #include "EngineUtils.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Net/UnrealNetwork.h"
@@ -1678,6 +1679,30 @@ void ABaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 
 	// 손에 든 아이템 버리기.
 	PlayerInputComponent->BindKey(EKeys::G, IE_Pressed, this, &ABaseCharacter::DropHeldItem);
+
+	// 액티브 스킬 키보드 발동 — 1/2 = 액티브 1/2, 세 번째는 R
+	// (3키는 강제 시작에 쓰이고 있어 비워 둔다). 버튼 클릭 방식과 병행.
+	PlayerInputComponent->BindKey(EKeys::One, IE_Pressed, this, &ABaseCharacter::OnAbilitySlot1Pressed);
+	PlayerInputComponent->BindKey(EKeys::Two, IE_Pressed, this, &ABaseCharacter::OnAbilitySlot2Pressed);
+	PlayerInputComponent->BindKey(EKeys::R,   IE_Pressed, this, &ABaseCharacter::OnAbilitySlot3Pressed);
+}
+
+void ABaseCharacter::OnAbilitySlot1Pressed() { ActivateAbilitySlotFromKey(0); }
+void ABaseCharacter::OnAbilitySlot2Pressed() { ActivateAbilitySlotFromKey(1); }
+void ABaseCharacter::OnAbilitySlot3Pressed() { ActivateAbilitySlotFromKey(2); }
+
+void ABaseCharacter::ActivateAbilitySlotFromKey(int32 SlotIndex)
+{
+	// 퀘스트 팝업이 열려 있는 동안은 이동과 마찬가지로 스킬 입력도 막는다.
+	if (bQuestUIOpen) return;
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC) return;
+
+	AGODHUD* HUD = Cast<AGODHUD>(PC->GetHUD());
+	if (!HUD || !HUD->MainHUDWidget) return;
+
+	HUD->MainHUDWidget->TryActivateActiveSlot(SlotIndex);
 }
 
 void ABaseCharacter::Move(const FInputActionValue& Value)
