@@ -796,4 +796,8 @@ public:
 
 	UFUNCTION(Client, Reliable)
 	void Client_ForceStartClimbing();
+
+	//충돌처리 관련
+	void SetPushPhysicsSettings(bool bIsPushed);
+
 };

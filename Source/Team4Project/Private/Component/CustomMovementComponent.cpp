@@ -230,6 +230,17 @@ bool UCustomMovementComponent::CanClimbDownLedge()
 
 void UCustomMovementComponent::StartClimbing()
 {
+	TraceClimbableSurfaces(); // 가장 가까운 사다리 찾기
+	if (!ClimbableSurfacesTracedResults.IsEmpty())
+	{
+		UPrimitiveComponent* ClimbBaseComp = ClimbableSurfacesTracedResults[0].GetComponent();
+		if (ClimbBaseComp && CharacterOwner)
+		{
+			// 사다리(ClimbWallVolume)에 캐릭터를 묶습니다.
+			CharacterOwner->SetBase(ClimbBaseComp);
+		}
+	}
+
 	SetMovementMode(MOVE_Custom, ECustomMovementMode::MOVE_Climb);
 
 	if (CharacterOwner && CharacterOwner->IsLocallyControlled() && !CharacterOwner->HasAuthority())
@@ -240,6 +251,11 @@ void UCustomMovementComponent::StartClimbing()
 
 void UCustomMovementComponent::StopClimbing()
 {
+	if (CharacterOwner)
+	{
+		CharacterOwner->SetBase(nullptr);
+	}
+
 	SetMovementMode(MOVE_Falling);
 	if (CharacterOwner && CharacterOwner->IsLocallyControlled() && !CharacterOwner->HasAuthority())
 	{
@@ -544,11 +560,26 @@ void UCustomMovementComponent::Server_PlayClimbMontage_Implementation(UAnimMonta
 
 void UCustomMovementComponent::Server_StopClimbing_Implementation()
 {
+	if (CharacterOwner)
+	{
+		CharacterOwner->SetBase(nullptr);
+	}
+
 	SetMovementMode(MOVE_Falling);
 }
 
 void UCustomMovementComponent::Server_StartClimbing_Implementation()
 {
+	TraceClimbableSurfaces();
+	if (!ClimbableSurfacesTracedResults.IsEmpty())
+	{
+		UPrimitiveComponent* ClimbBaseComp = ClimbableSurfacesTracedResults[0].GetComponent();
+		if (ClimbBaseComp && CharacterOwner)
+		{
+			CharacterOwner->SetBase(ClimbBaseComp);
+		}
+	}
+
 	SetMovementMode(MOVE_Custom, ECustomMovementMode::MOVE_Climb);
 }
 

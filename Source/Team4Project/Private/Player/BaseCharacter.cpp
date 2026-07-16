@@ -132,6 +132,8 @@ ABaseCharacter::ABaseCharacter(const FObjectInitializer& ObjectInitializer)
 		CMC->MaxDepenetrationWithGeometry = 30.f;
 		CMC->MaxDepenetrationWithGeometryAsProxy = 30.f;
 	}
+
+	
 }
 
 void ABaseCharacter::BeginPlay()
@@ -920,6 +922,10 @@ void ABaseCharacter::ReceivePush(ABaseCharacter* Pusher, const FVector& LaunchVe
 
 	Multicast_PlayStumbleMontage();
 
+	SetPushPhysicsSettings(true);
+
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+
 	// 넉백은 서버 시뮬과 소유 클라 양쪽에 적용해야 위치 보정으로 되돌아가지 않는다.
 	if (IsLocallyControlled())
 	{
@@ -939,6 +945,9 @@ void ABaseCharacter::Client_LaunchFromPush_Implementation(FVector LaunchVelocity
 
 void ABaseCharacter::ApplyLocalStumble(const FVector& LaunchVelocity, float StumbleDuration)
 {
+	SetPushPhysicsSettings(true);
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+
 	LaunchCharacter(LaunchVelocity, true, true);
 
 	// 비틀거리는 동안 이동 입력 잠금. 잠그지 않으면 공중조작으로 낙하를 그대로 되돌릴 수 있다.
@@ -969,8 +978,13 @@ void ABaseCharacter::ApplyLocalStumble(const FVector& LaunchVelocity, float Stum
 void ABaseCharacter::EndStumble()
 {
 	if (!HasAuthority() || !AbilitySystemComponent) return;
+  
 	// Remove(1 감소)가 아니라 카운트 0 고정 — 잔존 카운트가 밀치기를 영구 차단하지 않게.
 	AbilitySystemComponent->SetLooseGameplayTagCount(State::Stumble.GetTag(), 0);
+
+	SetPushPhysicsSettings(false);
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+
 }
 
 AGODPlayerState* ABaseCharacter::GetFallKillCredit() const
@@ -2070,4 +2084,14 @@ void ABaseCharacter::Client_ForceStartClimbing_Implementation()
 	{
 		CustomMovementComponent->ToggleClimbing(false);
 	}
+}
+
+void ABaseCharacter::SetPushPhysicsSettings(bool bIsPushed)
+{
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		// 속도 너무 빠를 때 벽을 뚫고 들어가지 않게 막아준다.
+		Capsule->SetUseCCD(bIsPushed);
+	}
+
 }
