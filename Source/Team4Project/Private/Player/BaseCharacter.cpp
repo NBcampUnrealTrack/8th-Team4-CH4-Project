@@ -973,18 +973,32 @@ void ABaseCharacter::ApplyLocalStumble(const FVector& LaunchVelocity, float Stum
 			},
 			StumbleDuration, false);
 	}
+
+	// 서버의 EndStumble 은 서버 캡슐만 되돌린다. 여기(소유 클라 또는 리슨 호스트)서
+	// 켠 CCD/Pawn 무시는 로컬 타이머로 직접 복구해야 클라에 영구히 남지 않는다.
+	GetWorldTimerManager().SetTimer(
+		StumblePhysicsRestoreTimer, this, &ABaseCharacter::RestoreStumblePhysics,
+		StumbleDuration, false);
+}
+
+void ABaseCharacter::RestoreStumblePhysics()
+{
+	SetPushPhysicsSettings(false);
+
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+	}
 }
 
 void ABaseCharacter::EndStumble()
 {
 	if (!HasAuthority() || !AbilitySystemComponent) return;
-  
+
 	// Remove(1 감소)가 아니라 카운트 0 고정 — 잔존 카운트가 밀치기를 영구 차단하지 않게.
 	AbilitySystemComponent->SetLooseGameplayTagCount(State::Stumble.GetTag(), 0);
 
-	SetPushPhysicsSettings(false);
-	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
-
+	RestoreStumblePhysics();
 }
 
 AGODPlayerState* ABaseCharacter::GetFallKillCredit() const
