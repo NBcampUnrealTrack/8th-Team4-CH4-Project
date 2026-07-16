@@ -32,9 +32,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Push")
 	float PushRange = 200.f;
 
-	// 판정 구체 반지름 (cm). 조준이 조금 빗나가도 잡히게 한다.
+	// 판정 구체 반지름 (cm). 
 	UPROPERTY(EditDefaultsOnly, Category = "Push")
-	float PushRadius = 45.f;
+	float PushRadius = 30.f;
 
 	// 수평 넉백 세기 (cm/s)
 	UPROPERTY(EditDefaultsOnly, Category = "Push")

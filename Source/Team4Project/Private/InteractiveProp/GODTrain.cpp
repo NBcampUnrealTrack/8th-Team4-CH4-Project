@@ -206,6 +206,10 @@ void AGODTrain::Tick(float DeltaTime)
 			{
 				TargetSpeed *= GearBrokenSpeedMultiplier;
 			}
+			if (bExplosionSlowed)
+			{
+				TargetSpeed *= ExplosionSlowMultiplier;
+			}
 			TrainSpeed = FMath::FInterpTo(TrainSpeed, TargetSpeed, DeltaTime, SpeedInterpRate);
 
 			// 게임플레이용 목적지 카운트다운
@@ -598,6 +602,22 @@ void AGODTrain::OnPressureExploded()
 	// 폭발 시 즉시 속도 패널티
 	TrainSpeed = FMath::Max(0.f, TrainSpeed - ExplosionSpeedPenalty);
 	// 이펙트/데미지는 BP에서 OnPressureExplode 델리게이트에 바인딩
+
+	// 탈선 대신 일시 감속: 지속시간 동안 목표 속도에 배수를 곱한다.
+	// 압력은 즉시 리셋해 게이지가 떨어지고 압력 관리 사이클이 다시 돌게 한다.
+	// (bExploded 가 남아 있으면 압력 Tick 이 100에 얼어붙고 경고음이 끝나지 않는다)
+	bExplosionSlowed = true;
+	GetWorldTimerManager().SetTimer(ExplosionSlowTimer,
+		FTimerDelegate::CreateWeakLambda(this, [this]()
+			{
+				bExplosionSlowed = false;
+			}),
+		ExplosionSlowDuration, /*bLoop=*/false);
+
+	if (Pressure)
+	{
+		Pressure->ResetAfterExplosion();
+	}
 
 	// 폭발음 (서버에서만 바인딩되는 델리게이트라 멀티캐스트로 전 클라 재생)
 	Multicast_PlayTrainSound(SoundRows::TrainExplosion);

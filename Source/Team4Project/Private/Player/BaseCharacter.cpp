@@ -791,6 +791,12 @@ void ABaseCharacter::Client_EndQuestMinigame_Implementation(bool bSuccess)
 	ActiveQuestStation = nullptr;
 	SetQuestUIOpen(false);
 
+	// 퀘스트 1개 완료음 — 본인 로컬 (미배정 위장 퀘스트도 동일하게 울려야 위장이 성립한다).
+	if (bSuccess)
+	{
+		PlayCharacterSoundLocal(SoundRows::QuestComplete);
+	}
+
 	if (ABasePlayerController* PC = Cast<ABasePlayerController>(GetController()))
 	{
 		if (AGODHUD* HUD = Cast<AGODHUD>(PC->GetHUD()))
@@ -905,7 +911,11 @@ void ABaseCharacter::ReceivePush(ABaseCharacter* Pusher, const FVector& LaunchVe
 
 	if (AbilitySystemComponent)
 	{
-		AbilitySystemComponent->AddLooseGameplayTag(State::Stumble.GetTag());
+		// AddLooseGameplayTag 는 호출마다 카운트가 누적된다. 연타로 밀리면 카운트만 쌓이는데
+		// EndStumble(단일 타이머, 1회 발화)은 1만 깎아 State.Stumble 이 영구히 남고,
+		// 그 뒤로 GA_Push(ActivationBlockedTags)가 계속 차단됐다 — "떨어진 뒤 발차기 안 됨" 버그.
+		// 카운트를 1로 고정해 몇 번을 맞아도 해제 한 번으로 확실히 풀리게 한다.
+		AbilitySystemComponent->SetLooseGameplayTagCount(State::Stumble.GetTag(), 1);
 		GetWorldTimerManager().SetTimer(
 			StumbleTimer, this, &ABaseCharacter::EndStumble, StumbleDuration, false);
 	}
@@ -968,10 +978,13 @@ void ABaseCharacter::ApplyLocalStumble(const FVector& LaunchVelocity, float Stum
 void ABaseCharacter::EndStumble()
 {
 	if (!HasAuthority() || !AbilitySystemComponent) return;
-	AbilitySystemComponent->RemoveLooseGameplayTag(State::Stumble.GetTag());
+  
+	// Remove(1 감소)가 아니라 카운트 0 고정 — 잔존 카운트가 밀치기를 영구 차단하지 않게.
+	AbilitySystemComponent->SetLooseGameplayTagCount(State::Stumble.GetTag(), 0);
 
 	SetPushPhysicsSettings(false);
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+
 }
 
 AGODPlayerState* ABaseCharacter::GetFallKillCredit() const
@@ -1190,6 +1203,14 @@ void ABaseCharacter::Interact_Implementation(ACharacter* Interactor)
 	// 죽은 캐릭터는 상호작용 대상이 아니다 (탄약 빼앗기는 총 시스템과 함께 제거됨).
 	if (!HasAuthority() || !Interactor || bIsDead) return;
 
+	// 수색은 보안관 전용 (New 20). 서버 권위 검사 — 다른 역할의 F 입력은 무시한다.
+	const ABaseCharacter* BaseInteractor = Cast<ABaseCharacter>(Interactor);
+	if (!BaseInteractor ||
+		BaseInteractor->GetCharacterTag() != Character::Special::Sheriff.GetTag())
+	{
+		return;
+	}
+
 	FGameplayEventData EventData;
 	EventData.OptionalObject = this;
 
@@ -1199,7 +1220,19 @@ void ABaseCharacter::Interact_Implementation(ACharacter* Interactor)
 
 FText ABaseCharacter::GetInteractPrompt_Implementation() const
 {
-	return bIsDead ? FText::GetEmpty() : FText::FromString(TEXT("수색"));
+	if (bIsDead) return FText::GetEmpty();
+
+	// 수색 프롬프트는 보안관에게만 (New 20 — 짐꾼 등 다른 역할에게 "수색 F"가 뜨던 문제).
+	// 프롬프트는 각 머신의 로컬 UI 가 읽으므로 로컬 플레이어의 직업으로 판정한다.
+	const APlayerController* LocalPC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	const ABaseCharacter* Viewer = LocalPC ? Cast<ABaseCharacter>(LocalPC->GetPawn()) : nullptr;
+	if (!Viewer || Viewer == this ||
+		Viewer->GetCharacterTag() != Character::Special::Sheriff.GetTag())
+	{
+		return FText::GetEmpty();
+	}
+
+	return FText::FromString(TEXT("수색"));
 }
 
 void ABaseCharacter::SetCoalEquipped(bool bEquip)
@@ -1386,9 +1419,37 @@ void ABaseCharacter::CheckFallRescueOrDeath()
 	float ReferenceZ = 0.f;
 	if (!GetFallReferenceZ(ReferenceZ)) return;
 
-	if (GetActorLocation().Z < ReferenceZ - FallDeathDepth)
+	bool bFellOffTrain = GetActorLocation().Z < ReferenceZ - FallDeathDepth;
+
+	// 고도차만으로는 "열차와 비슷한 높이의 지형에 착지"한 경우를 못 잡는다 (New 19 —
+	// 떨어진 뒤 가만히 서 있으면 복귀가 안 되던 버그). 걷는 중인데 발판이 열차
+	// (또는 열차에 부착된 액터)가 아니면 열차 밖에 내린 것으로 판정한다.
+	if (!bFellOffTrain && IsValid(CachedTrain) &&
+		GetCharacterMovement() && GetCharacterMovement()->IsMovingOnGround())
 	{
-		// 사망 시스템 제거(2026-07-13): 낙하는 사망이 아니라 FallRespawnDelay 뒤 열차 복귀.
+		const UPrimitiveComponent* Base = GetMovementBase();
+		const AActor* BaseActor = Base ? Base->GetOwner() : nullptr;
+
+		// 다른 캐릭터 머리 위나 물리 아이템(열차 바닥에 놓인 석탄/기어 등 — 열차에
+		// 부착돼 있지 않다) 위에 올라선 경우는 낙하로 치지 않는다.
+		if (BaseActor && !BaseActor->IsA<APawn>() && !BaseActor->IsA<AItemBase>())
+		{
+			bool bOnTrain = false;
+			for (const AActor* Cur = BaseActor; Cur; Cur = Cur->GetAttachParentActor())
+			{
+				if (Cur == CachedTrain)
+				{
+					bOnTrain = true;
+					break;
+				}
+			}
+			bFellOffTrain = !bOnTrain;
+		}
+	}
+
+	if (bFellOffTrain)
+	{
+		// 사망 시스템 제거: 낙하는 사망이 아니라 FallRespawnDelay 뒤 열차 복귀.
 		if (!GetWorldTimerManager().IsTimerActive(TrainRescueTimer))
 		{
 			GetWorldTimerManager().SetTimer(
@@ -1504,6 +1565,34 @@ void ABaseCharacter::FellOutOfWorld(const UDamageType& dmgType)
 	}
 
 	Super::FellOutOfWorld(dmgType);
+}
+
+void ABaseCharacter::Client_NotifySearchResult_Implementation(bool bIsMafia, ABaseCharacter* Target)
+{
+	// HUD 상단 배너로 결과 표시. OnAnnouncement 를 이 머신에서만 브로드캐스트하므로
+	// 다른 플레이어에게는 보이지 않는다 (수색 결과는 보안관만 알아야 한다).
+	if (AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr)
+	{
+		FString TargetName = TEXT("대상");
+		if (Target)
+		{
+			if (const APlayerState* TargetPS = Target->GetPlayerState())
+			{
+				TargetName = TargetPS->GetPlayerName();
+			}
+		}
+
+		const FText Msg = bIsMafia
+			? FText::Format(NSLOCTEXT("Search", "ResultMafia",
+				"수색 성공 — {0} 은(는) 마피아다!"), FText::FromString(TargetName))
+			: FText::Format(NSLOCTEXT("Search", "ResultNotMafia",
+				"수색 결과 — {0} 은(는) 마피아가 아니다"), FText::FromString(TargetName));
+
+		GS->OnAnnouncement.Broadcast(Msg, bIsMafia ? EAnnouncementType::Critical : EAnnouncementType::Info);
+	}
+
+	// BP 연출 훅 (WBP 커스텀 표시가 필요하면 캐릭터 BP 에서 구현).
+	OnSearchResult(bIsMafia, Target);
 }
 
 void ABaseCharacter::UnlockDoor(AActor* DoorActor)

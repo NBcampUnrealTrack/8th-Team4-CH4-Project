@@ -149,6 +149,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
 	float ExplosionSpeedPenalty = 80.f;
 
+	// 압력 폭발은 탈선이 아니라 일시 감속: 이 시간(초) 동안 목표 속도에
+	// ExplosionSlowMultiplier 를 곱한다. 폭발 즉시 압력은 리셋되어 사이클이 다시 돈다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
+	float ExplosionSlowDuration = 15.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
+	float ExplosionSlowMultiplier = 0.5f;
+
 	// 압력 80% 이상(고압 경고) 시 적용할 속도 배수. 목표 속도에 곱해진다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
 	float HighPressureSpeedMultiplier = 0.5f;
@@ -258,6 +266,10 @@ private:
 
 	// 고압 경고 중인지 여부. 목표 속도에 HighPressureSpeedMultiplier 를 적용한다.
 	bool bHighPressure = false;
+
+	// 폭발 감속 중인지 여부 (서버 전용). ExplosionSlowDuration 뒤 타이머로 해제된다.
+	bool bExplosionSlowed = false;
+	FTimerHandle ExplosionSlowTimer;
 
 	// 기어가 하나라도 풀렸는지. Tick 앞부분에서 한 번만 계산해 압력/속도 양쪽에 쓴다.
 	bool bAnyGearBroken = false;
