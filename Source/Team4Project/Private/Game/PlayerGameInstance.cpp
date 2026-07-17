@@ -41,6 +41,10 @@ const static FName CREATED_AT_SETTINGS_KEY = TEXT("CreatedAt");
 const static FName HAS_PASSWORD_SETTINGS_KEY = TEXT("HasPassword");
 const static FName PW_HASH_SETTINGS_KEY = TEXT("PwHash");
 
+// 게임 진행 중 여부. 게임이 시작되면 true 로 갱신해 검색 목록에서 거르고
+// 참여 시도도 클라 선에서 막는다 (최종 차단은 서버 GameMode::PreLogin 페이즈 검사).
+const static FName IN_PROGRESS_SETTINGS_KEY = TEXT("InProgress");
+
 namespace
 {
 	// 로컬 플레이어의 고유 ID(스팀 SteamID). 실패 시 머신 로그인 ID 폴백.
@@ -444,6 +448,24 @@ void UPlayerGameInstance::OnFindSessionComplete(bool Success)
 			}
 		}
 
+		// ---- 진행 중인 방 제거 ----
+		// 게임이 시작된 방은 참여 불가이므로 목록/빠른 방찾기 대상에서 뺀다.
+		// Join(Index)이 SearchResults 인덱스를 쓰므로 유령 세션과 마찬가지로
+		// SearchResults 자체에서 제거한다.
+		{
+			TArray<FOnlineSessionSearchResult>& Results = SessionSearch->SearchResults;
+			for (int32 i = Results.Num() - 1; i >= 0; --i)
+			{
+				bool bInProgress = false;
+				Results[i].Session.SessionSettings.Get(IN_PROGRESS_SETTINGS_KEY, bInProgress);
+				if (bInProgress)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("진행 중인 방 제외: %s"), *Results[i].GetSessionIdStr());
+					Results.RemoveAt(i);
+				}
+			}
+		}
+
 		TArray<FServerData> ServerNames;
 
 
@@ -578,8 +600,27 @@ void UPlayerGameInstance::CreateSession()
 			bHasPassword ? static_cast<int32>(FCrc::StrCrc32(*HostSessionPassword)) : 0,
 			EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 
+		// 새 방은 대기 상태로 시작. 게임 시작 시 SetSessionInProgress(true)로 갱신된다.
+		SessionSettings.Set(IN_PROGRESS_SETTINGS_KEY, false,
+			EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+
 		SessionInterface->CreateSession(0, SESSION_NAME, SessionSettings);
 	}
+}
+
+void UPlayerGameInstance::SetSessionInProgress(bool bInProgress)
+{
+	if (!SessionInterface.IsValid()) return;
+
+	FNamedOnlineSession* Session = SessionInterface->GetNamedSession(SESSION_NAME);
+	if (!Session) return; // 호스트가 아니거나 세션이 이미 정리된 경우
+
+	FOnlineSessionSettings NewSettings = Session->SessionSettings;
+	NewSettings.bAllowJoinInProgress = !bInProgress;
+	NewSettings.Set(IN_PROGRESS_SETTINGS_KEY, bInProgress,
+		EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+
+	SessionInterface->UpdateSession(SESSION_NAME, NewSettings, /*bShouldRefreshOnlineData=*/true);
 }
 
 void UPlayerGameInstance::MoveToTitleMap()
@@ -610,6 +651,19 @@ void UPlayerGameInstance::Join(uint32 Index, FString Password)
 		return;
 
 	FOnlineSessionSearchResult& Result = SessionSearch->SearchResults[Index];
+
+	// 검색 이후 게임이 시작된 방일 수 있다 — 스냅샷 기준 선검증 (최종 차단은 서버 PreLogin).
+	bool bInProgress = false;
+	Result.Session.SessionSettings.Get(IN_PROGRESS_SETTINGS_KEY, bInProgress);
+	if (bInProgress)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(1, 3.f, FColor::Red,
+				TEXT("이미 게임이 시작된 방에는 참여할 수 없습니다."));
+		}
+		return;
+	}
 
 	// 비밀번호 방이면 클라 측 선검증 (즉각적인 UX용 — 최종 검증은 서버 PreLogin).
 	// 틀리면 메뉴를 유지한 채 안내만 하고 중단한다.

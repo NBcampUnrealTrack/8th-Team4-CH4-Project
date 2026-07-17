@@ -47,6 +47,18 @@ void AGODGameMode::PreLogin(const FString& Options, const FString& Address,
 	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
 	if (!ErrorMessage.IsEmpty()) return;
 
+	// 게임 시작 후 난입 차단 (서버 권위 — 세션 목록 필터를 우회해도 여기서 막힌다).
+	// Countdown 도 차단: 카운트다운 중 접속하면 로딩이 끝나기 전에 AssignRoles 가
+	// 지나가 역할 없는 캐릭터가 되므로 대기 중에만 허용한다.
+	if (const AGODGameState* GODGS = GetGameState<AGODGameState>())
+	{
+		if (GODGS->CurrentPhase != EGamePhase::WaitingForPlayers)
+		{
+			ErrorMessage = TEXT("이미 게임이 시작된 방에는 참여할 수 없습니다.");
+			return;
+		}
+	}
+
 	// 비밀번호 방 검증 (서버 권위). 클라이언트는 접속 URL에 ?SessionPassword= 로 전달한다.
 	// ErrorMessage를 채우면 엔진이 접속을 거부하고 클라에 사유를 보낸다.
 	if (const UPlayerGameInstance* GI = GetGameInstance<UPlayerGameInstance>())
@@ -187,6 +199,12 @@ void AGODGameMode::StartGame()
 	LastMeetingEndTime = -1.0;
 	GODGS->OnRep_GamePhase();     // 리슨 서버(호스트)에도 Playing 페이즈 전환 브로드캐스트 (출발 연출 등)
 	GODGS->OnRep_RemainingTime(); // 리슨 서버 클라이언트 즉시 알림
+
+	// 게임 시작 → 세션을 "진행 중"으로 갱신해 신규 참여 차단 + 방 목록에서 제외
+	if (UPlayerGameInstance* GI = GetGameInstance<UPlayerGameInstance>())
+	{
+		GI->SetSessionInProgress(true);
+	}
 
 	// 재시작 대비: 이전 라운드 상태 초기화
 	for (TActorIterator<APressureValve> It(GetWorld()); It; ++It)
