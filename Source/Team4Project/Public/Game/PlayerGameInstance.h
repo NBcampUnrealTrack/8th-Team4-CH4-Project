@@ -76,6 +76,12 @@ public:
 	// GameMode::PreLogin의 서버 권위 검증에서 사용한다. 세션에 광고되지 않는다.
 	const FString& GetHostSessionPassword() const { return HostSessionPassword; }
 
+	// 게임 시작/종료 시 세션의 "진행 중" 상태를 갱신 (호스트 전용).
+	// 진행 중이면 신규 참여를 막고(bAllowJoinInProgress=false) 검색 목록에서도 걸러진다.
+	// 최종 차단은 GameMode::PreLogin의 페이즈 검사 — 여기는 목록/스팀 레벨의 1차 방어.
+	UFUNCTION(BlueprintCallable, Category = "Session")
+	void SetSessionInProgress(bool bInProgress);
+
 	// ============================================================
 	// 플레이어 데이터 영속화
 	// ============================================================
