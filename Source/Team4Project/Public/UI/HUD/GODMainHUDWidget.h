@@ -192,13 +192,23 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UGODAbilitySlotWidget> Slot_Active3;
 
+	// 중앙 하단 - 인터랙트 프롬프트 이미지를 위한 보더
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UBorder> B_InteractGroup;
+
 	// 중앙 하단 — 인터랙트 프롬프트 ("[F] 열기" 등).
 	// WBP에 이 이름의 TextBlock을 배치하면 자동 연결된다 (Optional이라 없어도 컴파일됨).
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TB_InteractPrompt;
 
+
+
 	// 중앙 상단 — 알림 방송 배너 (기어 파손, 압력 경고, 연료 부족 등).
 	// WBP에 이 이름의 TextBlock을 배치하면 자동 연결된다 (Optional이라 없어도 컴파일됨).
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UBorder> B_AnnouncementGroup;
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TB_Announcement;
 
