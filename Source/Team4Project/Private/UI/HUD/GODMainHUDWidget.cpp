@@ -6,6 +6,7 @@
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
+#include "Components/Border.h"
 #include "Engine/Texture2D.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
@@ -17,6 +18,7 @@
 #include "Components/AudioComponent.h"
 #include "Sound/GameSoundStatics.h"
 #include "Sound/GameSoundTypes.h"
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 초기화
@@ -41,10 +43,12 @@ void UGODMainHUDWidget::NativeConstruct()
 	if (TB_FuelWarning)     TB_FuelWarning->SetVisibility(ESlateVisibility::Hidden);
 
 	// 인터랙트 프롬프트 초기 숨김 (대상 생기면 OnInteractTargetChanged가 켠다)
-	if (TB_InteractPrompt)  TB_InteractPrompt->SetVisibility(ESlateVisibility::Collapsed);
+	if (B_InteractGroup)   B_InteractGroup->SetVisibility(ESlateVisibility::Collapsed);
+	//if (TB_InteractPrompt)  TB_InteractPrompt->SetVisibility(ESlateVisibility::Collapsed);
 
 	// 알림 방송 배너 초기 숨김
-	if (TB_Announcement) TB_Announcement->SetVisibility(ESlateVisibility::Collapsed);
+	// if (TB_Announcement) TB_Announcement->SetVisibility(ESlateVisibility::Collapsed);
+	if (B_AnnouncementGroup) B_AnnouncementGroup->SetVisibility(ESlateVisibility::Collapsed);
 
 	/* 역할 아이콘 호버 버튼 바인딩
 	if (Btn_RoleIcon)
@@ -224,7 +228,8 @@ void UGODMainHUDWidget::OnAnnouncement(const FText& Message, EAnnouncementType T
 
 		TB_Announcement->SetText(Message);
 		TB_Announcement->SetColorAndOpacity(FSlateColor(Color));
-		TB_Announcement->SetVisibility(ESlateVisibility::HitTestInvisible);
+		//TB_Announcement->SetVisibility(ESlateVisibility::HitTestInvisible);
+		if (B_AnnouncementGroup) B_AnnouncementGroup->SetVisibility(ESlateVisibility::HitTestInvisible);
 
 		if (UWorld* World = GetWorld())
 		{
@@ -238,9 +243,14 @@ void UGODMainHUDWidget::OnAnnouncement(const FText& Message, EAnnouncementType T
 
 void UGODMainHUDWidget::HideAnnouncement()
 {
-	if (TB_Announcement)
+	/*if (TB_Announcement)
 	{
 		TB_Announcement->SetVisibility(ESlateVisibility::Collapsed);
+	}*/
+
+	if (B_AnnouncementGroup)
+	{
+		B_AnnouncementGroup->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 
@@ -248,17 +258,24 @@ void UGODMainHUDWidget::OnInteractTargetChanged(AActor* NewTarget, FText Prompt)
 {
 	CurrentInteractTarget = NewTarget;
 
-	if (TB_InteractPrompt)
+	if (B_InteractGroup)
 	{
 		if (NewTarget && !Prompt.IsEmpty())
 		{
-			TB_InteractPrompt->SetText(
-				FText::Format(NSLOCTEXT("HUD", "InteractPrompt", "[F] {0}"), Prompt));
-			TB_InteractPrompt->SetVisibility(ESlateVisibility::HitTestInvisible);
+			// 1. 글씨는 안쪽 텍스트 블록에 채워넣고,
+			if (TB_InteractPrompt)
+			{
+				TB_InteractPrompt->SetText(
+					FText::Format(NSLOCTEXT("HUD", "InteractPrompt", "[F] {0}"), Prompt));
+			}
+
+			// 2. 화면에 띄우는 건 배경 상자(보더) 전체를 켭니다.
+			B_InteractGroup->SetVisibility(ESlateVisibility::HitTestInvisible);
 		}
 		else
 		{
-			TB_InteractPrompt->SetVisibility(ESlateVisibility::Collapsed);
+			// 3. 대상이 사라지면 배경 상자 전체를 접어버립니다. (글자도 세트로 같이 사라짐)
+			B_InteractGroup->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
 
