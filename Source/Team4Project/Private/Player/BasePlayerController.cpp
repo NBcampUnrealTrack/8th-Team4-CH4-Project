@@ -21,6 +21,7 @@
 #include "Misc/Paths.h"
 #include "Game/ChatTypes.h"
 #include "HAL/FileManager.h"
+#include "Components/ScrollBoxSlot.h"
 #include "Sound/GameSoundStatics.h"
 #include "Sound/GameSoundTypes.h"
 #include "UI/MenuSystem/PauseMenu.h"
@@ -269,7 +270,7 @@ void ABasePlayerController::SetupInputComponent()
 	Super::SetupInputComponent();
 
 	InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ABasePlayerController::OnSpectateNextClicked);
-	InputComponent->BindKey(EKeys::T, IE_Pressed, this, &ABasePlayerController::OnChatToggle);
+	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ABasePlayerController::OnChatToggle);
 
 	// 왼쪽 Alt 홀드: 커서 표시 + HUD 클릭 모드 (떼면 다시 마우스 시야 전환)
 	InputComponent->BindKey(EKeys::LeftAlt, IE_Pressed, this, &ABasePlayerController::OnHUDCursorPressed);
@@ -405,6 +406,13 @@ void ABasePlayerController::OpenChat()
 	if (UScrollBox* ScrollBox = GetChatScrollBox())
 	{
 		ScrollBox->SetVisibility(ESlateVisibility::HitTestInvisible);
+		GetWorldTimerManager().SetTimerForNextTick([this]()
+	 {
+			 if (UScrollBox* SB = GetChatScrollBox())
+			 {
+					 SB->ScrollToEnd();
+			 }
+	 });
 	}
 
 	if (UEditableText* Input = GetChatInputWidget())
@@ -477,7 +485,18 @@ void ABasePlayerController::HandleChatMessage(const FChatMessage& Msg)
 	}
 
 	ScrollBox->AddChild(Entry);
-	ScrollBox->ScrollToEnd();
+	if (UScrollBoxSlot* EntrySlot = Cast<UScrollBoxSlot>(ScrollBox->AddChild(Entry)))
+	{
+		EntrySlot->SetHorizontalAlignment(HAlign_Fill);
+		EntrySlot->SetPadding(FMargin(0.f, 0.f, 12.f, 6.f));
+	}
+	GetWorldTimerManager().SetTimerForNextTick([this]()
+{
+	  if (UScrollBox* SB = GetChatScrollBox())
+	  {
+			  SB->ScrollToEnd();
+	  }
+});
 
 	// 수신음 — 접속 시 히스토리 백필 중에는 생략.
 	if (!bChatBackfillInProgress)
@@ -543,6 +562,13 @@ void ABasePlayerController::ShowChatLogTemporarily()
 	if (UScrollBox* ScrollBox = GetChatScrollBox())
 	{
 		ScrollBox->SetVisibility(ESlateVisibility::HitTestInvisible);
+		GetWorldTimerManager().SetTimerForNextTick([this]()
+	 {
+			 if (UScrollBox* SB = GetChatScrollBox())
+			 {
+					 SB->ScrollToEnd();
+			 }
+	 });
 	}
 	
 	if (!bChatOpen)
