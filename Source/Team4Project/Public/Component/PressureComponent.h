@@ -58,6 +58,18 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Pressure")
 	bool bExploded = false;
 
+	// 폭발 후 밸브 조작 금지 쿨타임(초). 마피아가 밸브를 연속으로 터뜨려 무한 감속하는 것을 막는다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pressure")
+	float ValveCooldownAfterExplosion = 60.f;
+
+	// 폭발 직후 쿨타임 진행 중 여부 (복제). 이 동안 밸브 미니게임을 시작할 수 없다.
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Pressure")
+	bool bValveOnCooldown = false;
+
+	// 지금 밸브가 쿨타임(폭발 직후)이라 조작 불가인가. 밸브가 IsUsableNow 에서 참조.
+	UFUNCTION(BlueprintPure, Category = "Pressure")
+	bool IsValveOnCooldown() const { return bValveOnCooldown; }
+
 	// 긴급 회의 등으로 압력 시뮬레이션 전체 정지 (서버 전용).
 	// bTrainRunning=false 만으로는 감소(PressureDecayRate)가 계속되므로 별도 플래그가 필요하다.
 	UPROPERTY(BlueprintReadOnly, Category = "Pressure")
@@ -97,6 +109,12 @@ public:
 
 private:
 	bool bWasWarning = false;
+
+	// 폭발 시 호출 — 밸브 조작 금지 쿨타임 시작 (서버 전용).
+	void StartValveCooldown();
+	void EndValveCooldown();
+
+	FTimerHandle ValveCooldownTimer;
 
 	UFUNCTION() void OnRep_CurrentPressure();
 };

@@ -1,5 +1,7 @@
 ﻿#include "Component/PressureComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "TimerManager.h"
+#include "Engine/World.h"
 
 UPressureComponent::UPressureComponent()
 {
@@ -17,6 +19,7 @@ void UPressureComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UPressureComponent, CurrentPressure);
 	DOREPLIFETIME(UPressureComponent, bExploded);
+	DOREPLIFETIME(UPressureComponent, bValveOnCooldown);
 }
 
 void UPressureComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -54,6 +57,7 @@ void UPressureComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 	if (CurrentPressure >= ExplosionThreshold && !bExploded)
 	{
 		bExploded = true;
+		StartValveCooldown();
 		OnPressureExplode.Broadcast();
 	}
 }
@@ -83,6 +87,13 @@ void UPressureComponent::ResetForNewGame()
 	CurrentPressure = 0.f;
 	bWasWarning = false;
 
+	// 새 게임 시작 시 폭발 쿨타임도 초기화.
+	if (const UWorld* World = GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(ValveCooldownTimer);
+	}
+	bValveOnCooldown = false;
+
 	OnPressureChanged.Broadcast(0.f);
 }
 
@@ -92,7 +103,31 @@ void UPressureComponent::ForceExplode()
 
 	bExploded = true;
 	CurrentPressure = ExplosionThreshold;
+	StartValveCooldown();
 	OnPressureExplode.Broadcast();
+}
+
+void UPressureComponent::StartValveCooldown()
+{
+	if (!GetOwner()->HasAuthority()) return;
+
+	bValveOnCooldown = true;
+
+	// 쿨타임 0 이하면(에디터에서 꺼둔 경우) 곧바로 해제.
+	if (ValveCooldownAfterExplosion <= 0.f)
+	{
+		bValveOnCooldown = false;
+		return;
+	}
+
+	GetWorld()->GetTimerManager().SetTimer(
+		ValveCooldownTimer, this, &UPressureComponent::EndValveCooldown,
+		ValveCooldownAfterExplosion, /*bLoop=*/false);
+}
+
+void UPressureComponent::EndValveCooldown()
+{
+	bValveOnCooldown = false;
 }
 
 void UPressureComponent::OnRep_CurrentPressure()

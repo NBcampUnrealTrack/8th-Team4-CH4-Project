@@ -210,6 +210,12 @@ bool APressureValve::IsUsableNow() const
 {
 	if (bMinigameActive || ActorHasTag(TEXT("Stoker.ForceClose"))) return false;
 
+	// 폭발 직후 쿨타임 동안은 조작 불가 — 마피아가 연속 폭발로 무한 감속하는 것을 막는다.
+	if (const UPressureComponent* Pressure = GetPressureComponent())
+	{
+		if (Pressure->IsValveOnCooldown()) return false;
+	}
+
 	const AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr;
 	return GS && GS->CurrentPhase == EGamePhase::Playing;
 }

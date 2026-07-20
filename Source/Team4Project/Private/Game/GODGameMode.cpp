@@ -376,23 +376,34 @@ void AGODGameMode::AssignRoles()
 
 void AGODGameMode::AssignQuests()
 {
-	// 레벨 배치 고정 액터. 한 번만 모은다.
-	TArray<AQuestStation*> Stations;
+	// 레벨 배치 고정 액터를 QuestId(종류)별로 한 번씩만 모은다. 같은 종류가 열차 여러 곳에
+	// 놓여 있어도 하나의 "종류"로 취급 — 플레이어는 종류를 배정받고, 그 종류의 아무 스테이션에서나
+	// 완료하면 인정된다(TryMarkQuestCompleted 가 QuestId 로 매칭).
+	TArray<FName> QuestIds;                 // 고유 종류 목록
+	TArray<AQuestStation*> RepStations;     // 종류별 대표 스테이션(목록 표시용)
 	for (TActorIterator<AQuestStation> It(GetWorld()); It; ++It)
 	{
-		Stations.Add(*It);
+		AQuestStation* Station = *It;
+		if (!Station || Station->QuestId.IsNone()) continue;
+		if (QuestIds.Contains(Station->QuestId)) continue;
+
+		QuestIds.Add(Station->QuestId);
+		RepStations.Add(Station);
 	}
 
-	if (Stations.Num() == 0)
+	if (QuestIds.Num() == 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[Quest] 레벨에 QuestStation 이 하나도 없다. 퀘스트 배정을 건너뛴다."));
+		UE_LOG(LogTemp, Warning, TEXT("[Quest] 레벨에 유효한 QuestStation 이 하나도 없다. 퀘스트 배정을 건너뛴다."));
 		return;
 	}
 
-	// 같은 스테이션이 두 사람에게 가지 않는다.
-	for (int32 i = Stations.Num() - 1; i > 0; --i)
+	// 인당 배정 개수 = min(설정값, 존재하는 종류 수). 종류가 부족하면 그만큼만 배정된다.
+	const int32 PerPlayer = FMath::Min(NumQuestsPerPlayer, QuestIds.Num());
+	if (QuestIds.Num() < NumQuestsPerPlayer)
 	{
-		Stations.Swap(i, FMath::RandRange(0, i));
+		UE_LOG(LogTemp, Warning,
+			TEXT("[Quest] 퀘스트 종류 부족: %d종 존재, 인당 %d개 필요. %d개씩만 배정한다."),
+			QuestIds.Num(), NumQuestsPerPlayer, PerPlayer);
 	}
 
 	// 퀘스트 배정 대상 = 시민 + 보안관. 마피아/무법자는 배정 없음.
@@ -421,15 +432,8 @@ void AGODGameMode::AssignQuests()
 		PS->OnRep_AssignedQuests();
 	}
 
-	const int32 Needed = PlayerArray.Num() * NumQuestsPerPlayer;
-	if (Stations.Num() < Needed)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[Quest] 스테이션 부족: %d개 배치, %d개 필요(%d명 × %d). 일부 스테이션이 중복 배정된다."),
-			Stations.Num(), Needed, PlayerArray.Num(), NumQuestsPerPlayer);
-	}
-
-	int32 Cursor = 0;
+	// 플레이어마다 종류 목록을 따로 섞어서 앞에서 PerPlayer 개를 배타적으로 뽑는다. 한 사람 안에서는
+	// 종류가 겹치지 않고(각 3개 서로 다른 퀘스트), 사람끼리는 겹쳐도 무방 — 완료는 개인별로 추적된다.
 	for (APlayerController* PC : PlayerArray)
 	{
 		AGODPlayerState* PS = PC ? PC->GetPlayerState<AGODPlayerState>() : nullptr;
@@ -437,13 +441,23 @@ void AGODGameMode::AssignQuests()
 
 		PS->AssignedQuests.Reset();
 
-		for (int32 i = 0; i < NumQuestsPerPlayer; ++i)
+		TArray<int32> Order;
+		Order.Reserve(QuestIds.Num());
+		for (int32 i = 0; i < QuestIds.Num(); ++i)
+		{
+			Order.Add(i);
+		}
+		for (int32 i = Order.Num() - 1; i > 0; --i)
+		{
+			Order.Swap(i, FMath::RandRange(0, i));
+		}
+
+		for (int32 i = 0; i < PerPlayer; ++i)
 		{
 			FAssignedQuest Quest;
-			Quest.Station = Stations[Cursor % Stations.Num()];
+			Quest.Station = RepStations[Order[i]];
 			Quest.bCompleted = false;
 			PS->AssignedQuests.Add(Quest);
-			++Cursor;
 		}
 
 		PS->OnRep_AssignedQuests(); // 리슨 호스트는 OnRep 이 안 온다
@@ -487,8 +501,10 @@ void AGODGameMode::RecalculateQuestSpeedMultiplier()
 	AGODGameState* GS = GetGameState<AGODGameState>();
 	if (!GS) return;
 
-	int32 Completed = 0;
-	int32 Effective = 0;
+	// 진행도/속도는 "퀘스트 개수" 단위로 센다. 퀘스트 하나 깰 때마다 진행 바와 속도가 즉시 오른다.
+	// 예: 시민+보안관 3명이 각 3개씩 = 총 9개. 9개 전부 완료 → 배율 1 + 9/9 = 2.0 (2배속).
+	int32 Completed = 0;   // 완료한 퀘스트 수 (분자)
+	int32 Effective = 0;   // 유효 퀘스트 수 (분모)
 
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
@@ -496,21 +512,24 @@ void AGODGameMode::RecalculateQuestSpeedMultiplier()
 		AGODPlayerState* PS = PC ? PC->GetPlayerState<AGODPlayerState>() : nullptr;
 		if (!PS || !PS->ContributesToQuestSpeed()) continue;
 
-		const bool bDone = PS->AreAllQuestsCompleted();
-		if (bDone)
+		for (const FAssignedQuest& Quest : PS->AssignedQuests)
 		{
-			// 완료한 뒤 죽어도 기여는 남는다.
-			++Completed;
-			++Effective;
+			if (Quest.bCompleted)
+			{
+				// 완료한 퀘스트는 그 사람이 죽어도 기여가 남는다(분자·분모 모두 유지).
+				++Completed;
+				++Effective;
+			}
+			else if (PS->bIsAlive)
+			{
+				// 아직 미완료지만 살아 있으면 분모에 포함(앞으로 깰 수 있음).
+				++Effective;
+			}
+			// 미완료 상태로 죽으면 그 퀘스트는 분모에서 빠진다 → 배율은 절대 감소하지 않는다.
 		}
-		else if (PS->bIsAlive)
-		{
-			++Effective;
-		}
-		// 미완료 상태로 죽은 시민은 분모에서 빠진다
 	}
 
-	// 시민 전멸 시 분모가 0이 된다. 그땐 마지막 배율을 유지한다(어차피 마피아 승리조건이 먼저 성립).
+	// 유효 퀘스트가 0이면(시민 전멸 등) 마지막 배율을 유지한다(어차피 마피아 승리조건이 먼저 성립).
 	if (Effective > 0)
 	{
 		GS->QuestSpeedMultiplier = 1.f + static_cast<float>(Completed) / static_cast<float>(Effective);
