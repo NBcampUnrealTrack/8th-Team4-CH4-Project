@@ -542,6 +542,7 @@ void ABaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(ABaseCharacter, bIsDead);
 	DOREPLIFETIME(ABaseCharacter, bIsWorkingOnQuest);
 	DOREPLIFETIME(ABaseCharacter, CurrentHeldItem);
+	DOREPLIFETIME_CONDITION(ABaseCharacter, WireCutterUsesRemaining, COND_OwnerOnly);
 	DOREPLIFETIME(ABaseCharacter, bMeshHidden);
 	DOREPLIFETIME(ABaseCharacter, SkinIndex);
 	DOREPLIFETIME(ABaseCharacter, SkinVariantIndex);
@@ -841,13 +842,16 @@ void ABaseCharacter::Server_CompleteQuest_Implementation()
 
 	Station->ReleaseQuestPlayer();
 
-	// 배정 여부 판정과 보상은 게임모드
+	// 배정 여부 판정과 보상은 게임모드. 반환값 = 이 완료가 실제로 인정됐는지
+	// (배정 안 된 스테이션을 완료한 경우 false — 진행도 반영 없이 클라에도 실패로 알려야
+	// "클리어했는데 목록이 안 움직인다"는 혼란을 막을 수 있다).
+	bool bCounted = false;
 	if (AGODGameMode* GM = GetWorld()->GetAuthGameMode<AGODGameMode>())
 	{
-		GM->HandleQuestCompleted(GetPlayerState<AGODPlayerState>(), Station);
+		bCounted = GM->HandleQuestCompleted(GetPlayerState<AGODPlayerState>(), Station);
 	}
 
-	Client_EndQuestMinigame(true);
+	Client_EndQuestMinigame(bCounted);
 }
 
 void ABaseCharacter::Server_CancelQuest_Implementation()
@@ -1367,10 +1371,29 @@ void ABaseCharacter::UseMasterKey(AActor* DoorActor)
 
 void ABaseCharacter::UseWireCutter(AActor* GearActor)
 {
-	if (!HasAuthority() || !IsValid(GearActor)) return;
+	if (!HasAuthority() || !IsValid(GearActor) || WireCutterUsesRemaining <= 0) return;
 
 	if (AGearSlot* Slot = Cast<AGearSlot>(GearActor))
-		Slot->BreakGear();
+	{
+		if (Slot->BreakGear())
+		{
+			--WireCutterUsesRemaining;
+			OnRep_WireCutterUsesRemaining(); // 리슨 서버(호스트)는 OnRep 이 안 오므로 직접 호출
+		}
+	}
+}
+
+void ABaseCharacter::OnRep_WireCutterUsesRemaining()
+{
+	// HUD 능력 슬롯이 남은 횟수를 표시하고 싶을 때 이 콜백에서 갱신하면 된다.
+}
+
+void ABaseCharacter::ResetWireCutterUses()
+{
+	if (!HasAuthority()) return;
+
+	WireCutterUsesRemaining = MaxWireCutterUses;
+	OnRep_WireCutterUsesRemaining(); // 리슨 서버(호스트)는 OnRep 이 안 오므로 직접 호출
 }
 
 // ============================================================
@@ -1587,22 +1610,31 @@ void ABaseCharacter::Client_NotifySearchResult_Implementation(bool bIsMafia, ABa
 	// 다른 플레이어에게는 보이지 않는다 (수색 결과는 보안관만 알아야 한다).
 	if (AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr)
 	{
-		FString TargetName = TEXT("대상");
-		if (Target)
+		FText Msg;
+		EAnnouncementType Type = EAnnouncementType::Info;
+
+		if (!Target)
 		{
+			// 근처에 수색 대상이 없었던 경우 — 스킬은 발동했음을 알린다.
+			Msg = NSLOCTEXT("Search", "ResultNoTarget", "수색 — 근처에 사람이 없다");
+		}
+		else
+		{
+			FString TargetName = TEXT("대상");
 			if (const APlayerState* TargetPS = Target->GetPlayerState())
 			{
 				TargetName = TargetPS->GetPlayerName();
 			}
+
+			Msg = bIsMafia
+				? FText::Format(NSLOCTEXT("Search", "ResultMafia",
+					"수색 성공 — {0} 은(는) 마피아다!"), FText::FromString(TargetName))
+				: FText::Format(NSLOCTEXT("Search", "ResultNotMafia",
+					"수색 결과 — {0} 은(는) 마피아가 아니다"), FText::FromString(TargetName));
+			Type = bIsMafia ? EAnnouncementType::Critical : EAnnouncementType::Info;
 		}
 
-		const FText Msg = bIsMafia
-			? FText::Format(NSLOCTEXT("Search", "ResultMafia",
-				"수색 성공 — {0} 은(는) 마피아다!"), FText::FromString(TargetName))
-			: FText::Format(NSLOCTEXT("Search", "ResultNotMafia",
-				"수색 결과 — {0} 은(는) 마피아가 아니다"), FText::FromString(TargetName));
-
-		GS->OnAnnouncement.Broadcast(Msg, bIsMafia ? EAnnouncementType::Critical : EAnnouncementType::Info);
+		GS->OnAnnouncement.Broadcast(Msg, Type);
 	}
 
 	// BP 연출 훅 (WBP 커스텀 표시가 필요하면 캐릭터 BP 에서 구현).

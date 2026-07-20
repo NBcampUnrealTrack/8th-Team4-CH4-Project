@@ -27,11 +27,12 @@ public:
 		const FGameplayEventData* TriggerEventData) override;
 
 protected:
-	// 사거리(언리얼 단위, cm)
+	// 근접 수색 반경(cm). 1/2/R 슬롯 발동 시 이 반경 안의 최근접 인원을 감별한다.
+	// InteractComponent 가 있으면 그쪽 InteractRadius 를 우선 사용한다.
 	UPROPERTY(EditDefaultsOnly, Category = "Detect")
-	float Range = 10000.f;
+	float SearchRadius = 300.f;
 
-	// 디버그 라인 표시 (개발용)
+	// 디버그 표시 (개발용)
 	UPROPERTY(EditDefaultsOnly, Category = "Detect")
 	bool bDrawDebug = false;
 

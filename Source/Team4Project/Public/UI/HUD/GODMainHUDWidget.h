@@ -201,7 +201,14 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TB_InteractPrompt;
 
+	// 중앙 하단 — 아이템 버리기 프롬프트를 위한 보더. 아이템을 들고 있을 때만 표시된다.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UBorder> B_DropGroup;
 
+	// 중앙 하단 — 아이템 버리기 프롬프트 ("[G] 버리기").
+	// WBP에 이 이름의 TextBlock을 배치하면 자동 연결된다 (Optional이라 없어도 컴파일됨).
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> TB_DropPrompt;
 
 	// 중앙 상단 — 알림 방송 배너 (기어 파손, 압력 경고, 연료 부족 등).
 	// WBP에 이 이름의 TextBlock을 배치하면 자동 연결된다 (Optional이라 없어도 컴파일됨).
@@ -276,6 +283,9 @@ private:
 	UPROPERTY()
 	TWeakObjectPtr<APawn> LastKnownPawn;
 
+	// 버리기 프롬프트 갱신 시 불필요한 SetText/SetVisibility 호출을 피하기 위한 이전 상태 캐시.
+	bool bWasHoldingItem = false;
+
 	// ─── 초기화 / 이벤트 바인딩 ──────────────────
 
 	void TryBindGameState();
@@ -296,6 +306,10 @@ private:
 	// InteractComponent::OnInteractTargetChanged 콜백 — 프롬프트 표시/숨김
 	UFUNCTION()
 	void OnInteractTargetChanged(AActor* NewTarget, FText Prompt);
+
+	// 아이템 소지 여부에 따라 "[G] 버리기" 프롬프트를 표시/숨김. CurrentHeldItem 이
+	// RepNotify 없이 그냥 Replicated 라 매 틱 폴링으로 변화를 감지한다.
+	void UpdateDropPrompt();
 
 	// BaseCharacter::OnCharacterTagChanged 콜백 — 게임 시작 시 역할 배정(SetCharacterTag)에
 	// 맞춰 역할 아이콘/능력 슬롯 갱신 (리스폰이 없어 폰 변경 감지로는 잡히지 않는다).

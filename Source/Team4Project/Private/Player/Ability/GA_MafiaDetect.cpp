@@ -3,9 +3,36 @@
 
 #include "Player/Ability/GA_MafiaDetect.h"
 #include "Player/BaseCharacter.h"
+#include "Component/InteractComponent.h"
 #include "Game/BaseGameplayTags.h"
 #include "Sound/GameSoundTypes.h"
 #include "DrawDebugHelpers.h"
+#include "EngineUtils.h"
+
+namespace
+{
+	// 절단기(GA_WireCutter)의 최근접 탐색과 동일한 폴백 패턴 — 반경 내 살아있는 최근접 타인.
+	ABaseCharacter* FindNearestOtherCharacter(const ABaseCharacter* Seeker, float Radius)
+	{
+		ABaseCharacter* Best = nullptr;
+		float BestDistSq = Radius * Radius;
+		const FVector Origin = Seeker->GetActorLocation();
+
+		for (TActorIterator<ABaseCharacter> It(Seeker->GetWorld()); It; ++It)
+		{
+			ABaseCharacter* Other = *It;
+			if (!IsValid(Other) || Other == Seeker || Other->IsDead()) continue;
+
+			const float DistSq = FVector::DistSquared(Origin, Other->GetActorLocation());
+			if (DistSq <= BestDistSq)
+			{
+				BestDistSq = DistSq;
+				Best = Other;
+			}
+		}
+		return Best;
+	}
+}
 
 UGA_MafiaDetect::UGA_MafiaDetect()
 {
@@ -51,26 +78,29 @@ void UGA_MafiaDetect::ActivateAbility(
 			Target = Cast<ABaseCharacter>(const_cast<UObject*>(TriggerEventData->OptionalObject.Get()));
 		}
 
-		// 이벤트 대상이 없으면(슬롯 발동 등) 기존 시선(눈높이) 조준 트레이스로 폴백.
+		// 1/2/R 슬롯 발동 등 이벤트 대상이 없으면, 밸브/절단기와 동일하게 "근처 최근접 인원"을
+		// 감별한다(조준 불필요 — 근처에 서 있기만 하면 됨).
 		if (!Target)
 		{
-			const FRotator AimRot = Character->GetBaseAimRotation();
-			const FVector Start = Character->GetPawnViewLocation();
-			const FVector End = Start + AimRot.Vector() * Range;
+			float Radius = SearchRadius;
 
-			FCollisionQueryParams Params;
-			Params.AddIgnoredActor(Character);
-
-			FHitResult Hit;
-			const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Pawn, Params);
-			if (bHit)
+			// 1순위: InteractComponent 근접 목록(F 상호작용과 동일한 대상 판정).
+			if (Character->InteractComponent)
 			{
-				Target = Cast<ABaseCharacter>(Hit.GetActor());
+				Radius = Character->InteractComponent->InteractRadius;
+				Target = Cast<ABaseCharacter>(
+					Character->InteractComponent->GetClosestInteractableOfClass(ABaseCharacter::StaticClass()));
 			}
 
-			if (bDrawDebug)
+			// 2순위: 콜리전과 무관한 거리 검사 폴백.
+			if (!Target)
 			{
-				DrawDebugLine(GetWorld(), Start, bHit ? Hit.ImpactPoint : End,
+				Target = FindNearestOtherCharacter(Character, Radius);
+			}
+
+			if (bDrawDebug && Target)
+			{
+				DrawDebugLine(GetWorld(), Character->GetActorLocation(), Target->GetActorLocation(),
 					FColor::Green, false, 1.0f, 0, 1.0f);
 			}
 		}
@@ -87,6 +117,11 @@ void UGA_MafiaDetect::ActivateAbility(
 
 			// 성공/실패를 보안관 본인에게 통지 (New 2 — 수색 결과가 안 뜨던 문제).
 			Character->Client_NotifySearchResult(bIsMafia, Target);
+		}
+		else
+		{
+			// 근처에 수색할 사람이 없었음 — 스킬이 먹통인지 헷갈리지 않게 본인에게 통지.
+			Character->Client_NotifySearchResult(false, nullptr);
 		}
 	}
 

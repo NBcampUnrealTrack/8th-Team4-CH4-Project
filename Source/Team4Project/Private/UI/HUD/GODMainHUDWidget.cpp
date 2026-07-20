@@ -207,6 +207,13 @@ void UGODMainHUDWidget::InitializeForPawn(APawn* NewPawn)
 		// 새 폰 기준으로 초기화 (대상 없음 상태에서 시작)
 		OnInteractTargetChanged(nullptr, FText::GetEmpty());
 	}
+
+	// 버리기 프롬프트도 새 폰 기준으로 재평가 (재빙의 시 이전 폰의 소지 상태가 남지 않게).
+	bWasHoldingItem = false;
+	if (B_DropGroup)
+	{
+		B_DropGroup->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void UGODMainHUDWidget::OnCharacterTagChanged(const FGameplayTag& NewTag)
@@ -292,6 +299,29 @@ void UGODMainHUDWidget::OnInteractTargetChanged(AActor* NewTarget, FText Prompt)
 	BP_OnInteractTargetChanged(NewTarget, Prompt);
 }
 
+void UGODMainHUDWidget::UpdateDropPrompt()
+{
+	if (!B_DropGroup) return;
+
+	const ABaseCharacter* Char = CachedCharacter.Get();
+	const bool bHoldingItem = Char && Char->GetCurrentHeldItem() != nullptr;
+	if (bHoldingItem == bWasHoldingItem) return;
+	bWasHoldingItem = bHoldingItem;
+
+	if (bHoldingItem)
+	{
+		if (TB_DropPrompt)
+		{
+			TB_DropPrompt->SetText(NSLOCTEXT("HUD", "DropPrompt", "[G] 버리기"));
+		}
+		B_DropGroup->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	else
+	{
+		B_DropGroup->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // NativeTick
 // ─────────────────────────────────────────────────────────────────────────────
@@ -315,6 +345,7 @@ void UGODMainHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	}
 
 	UpdateWarnings(InDeltaTime);
+	UpdateDropPrompt();
 	//UpdateCrosshair();
 }
 

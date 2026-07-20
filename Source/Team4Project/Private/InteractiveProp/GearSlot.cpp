@@ -5,12 +5,14 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/ChildActorComponent.h"
+#include "Components/WidgetComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
 #include "TimerManager.h"
 #include "Game/GODGameState.h"
 #include "Sound/GameSoundStatics.h"
 #include "Sound/GameSoundTypes.h"
+#include "UI/HUD/GearRespawnTimerWidget.h"
 
 AGearSlot::AGearSlot()
 {
@@ -26,6 +28,15 @@ AGearSlot::AGearSlot()
 	InteractionBox->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	InteractionBox->SetCollisionResponseToAllChannels(ECR_Ignore);
 	InteractionBox->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+
+	// 기어 리스폰 카운트다운 3D 위젯. Widget Class(WBP)는 에디터 디테일에서 지정한다.
+	RespawnTimerWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("RespawnTimerWidget"));
+	RespawnTimerWidget->SetupAttachment(RootComponent);
+	RespawnTimerWidget->SetWidgetSpace(EWidgetSpace::World);
+	RespawnTimerWidget->SetDrawSize(FVector2D(220.f, 70.f));
+	RespawnTimerWidget->SetRelativeLocation(FVector(0.f, 0.f, 120.f));
+	RespawnTimerWidget->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	RespawnTimerWidget->SetVisibility(false);
 }
 
 void AGearSlot::BeginPlay()
@@ -41,6 +52,17 @@ void AGearSlot::BeginPlay()
 	{
 		OriginalGearTransform = MountedGear->GetActorTransform();
 		MountedGear->Tags.AddUnique(FName(TEXT("Gear.Mounted")));
+		MountedGear->OwningGearSlot = this;
+	}
+
+	if (RespawnTimerWidget)
+	{
+		RespawnTimerWidget->InitWidget();
+		if (UGearRespawnTimerWidget* Widget = Cast<UGearRespawnTimerWidget>(RespawnTimerWidget->GetUserWidgetObject()))
+		{
+			Widget->SetTargetSlot(this);
+		}
+		RespawnTimerWidget->SetVisibility(bRespawnPending, true);
 	}
 }
 
@@ -79,11 +101,13 @@ void AGearSlot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	DOREPLIFETIME(AGearSlot, QTESequence);
 	DOREPLIFETIME(AGearSlot, QTEProgressIndex);
 	DOREPLIFETIME(AGearSlot, QTEStartServerTime);
+	DOREPLIFETIME(AGearSlot, bRespawnPending);
+	DOREPLIFETIME(AGearSlot, RespawnStartServerTime);
 }
 
-void AGearSlot::BreakGear()
+bool AGearSlot::BreakGear()
 {
-	if (!HasAuthority() || !bIsAssembled || !IsValid(MountedGear)) return;
+	if (!HasAuthority() || !bIsAssembled || !IsValid(MountedGear)) return false;
 
 	MountedGear->Tags.Remove(FName(TEXT("Gear.Mounted")));
 
@@ -113,6 +137,62 @@ void AGearSlot::BreakGear()
 		GS->Announce(NSLOCTEXT("Announce", "GearBroken", "엔진 기어 파손 감지 — 열차 감속"),
 			EAnnouncementType::Warning);
 	}
+
+	return true;
+}
+
+void AGearSlot::OnGearTaken()
+{
+	// 이미 조립돼 있거나(=태그로 막혀 애초에 못 집는 상태), 이미 카운트다운이 도는 중이면 무시
+	// — 재차 집었다 놨다 해서 시계를 계속 리셋하는 악용을 막는다.
+	if (!HasAuthority() || bIsAssembled || bRespawnPending) return;
+
+	bRespawnPending = true;
+	RespawnStartServerTime = GetWorld()->GetTimeSeconds();
+	OnRep_RespawnPending(); // 리슨 서버는 OnRep 이 안 오므로 직접 호출
+
+	GetWorldTimerManager().SetTimer(RespawnTimerHandle, this, &AGearSlot::RespawnGear, GearRespawnDelay, false);
+}
+
+void AGearSlot::RespawnGear()
+{
+	if (!HasAuthority() || !bRespawnPending) return;
+
+	bRespawnPending = false;
+	OnRep_RespawnPending(); // 리슨 서버는 OnRep 이 안 오므로 직접 호출
+
+	if (!IsValid(MountedGear) || bIsAssembled) return;
+
+	// 원위치로 되돌리되, 조립까지 되는 건 아니다(QTE 는 여전히 필요) — CompleteRepair 와
+	// 달리 bIsAssembled/Gear.Mounted 태그는 건드리지 않는다.
+	if (MountedGear->bIsHeld)
+	{
+		MountedGear->Server_Drop();
+	}
+
+	MountedGear->SetActorTransform(OriginalGearTransform);
+
+	if (MountedGear->Mesh)
+	{
+		MountedGear->Mesh->SetPhysicsLinearVelocity(FVector::ZeroVector);
+		MountedGear->Mesh->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+	}
+
+	// 완전히 고쳐진 게 아니라 "돌아온" 것 — Gear.Repair 사운드를 그대로 쓰면 수리 완료로
+	// 오해할 수 있어 재생하지 않는다. 방송 문구로만 알린다.
+	if (AGODGameState* GS = GetWorld()->GetGameState<AGODGameState>())
+	{
+		GS->Announce(NSLOCTEXT("Announce", "GearRespawned", "분실된 엔진 기어가 원위치로 돌아왔습니다"),
+			EAnnouncementType::Info);
+	}
+}
+
+void AGearSlot::OnRep_RespawnPending()
+{
+	if (RespawnTimerWidget)
+	{
+		RespawnTimerWidget->SetVisibility(bRespawnPending, true);
+	}
 }
 
 void AGearSlot::ForceReassemble()
@@ -129,6 +209,14 @@ void AGearSlot::CompleteRepair(bool bAnnounce)
 	if (!IsValid(MountedGear)) return;
 
 	GetWorldTimerManager().ClearTimer(QTETimeoutHandle);
+
+	// 수리가 끝났으니 대기 중이던 리스폰 카운트다운은 취소.
+	GetWorldTimerManager().ClearTimer(RespawnTimerHandle);
+	if (bRespawnPending)
+	{
+		bRespawnPending = false;
+		OnRep_RespawnPending(); // 리슨 서버는 OnRep 이 안 오므로 직접 호출
+	}
 
 	if (MountedGear->bIsHeld)
 	{
