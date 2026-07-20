@@ -210,6 +210,12 @@ bool APressureValve::IsUsableNow() const
 {
 	if (bMinigameActive || ActorHasTag(TEXT("Stoker.ForceClose"))) return false;
 
+	// 폭발 직후 쿨타임 동안은 조작 불가 — 마피아가 연속 폭발로 무한 감속하는 것을 막는다.
+	if (const UPressureComponent* Pressure = GetPressureComponent())
+	{
+		if (Pressure->IsValveOnCooldown()) return false;
+	}
+
 	const AGODGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGODGameState>() : nullptr;
 	return GS && GS->CurrentPhase == EGamePhase::Playing;
 }
@@ -226,6 +232,17 @@ void APressureValve::Interact_Implementation(ACharacter* Interactor)
 
 FText APressureValve::GetInteractPrompt_Implementation() const
 {
+	// 폭발 직후 쿨타임이면 남은 시간을 안내(조작은 불가). 프롬프트는 저주기 폴링으로
+	// 갱신되고 문구가 바뀔 때만 재표시되므로, 초 단위로 카운트다운이 자연히 갱신된다.
+	if (const UPressureComponent* Pressure = GetPressureComponent())
+	{
+		if (Pressure->IsValveOnCooldown())
+		{
+			const int32 Secs = FMath::Max(1, FMath::CeilToInt(Pressure->GetValveCooldownRemaining()));
+			return FText::FromString(FString::Printf(TEXT("밸브 재정비 중 (%d초)"), Secs));
+		}
+	}
+
 	if (!IsUsableNow()) return FText::GetEmpty();
 	return FText::FromString(TEXT("밸브 조작"));
 }

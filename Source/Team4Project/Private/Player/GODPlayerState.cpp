@@ -50,17 +50,24 @@ bool AGODPlayerState::TryMarkQuestCompleted(AQuestStation* Station)
 {
 	if (!HasAuthority() || !Station) return false;
 
+	// 배정은 "스테이션 종류(QuestId)" 단위로 인정한다. 같은 종류(예: 설거지)가 열차 여러 곳에
+	// 놓여 있어도, 배정받은 종류의 아무 스테이션이나 완료하면 카운트된다. 예전처럼 배정된
+	// 정확한 액터 인스턴스만 인정하면, 플레이어가 자기 것이 아닌 동일 종류 스테이션을 해도
+	// 거부돼 "퀘스트를 해도 진행이 안 오르는" 문제가 생겼다.
+	const FName DoneQuestId = Station->QuestId;
+
 	for (FAssignedQuest& Quest : AssignedQuests)
 	{
-		if (Quest.Station != Station) continue;
-		if (Quest.bCompleted) return false; // 중복 완료 방지
+		if (!IsValid(Quest.Station)) continue;
+		if (Quest.Station->QuestId != DoneQuestId) continue;
+		if (Quest.bCompleted) continue; // 같은 종류가 여러 칸이면 다음 미완료 칸을 찾는다
 
 		Quest.bCompleted = true;
 		OnRep_AssignedQuests(); // 리슨 호스트는 OnRep 이 안 오므로 직접 호출
 		return true;
 	}
 
-	// 배정되지 않은 스테이션
+	// 배정되지 않은 종류거나 이미 전부 완료됨
 	return false;
 }
 

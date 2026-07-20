@@ -76,6 +76,9 @@ void UQuestListWidget::HandleAssignedQuestsChanged()
 
 	for (const FAssignedQuest& Quest : PS->AssignedQuests)
 	{
+		// 완료한 퀘스트는 목록에서 즉시 제거한다(요청: "하나 끝나면 리스트에서 지워져야").
+		if (Quest.bCompleted) continue;
+
 		// 스테이션 액터가 아직 복제되지 않았으면 이름을 못 읽는다. 다음 갱신에서 채워진다.
 		if (!IsValid(Quest.Station)) continue;
 
