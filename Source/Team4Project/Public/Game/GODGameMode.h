@@ -46,8 +46,13 @@ public:
 	// 퀘스트
 	// ============================================================
 
-	/** 완료 보고 처리. 배정된 스테이션일 때만 진행도 반영 + 특수직 탄약 보상. */
-	void HandleQuestCompleted(AGODPlayerState* PS, AQuestStation* Station);
+	/**
+	 * 완료 보고 처리. 배정된 스테이션일 때만 진행도 반영.
+	 * 배정되지 않은 스테이션이면 진행은 반영하지 않고 false 를 반환한다 — 단, 애초에
+	 * 배정된 퀘스트가 하나도 없는 역할(마피아/무법자)의 위장용 완료는 예외로 true 를 반환한다
+	 * (호출부에서 위장이 들키지 않도록 성공 연출을 그대로 보여줘야 하기 때문).
+	 */
+	bool HandleQuestCompleted(AGODPlayerState* PS, AQuestStation* Station);
 
 	/** 시민 완료 인원 / 유효 시민 수로 GameState 의 속도 배율을 다시 계산한다. */
 	void RecalculateQuestSpeedMultiplier();

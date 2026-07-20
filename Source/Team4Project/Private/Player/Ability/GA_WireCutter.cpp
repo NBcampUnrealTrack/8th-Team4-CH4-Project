@@ -56,6 +56,15 @@ void UGA_WireCutter::ActivateAbility(
 		return;
 	}
 
+	// 한 판당 사용 횟수 제한. 쿨타임과 별개로 소진되면 더 이상 발동하지 않는다.
+	if (Mafia->GetWireCutterUsesRemaining() <= 0)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[WireCutter] 이번 판 사용 횟수를 모두 소진해 발동 취소 (%s)"), *Mafia->GetName());
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
 	// 1순위: F키 상호작용과 같은 대상(InteractComponent 최근접). 오버랩 등록이 안 돼 있으면 null.
 	AGearSlot* GearSlot = nullptr;
 	float SearchRadius = 200.f;

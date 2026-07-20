@@ -365,6 +365,23 @@ public:
 	void UseMasterKey(AActor* DoorActor);
 	void UseWireCutter(AActor* GearActor);
 
+	// 절단기(기어 파괴) 한 판당 최대 사용 횟수. 0이 되면 쿨타임이 돌아와도 더 이상 못 쓴다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mafia")
+	int32 MaxWireCutterUses = 2;
+
+	// 이번 판에 남은 절단기 사용 횟수. 라운드 시작(AssignRoles)마다 MaxWireCutterUses 로 초기화.
+	UPROPERTY(ReplicatedUsing = OnRep_WireCutterUsesRemaining, BlueprintReadOnly, Category = "Mafia")
+	int32 WireCutterUsesRemaining = 2;
+
+	UFUNCTION()
+	void OnRep_WireCutterUsesRemaining();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mafia")
+	int32 GetWireCutterUsesRemaining() const { return WireCutterUsesRemaining; }
+
+	// 라운드 시작 시 사용 횟수 초기화 (서버 전용, GODGameMode::AssignRoles 가 호출)
+	void ResetWireCutterUses();
+
 	// ============================================================
 	// 역할별 능력 — Sheriff
 	// ============================================================

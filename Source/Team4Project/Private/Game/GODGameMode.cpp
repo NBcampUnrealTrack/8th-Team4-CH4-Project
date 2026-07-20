@@ -338,6 +338,7 @@ void AGODGameMode::AssignRoles()
 		if (ABaseCharacter* ExistingPawn = Cast<ABaseCharacter>(PC->GetPawn()))
 		{
 			ExistingPawn->SetCharacterTag(AssignedTag);
+			ExistingPawn->ResetWireCutterUses(); // 라운드 재시작 대비: 절단기 사용 횟수 초기화
 		}
 
 		// 역할 배정 디버그 출력
@@ -451,14 +452,19 @@ void AGODGameMode::AssignQuests()
 	RecalculateQuestSpeedMultiplier();
 }
 
-void AGODGameMode::HandleQuestCompleted(AGODPlayerState* PS, AQuestStation* Station)
+bool AGODGameMode::HandleQuestCompleted(AGODPlayerState* PS, AQuestStation* Station)
 {
-	if (!PS || !Station) return;
+	if (!PS || !Station) return false;
 
-	if (!PS->TryMarkQuestCompleted(Station)) return;
-
-	// 특수직(보안관/마피아/밀수꾼)의 퀘스트는 위장용 — 완료해도 보상/기여 없음.
-	// (배정 자체를 빼면 좌상단 목록이 비어 어깨너머로 역할이 탄로난다)
+	if (!PS->TryMarkQuestCompleted(Station))
+	{
+		// 마피아/무법자는 애초에 배정된 퀘스트가 없다 — 아무 스테이션에서나 위장으로
+		// 미니게임을 돌려도 정상 동작처럼 보여야 하므로 여기서만 예외로 true 취급.
+		// 반대로 실제 배정된 퀘스트가 있는 플레이어(시민/보안관)가 자기 몫이 아닌
+		// 스테이션을 완료한 경우는 진짜 실패 — 진행도 반영 없이 false 를 반환해
+		// 클라에게 "이건 내 퀘스트가 아니다"를 알려야 한다.
+		return PS->AssignedQuests.Num() == 0;
+	}
 
 	// 배정 퀘스트 전부 완료 → 본인에게만 클리어 사운드 (타인에게 들리면 진행 상황 노출).
 	if (PS->AreAllQuestsCompleted())
@@ -473,6 +479,7 @@ void AGODGameMode::HandleQuestCompleted(AGODPlayerState* PS, AQuestStation* Stat
 	}
 
 	RecalculateQuestSpeedMultiplier();
+	return true;
 }
 
 void AGODGameMode::RecalculateQuestSpeedMultiplier()
