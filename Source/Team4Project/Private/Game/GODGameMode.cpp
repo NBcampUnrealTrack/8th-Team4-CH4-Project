@@ -501,10 +501,11 @@ void AGODGameMode::RecalculateQuestSpeedMultiplier()
 	AGODGameState* GS = GetGameState<AGODGameState>();
 	if (!GS) return;
 
-	// 진행도/속도는 "퀘스트 개수" 단위로 센다. 퀘스트 하나 깰 때마다 진행 바와 속도가 즉시 오른다.
-	// 예: 시민+보안관 3명이 각 3개씩 = 총 9개. 9개 전부 완료 → 배율 1 + 9/9 = 2.0 (2배속).
-	int32 Completed = 0;   // 완료한 퀘스트 수 (분자)
-	int32 Effective = 0;   // 유효 퀘스트 수 (분모)
+	// 진행도/속도는 "플레이어 단위". 본인에게 배정된 퀘스트를 전부(3개) 깨야 1명분이 반영된다.
+	// 퀘스트 하나만 깬 상태는 속도/진행바에 영향 없음(개인 목록 헤더 "1/3"에만 반영).
+	// 예: 시민+보안관 3명이 각자 3개씩 전부 완료 → 배율 1 + 3/3 = 2.0 (2배속).
+	int32 Completed = 0;   // 자기 몫을 전부 끝낸 플레이어 수 (분자)
+	int32 Effective = 0;   // 유효 기여 플레이어 수 (분모)
 
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
@@ -512,24 +513,21 @@ void AGODGameMode::RecalculateQuestSpeedMultiplier()
 		AGODPlayerState* PS = PC ? PC->GetPlayerState<AGODPlayerState>() : nullptr;
 		if (!PS || !PS->ContributesToQuestSpeed()) continue;
 
-		for (const FAssignedQuest& Quest : PS->AssignedQuests)
+		const bool bDone = PS->AreAllQuestsCompleted();
+		if (bDone)
 		{
-			if (Quest.bCompleted)
-			{
-				// 완료한 퀘스트는 그 사람이 죽어도 기여가 남는다(분자·분모 모두 유지).
-				++Completed;
-				++Effective;
-			}
-			else if (PS->bIsAlive)
-			{
-				// 아직 미완료지만 살아 있으면 분모에 포함(앞으로 깰 수 있음).
-				++Effective;
-			}
-			// 미완료 상태로 죽으면 그 퀘스트는 분모에서 빠진다 → 배율은 절대 감소하지 않는다.
+			// 전부 완료한 뒤 죽어도 기여는 남는다(분자·분모 모두 유지).
+			++Completed;
+			++Effective;
 		}
+		else if (PS->bIsAlive)
+		{
+			++Effective;
+		}
+		// 미완료 상태로 죽은 기여자는 분모에서 빠진다 → 배율은 절대 감소하지 않는다.
 	}
 
-	// 유효 퀘스트가 0이면(시민 전멸 등) 마지막 배율을 유지한다(어차피 마피아 승리조건이 먼저 성립).
+	// 기여자 전멸 시 분모가 0이 된다. 그땐 마지막 배율을 유지한다(어차피 마피아 승리조건이 먼저 성립).
 	if (Effective > 0)
 	{
 		GS->QuestSpeedMultiplier = 1.f + static_cast<float>(Completed) / static_cast<float>(Effective);

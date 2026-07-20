@@ -2,6 +2,7 @@
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
+#include "GameFramework/GameStateBase.h"
 
 UPressureComponent::UPressureComponent()
 {
@@ -20,6 +21,7 @@ void UPressureComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME(UPressureComponent, CurrentPressure);
 	DOREPLIFETIME(UPressureComponent, bExploded);
 	DOREPLIFETIME(UPressureComponent, bValveOnCooldown);
+	DOREPLIFETIME(UPressureComponent, ValveCooldownEndTime);
 }
 
 void UPressureComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -88,11 +90,12 @@ void UPressureComponent::ResetForNewGame()
 	bWasWarning = false;
 
 	// 새 게임 시작 시 폭발 쿨타임도 초기화.
-	if (const UWorld* World = GetWorld())
+	if (GetWorld())
 	{
 		GetWorld()->GetTimerManager().ClearTimer(ValveCooldownTimer);
 	}
 	bValveOnCooldown = false;
+	ValveCooldownEndTime = 0.f;
 
 	OnPressureChanged.Broadcast(0.f);
 }
@@ -111,14 +114,20 @@ void UPressureComponent::StartValveCooldown()
 {
 	if (!GetOwner()->HasAuthority()) return;
 
-	bValveOnCooldown = true;
-
-	// 쿨타임 0 이하면(에디터에서 꺼둔 경우) 곧바로 해제.
+	// 쿨타임 0 이하면(에디터에서 꺼둔 경우) 아예 걸지 않는다.
 	if (ValveCooldownAfterExplosion <= 0.f)
 	{
 		bValveOnCooldown = false;
+		ValveCooldownEndTime = 0.f;
 		return;
 	}
+
+	bValveOnCooldown = true;
+
+	// 남은 시간 표시는 서버/클라 공통으로 GameState 동기 시각(GetServerWorldTimeSeconds)을 쓴다.
+	const AGameStateBase* GS = GetWorld()->GetGameState();
+	const float Now = GS ? GS->GetServerWorldTimeSeconds() : GetWorld()->GetTimeSeconds();
+	ValveCooldownEndTime = Now + ValveCooldownAfterExplosion;
 
 	GetWorld()->GetTimerManager().SetTimer(
 		ValveCooldownTimer, this, &UPressureComponent::EndValveCooldown,
@@ -128,6 +137,19 @@ void UPressureComponent::StartValveCooldown()
 void UPressureComponent::EndValveCooldown()
 {
 	bValveOnCooldown = false;
+	ValveCooldownEndTime = 0.f;
+}
+
+float UPressureComponent::GetValveCooldownRemaining() const
+{
+	if (!bValveOnCooldown) return 0.f;
+
+	const UWorld* World = GetWorld();
+	if (!World) return 0.f;
+
+	const AGameStateBase* GS = World->GetGameState();
+	const float Now = GS ? GS->GetServerWorldTimeSeconds() : World->GetTimeSeconds();
+	return FMath::Max(0.f, ValveCooldownEndTime - Now);
 }
 
 void UPressureComponent::OnRep_CurrentPressure()

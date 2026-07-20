@@ -66,9 +66,17 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Pressure")
 	bool bValveOnCooldown = false;
 
+	// 쿨타임이 끝나는 서버 동기 시각(GameState 서버 월드시간 기준, 복제). 남은 시간 표시용.
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Pressure")
+	float ValveCooldownEndTime = 0.f;
+
 	// 지금 밸브가 쿨타임(폭발 직후)이라 조작 불가인가. 밸브가 IsUsableNow 에서 참조.
 	UFUNCTION(BlueprintPure, Category = "Pressure")
 	bool IsValveOnCooldown() const { return bValveOnCooldown; }
+
+	// 쿨타임 남은 시간(초). 쿨타임이 아니면 0. 서버/클라 모두 GameState 동기 시각으로 계산.
+	UFUNCTION(BlueprintPure, Category = "Pressure")
+	float GetValveCooldownRemaining() const;
 
 	// 긴급 회의 등으로 압력 시뮬레이션 전체 정지 (서버 전용).
 	// bTrainRunning=false 만으로는 감소(PressureDecayRate)가 계속되므로 별도 플래그가 필요하다.
