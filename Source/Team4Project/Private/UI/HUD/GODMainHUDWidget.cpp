@@ -28,6 +28,8 @@ void UGODMainHUDWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
+	bHasShownRoleIntro = false;
+
 	// 💡 스킬 슬롯 / 역할 아이콘 초기 숨김 (새로운 변수명으로 변경)
 	if (Slot_Passive) Slot_Passive->SetVisibility(ESlateVisibility::Collapsed);
 	if (Slot_Active1) Slot_Active1->SetVisibility(ESlateVisibility::Collapsed);
@@ -139,6 +141,8 @@ void UGODMainHUDWidget::TryBindGameState()
 	GS->OnFuelLevelChanged.AddDynamic(this, &UGODMainHUDWidget::OnFuelLevelChanged);
 	GS->OnAnnouncement.AddDynamic(this, &UGODMainHUDWidget::OnAnnouncement);
 
+	GS->OnGamePhaseChanged.AddDynamic(this, &UGODMainHUDWidget::OnGamePhaseChanged);
+
 	// 현재 값으로 즉시 갱신
 	CurrentTime = GS->RemainingTime;
 	CurrentDistance = GS->DistanceToDestination;
@@ -209,6 +213,11 @@ void UGODMainHUDWidget::OnCharacterTagChanged(const FGameplayTag& NewTag)
 {
 	if (NewTag.IsValid())
 	{
+		if (NewTag.ToString().Contains(TEXT("Special.Outlaw")))
+		{
+			bHasShownRoleIntro = false;
+		}
+
 		SetupRoleHUD(NewTag);
 	}
 }
@@ -582,4 +591,10 @@ FString UGODMainHUDWidget::FormatTime(int32 TotalSeconds)
 	const int32 Minutes = TotalSeconds / 60;
 	const int32 Seconds = TotalSeconds % 60;
 	return FString::Printf(TEXT("%02d:%02d"), Minutes, Seconds);
+}
+
+void UGODMainHUDWidget::OnGamePhaseChanged(EGamePhase NewPhase)
+{
+	// C++에서 신호를 받으면, 위젯 블루프린트(WBP)로 신호를 토스합니다.
+	BP_OnGamePhaseChanged(NewPhase);
 }

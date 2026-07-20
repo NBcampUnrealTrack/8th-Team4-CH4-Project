@@ -230,6 +230,12 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "HUD|Announcement")
 	void BP_OnAnnouncement(const FText& Message, EAnnouncementType Type);
 
+	UFUNCTION()
+	void OnGamePhaseChanged(EGamePhase NewPhase);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "HUD|GamePhase")
+	void BP_OnGamePhaseChanged(EGamePhase NewPhase);
+
 	// 현재 인터랙트 대상 (없으면 None). WBP에서 월드 마커 위치 투영 등에 사용.
 	UPROPERTY(BlueprintReadOnly, Category = "HUD|Interact")
 	TObjectPtr<AActor> CurrentInteractTarget;
