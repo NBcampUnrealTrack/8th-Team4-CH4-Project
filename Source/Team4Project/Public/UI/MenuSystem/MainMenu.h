@@ -239,6 +239,19 @@ private:
 	UFUNCTION()
 	void OpenMainMenu();
 
+	// ── 방찾기 자동 새로고침 ──
+	// Join 메뉴가 열려 있는 동안 주기적으로 서버 목록을 다시 검색한다.
+	// (중복 검색은 GameInstance 의 in-flight 가드가 막으므로 주기가 짧아도 안전하다.)
+	void StartServerListAutoRefresh();
+	void StopServerListAutoRefresh();
+	void AutoRefreshServerList();
+
+	// 자동 새로고침 주기(초). 0 이하면 자동 새로고침을 끈다(메뉴 열 때 1회만 검색).
+	UPROPERTY(EditDefaultsOnly, Category = "Session")
+	float ServerListRefreshInterval = 5.f;
+
+	FTimerHandle ServerListRefreshTimer;
+
 	// ── 페이지 전환 (Out 애니 → 전환 → In 애니) ──
 	// 각 Open* 이 직접 SetActiveWidget 하지 않고 이걸 거쳐 Out→전환→In 순서를 만든다.
 	void BeginMenuTransition(EMenuState Target);

@@ -134,9 +134,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic")
 	int32 TimeWarningSeconds = 60;
 
-	/** 게임 종료 후 복귀할 메인 메뉴 맵 경로 */
+	/** 게임 종료 후 복귀할 메인 메뉴 맵 경로 (현재 미사용 — 게임 종료 시 로비로 복귀한다) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic|Maps")
 	FString MainMenuMapPath = TEXT("/Game/Level/TitleMap");
+
+	/** 게임 종료 후 복귀할 로비 맵 경로 (게임 시작 전 대기 상태로 리셋 → 세션 재노출) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Logic|Maps")
+	FString LobbyMapPath = TEXT("/Game/Level/LobbyMap");
 
 	// ============================================================
 	// 역할별 캐릭터 BP 클래스 — BP_GODGameMode 에서 지정
@@ -196,9 +200,9 @@ private:
 	void RespawnPlayerAsRole(APlayerController* PC, TSubclassOf<ABaseCharacter> CharClass);
 	void SetupWatchmanTracking();
 
-	/** 타이머 만료 시 메인 메뉴로 복귀. */
+	/** 타이머 만료 시 로비로 복귀 (게임 시작 전 대기 상태). 세션을 다시 참여 가능 상태로 되돌린다. */
 	UFUNCTION()
-	void ReturnToMainMenu();
+	void ReturnToLobby();
 
 	/** 압력 100% 폭발 시 호출 → 탈선 처리 + 마피아 승리. */
 	UFUNCTION()

@@ -359,8 +359,13 @@ void UPlayerGameInstance::OnNetworkFailure(UWorld* world, UNetDriver* NetDriver,
 
 void UPlayerGameInstance::RefreshServerList()
 {
-	if (!SessionInterface.IsValid()) return; 
-    
+	if (!SessionInterface.IsValid()) return;
+
+	// 중복 검색 가드: 이전 FindSessions 가 아직 진행 중이면 새 검색을 시작하지 않는다.
+	// (자동 주기 새로고침 + 수동/QuickJoin 트리거가 겹쳐 스팀에 검색을 중첩 요청하는 것을 막는다.
+	//  진행 중 요청은 조용히 무시 — 현재 검색이 끝나면 곧 다음 주기가 다시 돈다.)
+	if (bSearchInProgress) return;
+
 	SessionSearch = MakeShareable(new FOnlineSessionSearch());
 	if (SessionSearch.IsValid())
 	{
@@ -377,12 +382,21 @@ void UPlayerGameInstance::RefreshServerList()
        
 		SessionSearch->MaxSearchResults = 100;
 		UE_LOG(LogTemp, Warning, TEXT("Starting Find Session"));
-		SessionInterface->FindSessions(0, SessionSearch.ToSharedRef());
+		bSearchInProgress = true;
+		if (!SessionInterface->FindSessions(0, SessionSearch.ToSharedRef()))
+		{
+			// 검색 시작 자체가 실패하면 완료 델리게이트가 오지 않으므로 가드를 즉시 해제한다
+			// (안 그러면 이후 새로고침이 영구히 막힌다).
+			bSearchInProgress = false;
+		}
 	}
 }
 
 void UPlayerGameInstance::OnFindSessionComplete(bool Success)
 {
+	// 검색 종료 — 성공/실패와 무관하게 중복 검색 가드를 해제한다(다음 새로고침 허용).
+	bSearchInProgress = false;
+
 	// 빠른 방찾기 플래그는 결과와 무관하게 이번 검색에서 소비한다
 	const bool bQuickJoinRequested = bQuickJoinPending;
 	bQuickJoinPending = false;
@@ -559,6 +573,9 @@ void UPlayerGameInstance::OnFindSessionComplete(bool Success)
 
 void UPlayerGameInstance::CreateSession()
 {
+	// 새 방 — 이전 방의 입장 승인 목록을 비운다(재접속 비번 면제는 이 방 한정).
+	AdmittedPlayerIds.Reset();
+
 	if (SessionInterface.IsValid())
 	{
 		FOnlineSessionSettings SessionSettings;
@@ -621,6 +638,19 @@ void UPlayerGameInstance::SetSessionInProgress(bool bInProgress)
 		EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 
 	SessionInterface->UpdateSession(SESSION_NAME, NewSettings, /*bShouldRefreshOnlineData=*/true);
+}
+
+void UPlayerGameInstance::MarkPlayerAdmitted(const FString& PlayerId)
+{
+	if (!PlayerId.IsEmpty())
+	{
+		AdmittedPlayerIds.Add(PlayerId);
+	}
+}
+
+bool UPlayerGameInstance::IsPlayerAdmitted(const FString& PlayerId) const
+{
+	return !PlayerId.IsEmpty() && AdmittedPlayerIds.Contains(PlayerId);
 }
 
 void UPlayerGameInstance::MoveToTitleMap()

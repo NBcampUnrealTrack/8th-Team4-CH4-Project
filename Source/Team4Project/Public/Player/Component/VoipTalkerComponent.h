@@ -6,7 +6,6 @@
 #include "Net/VoiceConfig.h"
 #include "VoipTalkerComponent.generated.h"
 
-class USoundAttenuation;
 class UAudioComponent;
 class APawn;
 
@@ -28,34 +27,27 @@ public:
 	void TeardownVoiceAudio();
 
 	/**
-	 * 발화자/청자의 생사 조합에 따라 볼륨·공간화를 재생 중인 컴포넌트에 적용.
-	 *  - 생존 발화자: 전원에게 들림. 산 청자=3D 감쇠, 죽은 청자=2D(거리 무관).
-	 *  - 사망 발화자: 죽은 청자에게만 들림(2D). 산 청자는 음소거.
+	 * 발화자/청자의 생사 조합에 따라 볼륨을 재생 중인 컴포넌트에 적용(전 구간 2D).
+	 *  - 생존 발화자: 전원에게 VoiceVolume 으로 들림(청자 생사·거리 무관).
+	 *  - 사망 발화자: 죽은 청자에게만 VoiceVolume, 산 청자는 음소거(0).
 	 * 호출 시점: OnTalkingBegin(발화 시작) + VoiceChannelSubsystem(생사 변화 이벤트).
 	 * 폴링 없음 — 상태가 바뀌는 순간에만 재적용된다.
 	 */
 	void ApplyVoicePolicy();
 
-	// 현재 생사 상태·빙의 Pawn 을 반영해 Settings.AttenuationSettings / ComponentToAttachTo 만 갱신.
+	// 이 머신의 로컬 청자 입장에서 이 발화자가 내야 할 볼륨(0 = 음소거).
+	// 오디빌리티 정책 전체가 여기 한 곳에 모여 있다(생존→전원, 사망→죽은 청자만).
+	float ComputeListenerVolume() const;
+
+	// 보이스 공통 기본 볼륨(초기값). 1.0 = 원음, 그 이상은 증폭.
+	UPROPERTY(EditDefaultsOnly, Category = "Voice", meta = (ClampMin = "0.0", UIMin = "0.0"))
+	float VoiceVolume = 1.f;
+
+	// 현재 생사 상태·빙의 Pawn 을 반영해 Settings.ComponentToAttachTo 만 갱신.
 	// (재생 중이 아니어도 호출 가능 — 다음 발화 세션에 엔진이 이 값을 읽어 적용한다.)
 	void RefreshVoiceSettings();
 
-	UPROPERTY(EditDefaultsOnly, Category = "Voice")
-	TObjectPtr<USoundAttenuation> VoiceAttenuationOverride;
-
-	// 근접 보이스 최대 볼륨 반경(cm). 기본 감쇠 생성에 사용.
-	UPROPERTY(EditDefaultsOnly, Category = "Voice")
-	float InnerRadius = 400.f;
-
-	// 반경 밖에서 0 까지 감쇠하는 거리(cm)
-	UPROPERTY(EditDefaultsOnly, Category = "Voice")
-	float FalloffDistance = 1600.f;
-
 private:
-	// 에셋이 없을 때 한 번만 만들어 재사용하는 런타임 감쇠.
-	UPROPERTY(Transient)
-	TObjectPtr<USoundAttenuation> RuntimeAttenuation;
-
 	/** 발화 중 Pawn 이 늦게 붙는 경우(빙의 지연) attach/감쇠를 바로잡기 위한 콜백 */
 	UFUNCTION()
 	void HandleOwnerPawnSet(APlayerState* Player, APawn* NewPawn, APawn* OldPawn);
@@ -75,8 +67,6 @@ private:
 
 	/** 현재 구독 해제. */
 	void UnbindOwnerPawnEndPlay();
-
-	USoundAttenuation* ResolveAttenuation();
 
 	/**
 	 * 발화자(이 Talker 의 오너 PlayerState)가 사망 상태인지.
