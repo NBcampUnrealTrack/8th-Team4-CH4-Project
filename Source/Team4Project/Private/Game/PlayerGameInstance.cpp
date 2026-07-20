@@ -45,6 +45,14 @@ const static FName PW_HASH_SETTINGS_KEY = TEXT("PwHash");
 // 참여 시도도 클라 선에서 막는다 (최종 차단은 서버 GameMode::PreLogin 페이즈 검사).
 const static FName IN_PROGRESS_SETTINGS_KEY = TEXT("InProgress");
 
+// 이 게임 빌드의 고유 서명. Steam 테스트 AppID(480, SpaceWar)는 전 세계 개발자가 공유하므로
+// 검색에 "누군지도 모르는 남의 세션"이 그대로 섞여 든다. 호스트가 이 키를 광고하고,
+// 검색 측은 이 값이 정확히 일치하지 않는 세션(= 남의 프로젝트/다른 빌드)을 목록·조인·빠른참여에서
+// 모두 제외한다. (근본 해결은 전용 Steam AppID 발급 — SteamDevAppId 를 480 에서 교체.)
+// 팀 전원이 같은 값의 새 빌드를 써야 서로의 방이 보인다 — 값을 바꾸면 구 빌드와 서로 안 보임.
+const static FName BUILD_ID_SETTINGS_KEY = TEXT("T4BuildId");
+const static FString GBuildIdValue = TEXT("Team4-GearsOfDeceit-v1");
+
 namespace
 {
 	// 로컬 플레이어의 고유 ID(스팀 SteamID). 실패 시 머신 로그인 ID 폴백.
@@ -227,6 +235,11 @@ void UPlayerGameInstance::LoadMenuWidget()
 	if (!ensure(MenuClass != nullptr))
 		return;
 
+	// travel 후 메뉴 재진입 시 이전 레벨에서 걸린 검색 가드를 리셋한다.
+	// (travel 로 중단된 FindSessions 는 완료 콜백이 오지 않아 bSearchInProgress 가 true 로
+	//  남을 수 있고, 그러면 RefreshServerList 가 계속 early-return 해 방 목록이 영영 안 뜬다.)
+	bSearchInProgress = false;
+
 	Menu = CreateWidget<UMainMenu>(this, MenuClass);
 	if (!ensure(Menu != nullptr))
 		return;
@@ -323,6 +336,7 @@ void UPlayerGameInstance::OnCreateSessionComplete(FName Sessionname, bool Succes
 	if (Menu != nullptr)
 	{
 		Menu->Teardown();
+		Menu = nullptr; // 다음 메뉴 진입에서 새로 생성 — stale 위젯에 SetServerList 하는 것 방지
 	}
 
 	UEngine* Engine = GetEngine();
@@ -361,10 +375,20 @@ void UPlayerGameInstance::RefreshServerList()
 {
 	if (!SessionInterface.IsValid()) return;
 
-	// 중복 검색 가드: 이전 FindSessions 가 아직 진행 중이면 새 검색을 시작하지 않는다.
-	// (자동 주기 새로고침 + 수동/QuickJoin 트리거가 겹쳐 스팀에 검색을 중첩 요청하는 것을 막는다.
-	//  진행 중 요청은 조용히 무시 — 현재 검색이 끝나면 곧 다음 주기가 다시 돈다.)
-	if (bSearchInProgress) return;
+	// 중복 검색 가드 (+ 스턱 방지 워치독): 이전 FindSessions 가 진행 중이면 새 검색을 막는다.
+	// (자동 주기 새로고침 + 수동/QuickJoin 트리거가 겹쳐 스팀에 검색을 중첩 요청하는 것을 막는다.)
+	// 단, travel 중 검색이 중단돼 OnFindSessionComplete 가 오지 않으면 플래그가 영구히 걸리므로,
+	// 마지막 검색 시작 후 SearchStaleTimeout 초가 지났으면 죽은 검색으로 보고 새 검색을 허용한다.
+	if (bSearchInProgress)
+	{
+		const double Elapsed = FPlatformTime::Seconds() - SearchStartTimeSeconds;
+		if (SearchStaleTimeout <= 0.f || Elapsed < static_cast<double>(SearchStaleTimeout))
+		{
+			return; // 정상 진행 중 — 중복 요청 무시
+		}
+		UE_LOG(LogTemp, Warning,
+			TEXT("이전 FindSessions 가 %.1f초간 미완료 — 스턱으로 간주하고 재검색"), Elapsed);
+	}
 
 	SessionSearch = MakeShareable(new FOnlineSessionSearch());
 	if (SessionSearch.IsValid())
@@ -383,6 +407,7 @@ void UPlayerGameInstance::RefreshServerList()
 		SessionSearch->MaxSearchResults = 100;
 		UE_LOG(LogTemp, Warning, TEXT("Starting Find Session"));
 		bSearchInProgress = true;
+		SearchStartTimeSeconds = FPlatformTime::Seconds();
 		if (!SessionInterface->FindSessions(0, SessionSearch.ToSharedRef()))
 		{
 			// 검색 시작 자체가 실패하면 완료 델리게이트가 오지 않으므로 가드를 즉시 해제한다
@@ -404,6 +429,26 @@ void UPlayerGameInstance::OnFindSessionComplete(bool Success)
 	if (Success && SessionSearch.IsValid() && Menu != nullptr)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Finished Find Session"));
+
+		// ---- 남의 세션 제거 (Steam 테스트 AppID 480 공유 대응) ----
+		// AppID 480(SpaceWar)은 전 세계 개발자가 공유해, 모르는 사람들의 세션이 검색에 섞여 든다.
+		// 이 빌드의 고유 서명(BUILD_ID)이 정확히 일치하지 않는 세션은 목록/조인/빠른참여에서 모두
+		// 제외한다 — Join(Index)이 SearchResults 인덱스를 쓰므로 SearchResults 자체에서 제거해
+		// 인덱스 일관성을 유지한다. (근본 해결은 전용 AppID 발급.)
+		{
+			TArray<FOnlineSessionSearchResult>& Results = SessionSearch->SearchResults;
+			for (int32 i = Results.Num() - 1; i >= 0; --i)
+			{
+				FString BuildId;
+				if (!Results[i].Session.SessionSettings.Get(BUILD_ID_SETTINGS_KEY, BuildId)
+					|| BuildId != GBuildIdValue)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("외부/타 빌드 세션 제외: %s"),
+						*Results[i].GetSessionIdStr());
+					Results.RemoveAt(i);
+				}
+			}
+		}
 
 		// ---- 유령 세션 제거 ----
 		// 같은 호스트(HostId)의 세션이 여러 개 잡히면(강제 종료로 남은 옛 로비 + 새 로비)
@@ -458,6 +503,37 @@ void UPlayerGameInstance::OnFindSessionComplete(bool Success)
 					UE_LOG(LogTemp, Warning, TEXT("유령 세션 제거: %s (호스트 %s의 더 최신 세션 존재)"),
 						*Results[i].GetSessionIdStr(), *Results[i].Session.OwningUserName);
 					Results.RemoveAt(i);
+				}
+			}
+		}
+
+		// ---- 오래된 유령 세션 제거 (외톨이 유령 대응) ----
+		// 위 호스트별 중복 제거는 "같은 호스트 세션이 여럿"일 때만 동작한다. 강제 종료로 남은
+		// 세션이 하나뿐이면 걸러지지 않으므로, 생성 시각(CreatedAt)이 너무 과거인 세션은
+		// 단독이어도 죽은 방으로 간주해 제외한다. (CreatedAt 은 호스트 UTC, 비교는 클라 UTC —
+		//  시계 오차가 임계값보다 작다고 가정. 정상 로비가 이만큼 오래 대기하는 경우는 드묾.)
+		if (GhostSessionMaxAgeSeconds > 0.f)
+		{
+			const int64 NowUnix = FDateTime::UtcNow().ToUnixTimestamp();
+			TArray<FOnlineSessionSearchResult>& AgeResults = SessionSearch->SearchResults;
+			for (int32 i = AgeResults.Num() - 1; i >= 0; --i)
+			{
+				FString CreatedAtStr;
+				if (!AgeResults[i].Session.SessionSettings.Get(CREATED_AT_SETTINGS_KEY, CreatedAtStr))
+				{
+					continue; // 메타데이터 없는 세션(구버전)은 건드리지 않음
+				}
+				const int64 CreatedAt = FCString::Atoi64(*CreatedAtStr);
+				if (CreatedAt <= 0)
+				{
+					continue;
+				}
+				const int64 AgeSec = NowUnix - CreatedAt;
+				if (AgeSec > static_cast<int64>(GhostSessionMaxAgeSeconds))
+				{
+					UE_LOG(LogTemp, Warning, TEXT("오래된 유령 세션 제외: %s (생성 %lld초 전)"),
+						*AgeResults[i].GetSessionIdStr(), AgeSec);
+					AgeResults.RemoveAt(i);
 				}
 			}
 		}
@@ -600,6 +676,9 @@ void UPlayerGameInstance::CreateSession()
 		// 한글 보존을 위해 Base64(ASCII)로 인코딩해 광고 (읽는 측에서 DecodeRoomName).
 		SessionSettings.Set(SERVER_NAME_SETTINGS_KEY, EncodeRoomName(DesiredServerName), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 
+		// 이 빌드의 고유 서명 — 검색 측에서 남의(AppID 480 공유) 세션을 걸러내는 데 쓴다.
+		SessionSettings.Set(BUILD_ID_SETTINGS_KEY, GBuildIdValue, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+
 		// 유령 세션 필터링용: 호스트 고유 ID + 생성 시각(Unix time).
 		// 검색 측(OnFindSessionComplete)에서 같은 호스트의 세션이 여럿이면 최신 것만 남긴다.
 		SessionSettings.Set(HOST_ID_SETTINGS_KEY, GetLocalHostIdString(GetWorld()),
@@ -719,6 +798,7 @@ void UPlayerGameInstance::Join(uint32 Index, FString Password)
 	if (Menu != nullptr)
 	{
 		Menu->Teardown();
+		Menu = nullptr; // 다음 메뉴 진입에서 새로 생성 — stale 위젯에 SetServerList 하는 것 방지
 	}
 
 	// 스팀 JoinSession 은 bUsesPresence == bUseLobbiesIfAvailable 를 요구한다.

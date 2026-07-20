@@ -168,6 +168,19 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Session|QuickJoin")
 	float QuickJoinPingWeight = 1.f;
 
+	// ── 방찾기 안정화 ──
+	// FindSessions 스턱 방지 워치독 임계값(초). travel 중 검색이 중단돼 완료 콜백이
+	// 오지 않으면 진행 가드(bSearchInProgress)가 영구히 걸린다 — 마지막 검색 시작 후
+	// 이 시간이 지나면 이전 검색을 죽은 것으로 보고 새 검색을 허용한다. 0 이하면 비활성.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Session")
+	float SearchStaleTimeout = 15.f;
+
+	// 유령 세션 최대 허용 나이(초). 생성된 지 이 시간을 넘긴 세션은 호스트별 중복이
+	// 아니어도 검색 목록에서 제외한다 — 강제 종료로 스팀에 남은 외톨이 유령 방 대응.
+	// 0 이하면 비활성. 정상 로비가 이보다 오래 대기하는 경우는 드물다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Session")
+	float GhostSessionMaxAgeSeconds = 1800.f;
+
 	// ============================================================
 	// 오디오 설정 적용 (SoundClass/SoundMix)
 	// ============================================================
@@ -247,6 +260,9 @@ private:
 	// FindSessions 진행 중 가드 — 자동 주기 새로고침과 수동 트리거가 겹쳐
 	// 스팀에 검색을 중첩 요청하지 않도록 막는다. OnFindSessionComplete 에서 해제.
 	bool bSearchInProgress = false;
+
+	// bSearchInProgress 를 세운 시각(FPlatformTime::Seconds). 워치독이 스턱 여부를 판단한다.
+	double SearchStartTimeSeconds = 0.0;
 
 	void CreateSession();
 

@@ -4,6 +4,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Player/BasePlayerController.h"
 #include "UI/MenuSystem/SettingsMenu.h"
+#include "UI/MenuSystem/MenuInterface.h"
 #include "Blueprint/UserWidget.h"
 
 
@@ -41,9 +42,21 @@ void UPauseMenuWidget::OnResumeClicked()
 
 void UPauseMenuWidget::OnExitClicked()
 {
-	// 오픈월드나 로비 등 메인 메뉴 레벨로 세션을 끊고 이동시킵니다.
-	// "L_MainMenu" 자리에 본인의 메인타이틀 맵 이름을 넣으시면 됩니다.
-	UGameplayStatics::OpenLevel(this, FName("L_MainMenu"));
+	// 세션을 끊고 메인 메뉴(TitleMap)로 복귀. GameInstance 의 LoadMainMenu 가
+	// DestroySession → TitleMap 이동까지 처리하고, 복귀 후 LoadMenuWidget 에서 검색 가드도 리셋된다.
+	// (기존 OpenLevel("L_MainMenu") 은 존재하지 않는 맵 + 세션 미정리라 재참여/방목록이 깨졌었다.)
+	UWorld* World = GetWorld();
+	if (World)
+	{
+		if (IMenuInterface* MenuInterface = Cast<IMenuInterface>(World->GetGameInstance()))
+		{
+			MenuInterface->LoadMainMenu();
+			return;
+		}
+	}
+
+	// 폴백: 인터페이스를 못 찾으면 최소한 존재하는 타이틀 맵으로라도 이동.
+	UGameplayStatics::OpenLevel(this, FName("TitleMap"));
 }
 
 void UPauseMenuWidget::OnSettingsClicked()
