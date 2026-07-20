@@ -82,6 +82,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Session")
 	void SetSessionInProgress(bool bInProgress);
 
+	// ── 비밀번호 방: 재접속 면제 ──
+	// 이미 방에 정상 입장(비번 통과)한 플레이어의 고유 ID를 기록해 둔다.
+	// 게임 종료 후 로비 복귀(논-seamless 하드 트래블)로 재접속할 때, 이들은 GameMode::PreLogin 의
+	// 비번 재검증을 면제받아 튕기지 않는다. 목록은 CreateSession(새 방)에서 초기화된다.
+	void MarkPlayerAdmitted(const FString& PlayerId);
+	bool IsPlayerAdmitted(const FString& PlayerId) const;
+
 	// ============================================================
 	// 플레이어 데이터 영속화
 	// ============================================================
@@ -228,11 +235,18 @@ private:
 	// 생성된 세션의 비밀번호 (호스트 머신 전용 — PreLogin 검증 소스)
 	FString HostSessionPassword;
 
+	// 이 방에 이미 입장 승인된 플레이어 고유 ID 집합 (재접속 비번 면제용). CreateSession 에서 비운다.
+	TSet<FString> AdmittedPlayerIds;
+
 	// Join() 입력 비밀번호 — 접속 URL에 ?SessionPassword= 옵션으로 전달
 	FString PendingJoinPassword;
 
 	// QuickJoin() 진행 중 플래그 — 검색 완료 시 최적 방 자동 조인
 	bool bQuickJoinPending = false;
+
+	// FindSessions 진행 중 가드 — 자동 주기 새로고침과 수동 트리거가 겹쳐
+	// 스팀에 검색을 중첩 요청하지 않도록 막는다. OnFindSessionComplete 에서 해제.
+	bool bSearchInProgress = false;
 
 	void CreateSession();
 

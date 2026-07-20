@@ -149,6 +149,7 @@ void UMainMenu::NativeDestruct()
     {
         World->GetTimerManager().ClearTimer(MenuTransitionTimer);
     }
+    StopServerListAutoRefresh();
     StopUIMusic();
     Super::NativeDestruct();
 }
@@ -290,6 +291,10 @@ void UMainMenu::SetServerList(TArray<FServerData> ServerNames)
 
         ServerList->AddChild(Row);
     }
+
+    // 목록을 새로 그렸으므로(자동 새로고침 포함) 기존 선택 하이라이트를 다시 적용한다.
+    // (SelectedIndex 가 새 목록 범위를 벗어나면 UpdateChildren 이 아무 행도 선택하지 않는다.)
+    UpdateChildren();
 }
 
 void UMainMenu::SelectIndex(uint32 Index)
@@ -442,6 +447,9 @@ void UMainMenu::OpenJoinMenu()
     {
         MenuInterface->RefreshServerList();
     }
+
+    // Join 메뉴가 열려 있는 동안 주기적으로 목록을 다시 검색한다(방 상태 변화 반영).
+    StartServerListAutoRefresh();
 }
 
 void UMainMenu::OpenMainMenu()
@@ -452,6 +460,53 @@ void UMainMenu::OpenMainMenu()
         return;
 
     BeginMenuTransition(EMenuState::MainMenu);
+}
+
+// ============================================================
+// 방찾기 자동 새로고침
+// ============================================================
+
+void UMainMenu::StartServerListAutoRefresh()
+{
+    UWorld* World = GetWorld();
+    if (!World || ServerListRefreshInterval <= 0.f)
+        return; // 주기 0 이하면 자동 새로고침 비활성 (메뉴 열 때 1회 검색만)
+
+    // 즉시 1회는 OpenJoinMenu 에서 이미 돌렸으므로 여기서는 반복 타이머만 건다.
+    World->GetTimerManager().SetTimer(
+        ServerListRefreshTimer, this, &UMainMenu::AutoRefreshServerList,
+        ServerListRefreshInterval, /*bLoop=*/true);
+}
+
+void UMainMenu::StopServerListAutoRefresh()
+{
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(ServerListRefreshTimer);
+    }
+}
+
+void UMainMenu::AutoRefreshServerList()
+{
+    // Join 페이지가 아니면 갱신 불필요 — 방어적으로 타이머를 멈춘다.
+    if (CurrentState != EMenuState::Join)
+    {
+        StopServerListAutoRefresh();
+        return;
+    }
+
+    // 비밀번호 팝업이 떠 있으면(방을 고르고 비밀번호 입력 중) 목록을 다시 그리지 않는다.
+    // 갱신이 ServerList 를 재생성하면 선택/입력 흐름이 어긋날 수 있어 이번 주기는 건너뛴다.
+    if (JoinPasswordPopup && JoinPasswordPopup->GetVisibility() == ESlateVisibility::Visible)
+    {
+        return;
+    }
+
+    // 진행 중인 검색이 있으면 GameInstance 의 in-flight 가드가 이 호출을 조용히 무시한다.
+    if (MenuInterface != nullptr)
+    {
+        MenuInterface->RefreshServerList();
+    }
 }
 
 // ============================================================
@@ -486,6 +541,12 @@ void UMainMenu::BeginMenuTransition(EMenuState Target)
     // 전환 애니 진행 중이면 무시 (버튼 연타 방지).
     if (bMenuTransitioning)
         return;
+
+    // Join 페이지를 떠나면 자동 새로고침을 멈춘다.
+    if (Target != EMenuState::Join)
+    {
+        StopServerListAutoRefresh();
+    }
 
     PendingState = Target;
 

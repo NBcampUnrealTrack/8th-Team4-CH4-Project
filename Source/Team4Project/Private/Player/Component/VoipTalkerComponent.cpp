@@ -6,7 +6,6 @@
 #include "Player/BaseCharacter.h"
 #include "Player/VoiceChannelSubsystem.h"
 #include "Components/AudioComponent.h"
-#include "Sound/SoundAttenuation.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
@@ -114,19 +113,10 @@ void UVoipTalkerComponent::RefreshVoiceSettings()
 	APawn* OwnerPawn = OwnerPS ? OwnerPS->GetPawn() : nullptr;
 	USceneComponent* PawnRoot = OwnerPawn ? OwnerPawn->GetRootComponent() : nullptr;
 
-	// 사망 발화자: 래그돌을 따라가지 않도록 2D + 미부착.
-	if (IsSpeakerDead())
-	{
-		Settings.AttenuationSettings = nullptr;
-		Settings.ComponentToAttachTo = nullptr;
-		return;
-	}
-
-	// 생존 발화자: Pawn 에 부착(2D여도 위치는 무시되므로 무해).
-	//  - 산 청자 → 3D 근접 감쇠(ResolveAttenuation)
-	//  - 죽은 청자 → 거리 무관 2D(감쇠 없음)
-	Settings.ComponentToAttachTo = PawnRoot;
-	Settings.AttenuationSettings = IsLocalListenerDead() ? nullptr : ResolveAttenuation();
+	// 전체 2D 보이스: 감쇠 없음(거리 무관).
+	// 사망 발화자만 래그돌을 따라다니지 않도록 미부착으로 둔다(생존자는 부착해도 2D라 무해).
+	Settings.AttenuationSettings = nullptr;
+	Settings.ComponentToAttachTo = IsSpeakerDead() ? nullptr : PawnRoot;
 }
 
 void UVoipTalkerComponent::ApplyVoicePolicy()
@@ -140,54 +130,33 @@ void UVoipTalkerComponent::ApplyVoicePolicy()
 		return; // 재생 중이 아니면 Settings 갱신만으로 충분(다음 발화에 반영).
 	}
 
-	// 현재 재생 중인 사운드에도 즉시 반영(Settings 는 '다음' 재생, 아래는 '현재' 재생용).
-	const bool bListenerDead = IsLocalListenerDead();
+	// 전체 2D 보이스: 공간화/감쇠는 항상 끈다(거리 무관).
+	// "들리냐 / 안 들리냐 / 얼마나 크게"는 오직 볼륨 하나로 결정 — ComputeListenerVolume 참고.
+	// (매 호출 볼륨을 다시 계산하므로, 음소거됐던 컴포넌트가 재사용돼도 자동 복구된다.)
+	AudioComponent->SetVolumeMultiplier(ComputeListenerVolume());
+	AudioComponent->bAllowSpatialization = false;
+	AudioComponent->SetAttenuationSettings(nullptr);
 
-	if (IsSpeakerDead())
+	// 사망 발화자: 죽은 캐릭터(래그돌)를 따라다니지 않도록 재생 컴포넌트를 떼어낸다.
+	if (IsSpeakerDead() && AudioComponent->GetAttachParent())
 	{
-		// 사망자 보이스: 죽은 사람끼리만 들린다.
-		// 청자가 살아있으면 음소거(0), 청자도 죽었으면 정상 청취(1, 이전에 줄었을 수 있어 복구).
-		// ※ 단방향 격리(산 사람→안 들림 / 죽은 사람→들림)는 엔진 양방향 Mute 로 표현 불가해
-		//   청자 머신에서 재생 여부를 직접 결정한다.
-		AudioComponent->SetVolumeMultiplier(bListenerDead ? 1.f : 0.f);
+		AudioComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+	}
+}
 
-		// 2D 처리: 공간화/감쇠 없이, 죽은 캐릭터(래그돌)를 따라다니지 않게 떼어낸다.
-		AudioComponent->bAllowSpatialization = false;
-		AudioComponent->SetAttenuationSettings(nullptr);
-		if (AudioComponent->GetAttachParent())
-		{
-			AudioComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
-		}
-		return;
+float UVoipTalkerComponent::ComputeListenerVolume() const
+{
+	// 오디빌리티 정책은 여기 한 곳에 집중한다.
+	//  - 사망 발화자 → 죽은 청자에게만 들림. 산 청자에겐 음소거(0).
+	//  - 생존 발화자 → 청자 생사와 무관하게 전원에게 들림.
+	// ※ 단방향 격리(산 사람→안 들림 / 죽은 사람→들림)는 엔진 양방향 Mute 로 표현할 수 없어,
+	//   각 청자 머신에서 로컬 청자의 생사를 보고 재생 여부를 직접 결정한다.
+	if (IsSpeakerDead() && !IsLocalListenerDead())
+	{
+		return 0.f;
 	}
 
-	// 생존자 보이스: 모두에게 들림(죽은 청자 포함).
-	// 이전에 사망자 음소거(0)로 쓰였던 컴포넌트가 재사용될 수 있어 볼륨 복구.
-	AudioComponent->SetVolumeMultiplier(1.f);
-
-	if (bListenerDead)
-	{
-		// 죽은 청자: 관전 중 어디에 있든 생존자 대화가 들리도록 거리 감쇠 없이 2D 재생.
-		AudioComponent->bAllowSpatialization = false;
-		AudioComponent->SetAttenuationSettings(nullptr);
-	}
-	else if (USoundAttenuation* Attenuation = ResolveAttenuation())
-	{
-		AudioComponent->bAllowSpatialization = true;
-		AudioComponent->SetAttenuationSettings(Attenuation);
-	}
-
-	// 재생 컴포넌트를 발화자 Pawn 에 부착 → 감쇠가 카메라가 아닌 캐릭터 위치 기준으로 계산되게.
-	// (RefreshVoiceSettings 에서 Settings.ComponentToAttachTo 는 이미 PawnRoot 로 세팅됨)
-	if (USceneComponent* PawnRoot = Settings.ComponentToAttachTo)
-	{
-		if (AudioComponent->GetAttachParent() != PawnRoot)
-		{
-			AudioComponent->AttachToComponent(
-				PawnRoot,
-				FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-		}
-	}
+	return VoiceVolume;
 }
 
 bool UVoipTalkerComponent::IsSpeakerDead() const
@@ -269,26 +238,4 @@ void UVoipTalkerComponent::HandleOwnerPawnEndPlay(AActor* /*Actor*/, EEndPlayRea
 	Settings.ComponentToAttachTo = nullptr;
 
 	TeardownVoiceAudio();
-}
-
-USoundAttenuation* UVoipTalkerComponent::ResolveAttenuation()
-{
-	if (IsValid(VoiceAttenuationOverride))
-	{
-		return VoiceAttenuationOverride;
-	}
-
-	if (!IsValid(RuntimeAttenuation))
-	{
-		RuntimeAttenuation = NewObject<USoundAttenuation>(this);
-		FSoundAttenuationSettings& S = RuntimeAttenuation->Attenuation;
-		S.bAttenuate = true;
-		S.bSpatialize = true;
-		S.AttenuationShape = EAttenuationShape::Sphere;
-		S.AttenuationShapeExtents = FVector(InnerRadius, 0.f, 0.f);
-		S.FalloffDistance = FalloffDistance;
-		S.bEnableOcclusion = true;
-	}
-
-	return RuntimeAttenuation;
 }

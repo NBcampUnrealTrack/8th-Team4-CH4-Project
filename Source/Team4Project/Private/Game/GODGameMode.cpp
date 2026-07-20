@@ -64,7 +64,13 @@ void AGODGameMode::PreLogin(const FString& Options, const FString& Address,
 	if (const UPlayerGameInstance* GI = GetGameInstance<UPlayerGameInstance>())
 	{
 		const FString& HostPassword = GI->GetHostSessionPassword();
-		if (!HostPassword.IsEmpty())
+
+		// 이미 이 방에 정상 입장했던 플레이어(게임 종료 후 로비 복귀 재접속 등)는 비번 재검증을 면제한다.
+		// 논-seamless 트래블 재접속 URL에는 원래 ?SessionPassword= 옵션이 실리지 않아, 면제가 없으면 튕긴다.
+		const FString IncomingPlayerId = UniqueId.IsValid() ? UniqueId->ToString() : FString();
+		const bool bAlreadyAdmitted = GI->IsPlayerAdmitted(IncomingPlayerId);
+
+		if (!HostPassword.IsEmpty() && !bAlreadyAdmitted)
 		{
 			const FString Supplied = UGameplayStatics::ParseOption(Options, TEXT("SessionPassword"));
 			if (Supplied != HostPassword)
@@ -78,6 +84,19 @@ void AGODGameMode::PreLogin(const FString& Options, const FString& Address,
 void AGODGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
+
+	// 정상 입장한 플레이어를 방 입장 승인 목록에 기록 → 로비 복귀 재접속 시 PreLogin 비번 재검증 면제.
+	if (NewPlayer)
+	{
+		if (UPlayerGameInstance* GI = GetGameInstance<UPlayerGameInstance>())
+		{
+			if (const APlayerState* PS = NewPlayer->GetPlayerState<APlayerState>())
+			{
+				const FUniqueNetIdRepl& Id = PS->GetUniqueId();
+				GI->MarkPlayerAdmitted(Id.IsValid() ? Id->ToString() : FString());
+			}
+		}
+	}
 
 	//AGODGameState* GODGS = GetGameState<AGODGameState>();
 	//if (!GODGS || GODGS->CurrentPhase != EGamePhase::WaitingForPlayers) return;
@@ -776,12 +795,26 @@ void AGODGameMode::EndGame(EGamePhase WinningPhase)
 	}
 
 	GetWorld()->GetTimerManager().SetTimer(
-		MenuReturnTimerHandle, this, &AGODGameMode::ReturnToMainMenu, EndGameDelay, /*bLoop=*/false);
+		MenuReturnTimerHandle, this, &AGODGameMode::ReturnToLobby, EndGameDelay, /*bLoop=*/false);
 }
 
-void AGODGameMode::ReturnToMainMenu()
+void AGODGameMode::ReturnToLobby()
 {
-	GetWorld()->ServerTravel(MainMenuMapPath);
+	// 게임 종료 → 로비(게임 시작 전 대기 상태)로 복귀.
+	// 세션을 다시 "대기 중"으로 되돌려 방찾기 목록에 노출 + 신규 참여를 허용한다.
+	// (StartGame 의 SetSessionInProgress(true) 와 짝을 이루는 해제 지점)
+	if (UPlayerGameInstance* GI = GetGameInstance<UPlayerGameInstance>())
+	{
+		GI->SetSessionInProgress(false);
+	}
+
+	// 논-seamless(하드) 트래블로 로비를 다시 로드한다.
+	// 접속 중인 클라이언트가 첫 접속과 동일하게 PreLogin/PostLogin/RestartPlayer/BeginPlay 를 다시 타므로
+	// 채팅 위젯·플레이어 상태(bIsAlive/Soot/역할)·로비 Pawn 이 전부 깨끗하게 재초기화된다.
+	// (seamless 트래블은 PlayerController/PlayerState 를 재사용해 지난 라운드의 사망 상태·UI 가 로비로 따라온다.)
+	// 다음 게임의 새 GODGameMode 는 생성자에서 bUseSeamlessTravel=true 로 돌아가므로 여기 변경은 이번 트래블 한정.
+	bUseSeamlessTravel = false;
+	GetWorld()->ServerTravel(LobbyMapPath + TEXT("?listen"));
 }
 
 void AGODGameMode::HandlePressureExplosion()
